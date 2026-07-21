@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useState } from "react"
+import { useEffect, useMemo, useState } from "react"
 import Link from "next/link"
 
 import { Badge } from "@/components/ui/badge"
@@ -12,7 +12,19 @@ import { useEmployees } from "@/features/employees/hooks/useEmployees"
 import type { StoreConfig } from "@/features/store/schemas/store.schema"
 import { runPlanningFlow, type PlanningFlowResult } from "@/features/planning/flow"
 import { createEditorState, type EditorState } from "@/features/planning/editor"
+import type { PlanningIssue } from "@/features/core/planning-generator/types/business-pipeline"
 import { PlanningEditor } from "@/features/planning/editor/ui"
+import {
+  PlanningBoard,
+  PlanningPublishDialog,
+  adaptEditorStateToBoard,
+  buildPlanningBoard,
+  decidePublication,
+  listWeekOptions,
+  mondayOf,
+  weekPeriod,
+  type WeekOption,
+} from "@/features/planning/board"
 import { useSetupReadiness } from "@/features/onboarding"
 import {
   planningStore,
@@ -33,21 +45,20 @@ function isoDate(date: Date, addDays = 0): string {
 }
 
 /** A one-week planning scope starting today (temporary default until a picker exists). */
-function defaultScope() {
-  const today = new Date()
+/**
+ * A planning period is always Monday → Sunday.
+ *
+ * Anchoring on "today" produced a week running Tuesday 21 → Monday 27 while
+ * being labelled week 30, so the columns, the dates and the number all
+ * disagreed. `weekPeriod` snaps to the ISO Monday.
+ */
+function scopeForWeek(monday: string) {
+  const period = weekPeriod(monday)
   return {
-    planningId: "planning_1",
-    period: { start: isoDate(today), end: isoDate(today, 6) },
+    planningId: `planning_${period.start}`,
+    period,
     now: new Date().toISOString(),
   }
-}
-
-function GenerationDiagnostics({ generation }: { generation: Extract<PlanningFlowResult, { status: "success" }>["generation"] }) {
-  const technicalCodes = new Set(["coverage_surplus_detail", "daily_distribution_imperfect"])
-  const mainIssues = generation.issues.filter((issue) => !technicalCodes.has(issue.code))
-  const technicalIssues = generation.issues.filter((issue) => technicalCodes.has(issue.code))
-  const repair = generation.repairAttempts.filter((attempt) => attempt.generated > 0)
-  return <><p className="text-sm text-muted-foreground">{generation.status === "blocked" ? `${generation.issues.filter((issue) => issue.code === "contract_inexact").length} contrat(s) inexact(s) ou violation(s) bloquante(s). Les affectations affichées sont provisoires et ne constituent pas un planning valide.` : "Le meilleur plan trouvé sous l’objectif borné a été conservé. Aucun écart n’a été masqué."}</p><ul className="mt-3 list-disc space-y-1 pl-5 text-sm">{mainIssues.map((issue, index) => <li key={`${issue.code}-${index}`}>{issue.message}</li>)}</ul>{technicalIssues.length || repair.length ? <details className="mt-4 rounded-lg border p-3 text-sm"><summary className="cursor-pointer font-medium">Diagnostic technique</summary><ul className="mt-3 list-disc space-y-1 pl-5">{technicalIssues.map((issue, index) => <li key={`${issue.code}-${index}`}>{issue.message}</li>)}{repair.map((attempt) => <li key={attempt.family}>{attempt.family} : {attempt.generated} générés, {attempt.rejected} rejetés, {attempt.evaluated} évalués, {attempt.accepted} acceptés</li>)}</ul></details> : null}</>
 }
 
 /**
@@ -67,7 +78,52 @@ export function PlanningView({ initialStore }: { initialStore: StoreConfig | nul
   const [isDirty, setIsDirty] = useState(false)
   const [isPersisting, setIsPersisting] = useState(false)
   const [persistenceError, setPersistenceError] = useState<string | null>(null)
-  const [degradedAccepted, setDegradedAccepted] = useState(false)
+  // Which week the next generation targets. The engine handles one week at a
+  // time today, but making the choice explicit means a future week costs no UI
+  // change when it becomes possible.
+  const [targetWeek, setTargetWeek] = useState<string>(() =>
+    mondayOf(new Date().toISOString().slice(0, 10))
+  )
+  const weekOptions = useMemo(() => listWeekOptions(targetWeek), [targetWeek])
+  const boardInput = useMemo(
+    () =>
+      editorState
+        ? adaptEditorStateToBoard(
+            editorState,
+            (setup.sectors ?? []).map((sector) => ({ id: sector.id, name: sector.name })),
+            buildBoardDiagnostics(state)
+          )
+        : null,
+    [editorState, setup.sectors, state]
+  )
+  // The publish dialog restates the reserves, so it reads the same summary the
+  // banner under the schedule does — one computation, no second wording.
+  const boardSummary = useMemo(
+    () =>
+      boardInput
+        ? buildPlanningBoard(boardInput, {
+            view: "sector",
+            sectorId: null,
+            date: null,
+            employeeId: null,
+          }).summary
+        : null,
+    [boardInput]
+  )
+  const [publishDialogOpen, setPublishDialogOpen] = useState(false)
+  const [publishBlocked, setPublishBlocked] = useState(false)
+  // What the "Publier" button is allowed to do. Decided by a pure function over
+  // the run's diagnostics and the recomputed shortfalls — never over the display
+  // status, which cannot tell a hard violation from a coverage reserve.
+  const publishDecision = useMemo(
+    () =>
+      decidePublication({
+        hasBlockingViolation: boardInput?.diagnostics?.blocking,
+        requiresExplicitAcceptance: boardInput?.diagnostics?.requiresAcceptance,
+        underCoveredSlots: boardSummary?.deficits.length,
+      }),
+    [boardInput, boardSummary]
+  )
 
   useEffect(() => {
     void planningStore
@@ -93,10 +149,11 @@ export function PlanningView({ initialStore }: { initialStore: StoreConfig | nul
         store: initialStore,
         employees,
         sectors: setup.sectors,
-        scope: defaultScope(),
+        scope: scopeForWeek(targetWeek),
       })
       if (result.status === "success") {
-        setDegradedAccepted(false)
+        setPublishDialogOpen(false)
+        setPublishBlocked(false)
         setRecord(null)
         setEditorState(
           createEditorState({
@@ -143,9 +200,23 @@ export function PlanningView({ initialStore }: { initialStore: StoreConfig | nul
     })
   }
 
-  function handlePublish() {
-    const generationStatus = state.status === "done" && state.result.status === "success" ? state.result.generation.status : null
-    if (generationStatus === "blocked" || (generationStatus === "degraded" && !degradedAccepted)) return
+  function publishNow() {
+    // Second reading of the same gate, with the acceptance granted. The dialog
+    // can only be reached through `handlePublish`, but publication is the one
+    // irreversible action here, so it checks rather than trusts its caller.
+    if (
+      decidePublication({
+        hasBlockingViolation: boardInput?.diagnostics?.blocking,
+        requiresExplicitAcceptance: boardInput?.diagnostics?.requiresAcceptance,
+        underCoveredSlots: boardSummary?.deficits.length,
+        acceptedDegradations: true,
+      }) !== "publish-directly"
+    ) {
+      setPublishDialogOpen(false)
+      setPublishBlocked(true)
+      return
+    }
+    setPublishDialogOpen(false)
     void withPersistence(async () => {
       const saved = await persistCurrent()
       if (!saved) return
@@ -153,6 +224,27 @@ export function PlanningView({ initialStore }: { initialStore: StoreConfig | nul
       setRecord(published)
       await refreshSavedPlannings()
     })
+  }
+
+  /**
+   * A clean schedule publishes on the first click. One carrying reserves opens
+   * the confirmation, which is the only place the acceptance is ever asked for.
+   * One breaking a hard rule publishes nowhere and says why.
+   */
+  function handlePublish() {
+    switch (publishDecision) {
+      case "block-publication":
+        setPublishDialogOpen(false)
+        setPublishBlocked(true)
+        return
+      case "require-explicit-acceptance":
+        setPublishBlocked(false)
+        setPublishDialogOpen(true)
+        return
+      case "publish-directly":
+        setPublishBlocked(false)
+        publishNow()
+    }
   }
 
   function handleArchive() {
@@ -194,18 +286,36 @@ export function PlanningView({ initialStore }: { initialStore: StoreConfig | nul
 
   return (
     <div className="space-y-6">
-      <div className="flex flex-wrap items-end justify-between gap-4">
-        <PageHeader
-          title="Planning"
-          description="Générez un planning à partir de la configuration du magasin et de votre équipe."
-        />
-        <Button
-          onClick={handleGenerate}
-          disabled={!initialStore || !setup.ready || setup.isLoading || isLoading || state.status === "loading"}
-        >
-          {state.status === "loading" ? "Génération…" : "Générer le planning"}
-        </Button>
-      </div>
+      {/* Once a planning exists the control bar carries the title and the
+          actions, so this header would only push the schedule down. */}
+      {editorState ? null : (
+        <div className="flex flex-wrap items-end justify-between gap-4">
+          <PageHeader
+            title="Planning"
+            description="Générez un planning à partir de la configuration du magasin et de votre équipe."
+          />
+          <div className="flex items-center gap-2">
+            <select
+              value={targetWeek}
+              onChange={(event) => setTargetWeek(event.target.value)}
+              className="rounded-md border bg-background px-2 py-1.5 text-sm"
+              aria-label="Semaine à générer"
+            >
+              {weekOptions.map((option: WeekOption) => (
+                <option key={option.value} value={option.value}>
+                  {option.label}
+                </option>
+              ))}
+            </select>
+            <Button
+              onClick={handleGenerate}
+              disabled={!initialStore || !setup.ready || setup.isLoading || isLoading || state.status === "loading"}
+            >
+              {state.status === "loading" ? "Génération…" : "Générer"}
+            </Button>
+          </div>
+        </div>
+      )}
 
       {!initialStore ? (
         <Card>
@@ -284,50 +394,68 @@ export function PlanningView({ initialStore }: { initialStore: StoreConfig | nul
         </Card>
       ) : null}
 
-      {state.status === "done" && state.result.status === "success" && (state.result.generation.status !== "complete" || state.result.generation.issues.length > 0) ? (
-        <Card>
-          <CardHeader><CardTitle className="text-base">{state.result.generation.status === "blocked" ? "Proposition de diagnostic — génération bloquée" : state.result.generation.status === "degraded" ? "Planning dégradé" : "Compromis métier et informations"}</CardTitle></CardHeader>
-          <CardContent><GenerationDiagnostics generation={state.result.generation} />{state.result.generation.status === "degraded" ? <label className="mt-4 flex items-start gap-2 text-sm"><input type="checkbox" checked={degradedAccepted} onChange={(event) => setDegradedAccepted(event.target.checked)} /><span>J’accepte explicitement les écarts de couverture ou de répartition avant publication.</span></label> : null}</CardContent>
-        </Card>
-      ) : null}
-
-      {editorState ? (
+      {editorState && boardInput ? (
         <>
-          <Card>
-            <CardContent className="flex flex-wrap items-center justify-between gap-3 py-4">
-              <div className="flex items-center gap-3">
+          {persistenceError ? <p role="alert" className="text-sm text-destructive">{persistenceError}</p> : null}
+
+          {publishBlocked ? (
+            <p role="alert" className="rounded-md border border-destructive/40 bg-destructive/10 p-3 text-sm text-destructive">
+              Publication impossible : des règles obligatoires ne sont pas respectées. Corrigez le
+              planning avant de le publier — aucune acceptation ne permet de passer outre.
+            </p>
+          ) : null}
+
+          {/* New planning board: engine-agnostic, read-only for now. It renders
+              a ViewModel built outside React, so the V3 swap will only replace
+              the adapter above it. */}
+          <PlanningBoard
+            input={boardInput}
+            weekOptions={weekOptions}
+            selectedWeek={targetWeek}
+            onSelectWeek={setTargetWeek}
+            actions={
+              <>
                 <StatusBadge status={currentStatus} />
-                <span className="text-sm text-muted-foreground">
-                  {isDirty ? "● Modifications non enregistrées" : "✓ Enregistré"}
+                <span className="text-xs text-muted-foreground">
+                  {isDirty ? "● Non enregistré" : "✓ Enregistré"}
                 </span>
-              </div>
-              <div className="flex flex-wrap gap-2">
+                <Button
+                  size="sm"
+                  onClick={handleGenerate}
+                  disabled={!initialStore || !setup.ready || setup.isLoading || isLoading || state.status === "loading"}
+                >
+                  {state.status === "loading" ? "Génération…" : "Générer"}
+                </Button>
                 {currentStatus === "draft" ? (
                   <>
                     <Button size="sm" variant="outline" onClick={handleSave} disabled={isPersisting || !isDirty}>
                       Enregistrer
                     </Button>
-                    <Button size="sm" onClick={handlePublish} disabled={isPersisting || (state.status === "done" && state.result.status === "success" && (state.result.generation.status === "blocked" || (state.result.generation.status === "degraded" && !degradedAccepted)))}>
+                    {/* Left clickable even when publication is barred: a dead
+                        button explains nothing, whereas the click produces the
+                        reason below the schedule. */}
+                    <Button size="sm" onClick={handlePublish} disabled={isPersisting}>
                       Publier
                     </Button>
                   </>
                 ) : null}
                 {currentStatus === "published" ? (
-                  <Button size="sm" onClick={handleEditPublished} disabled={isPersisting}>
-                    Modifier dans un nouveau brouillon
-                  </Button>
+                  <>
+                    <Button size="sm" onClick={handleEditPublished} disabled={isPersisting}>
+                      Nouveau brouillon
+                    </Button>
+                    <Button size="sm" variant="outline" onClick={handleArchive} disabled={isPersisting}>
+                      Archiver
+                    </Button>
+                  </>
                 ) : null}
-                {currentStatus === "published" ? (
-                  <Button size="sm" variant="outline" onClick={handleArchive} disabled={isPersisting}>
-                    Archiver
-                  </Button>
-                ) : null}
-              </div>
-            </CardContent>
-          </Card>
+              </>
+            }
+          />
 
-          {persistenceError ? <p role="alert" className="text-sm text-destructive">{persistenceError}</p> : null}
-
+          <details className="rounded-lg border p-3 text-sm">
+            <summary className="cursor-pointer font-medium">Éditeur détaillé (existant)</summary>
+            <div className="mt-3">
           <PlanningEditor
             key={`${record?.id ?? "new"}_${editorInstance}`}
             initialState={editorState}
@@ -338,10 +466,41 @@ export function PlanningView({ initialStore }: { initialStore: StoreConfig | nul
               setIsDirty(true)
             }}
           />
+            </div>
+          </details>
+
+          {boardSummary ? (
+            <PlanningPublishDialog
+              open={publishDialogOpen}
+              summary={boardSummary}
+              busy={isPersisting}
+              onCancel={() => setPublishDialogOpen(false)}
+              onConfirm={publishNow}
+            />
+          ) : null}
         </>
       ) : null}
     </div>
   )
+}
+
+
+/**
+ * Reduce a generation run to the three things the board needs: can it be
+ * published, does someone have to accept something, and what belongs in the
+ * technical drawer. Everything else the engine says stays where it was.
+ */
+function buildBoardDiagnostics(state: GenerationState) {
+  if (state.status !== "done" || state.result.status !== "success") return undefined
+  const generation = state.result.generation
+  const technical = generation.issues
+    .filter((issue: PlanningIssue) => issue.severity !== "blocking")
+    .map((issue: PlanningIssue) => ({ label: issue.code, value: issue.message }))
+  return {
+    blocking: generation.status === "blocked",
+    requiresAcceptance: generation.status === "degraded",
+    technical,
+  }
 }
 
 function StatusBadge({ status }: { status: PlanningStatus }) {
