@@ -22,6 +22,7 @@ export interface EmployeePlanningPreference {
 export interface BusinessPlanningContext {
   readonly sectors?: readonly SectorPlanningRules[]
   readonly employeePreferences?: readonly EmployeePlanningPreference[]
+  readonly pipelineMode?: "sprint-3d" | "legacy-v2"
 }
 
 export interface RepairAttemptStatistics {

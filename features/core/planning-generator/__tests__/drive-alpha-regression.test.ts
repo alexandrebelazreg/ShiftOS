@@ -5,6 +5,15 @@ import { brand } from "@/features/core/planning-generator/__tests__/fixtures"
 import { driveScenario } from "@/features/core/planning-generator/__tests__/drive-alpha-fixture"
 
 describe("Drive alpha — 20 au 26 juillet 2026", () => {
+  it("utilise Sprint 3D même lorsque les jours non fixes sont facultatifs", () => {
+    const input = driveScenario()
+    const sector = input.business!.sectors![0]
+    const result = planningGenerator.generate({ ...input, business: { ...input.business, sectors: [{ ...sector, workEveryNonFixedRestDay: false }] } })
+    expect(result.weeklyAllocation).toBeDefined()
+    expect(result.phaseTrace).toContain("weekly-allocation")
+    expect(result.phaseTrace).toContain("daily-placement")
+    expect(result.explanations.some((item) => ["closing-assignment", "coverage", "contract-completion"].includes(item.phase))).toBe(false)
+  }, 120_000)
   it("ne transmet aucune violation bloquante silencieuse à la réparation globale", () => {
     const result = planningGenerator.generate(driveScenario())
     const shifts = new Map(result.shifts.map((shift) => [shift.id, shift]))

@@ -13,4 +13,16 @@ describe("configuration de demande secteur", () => {
   it("autorise 0 % sur les jours fermés", () => { expect(validateSectorDemand(complete(), store).some((issue) => issue.path === "weeklyDistribution")).toBe(false) })
   it("rejette les horaires invalides ou hors magasin", () => { const sector = complete(); const invalid = { ...sector, hours: sector.hours.map((day) => day.day === "monday" ? { ...day, opensAt: "07:00" } : day) }; expect(validateSectorDemand(invalid, store).some((issue) => issue.path === "hours.monday")).toBe(true) })
   it("valide et persiste la coupure maximale du secteur", () => { const valid = { ...complete(), shiftRules: { ...complete().shiftRules, splitShiftAllowed: true, maximumSplitDuration: 90 } }; expect(validateSectorDemand(valid, store)).toEqual([]); let value: string | null = null; const repository = createSectorRepository({ getItem: () => value, setItem: (_key, next) => { value = next } }); repository.save([valid]); expect(repository.list()[0].shiftRules.maximumSplitDuration).toBe(90); const invalid = { ...valid, shiftRules: { ...valid.shiftRules, maximumSplitDuration: 100 } }; expect(validateSectorDemand(invalid, store).some((issue) => issue.path === "shiftRules.maximumSplitDuration")).toBe(true) })
+  it("migre explicitement les secteurs historiques Drive vers les jours obligatoires", () => {
+    const historical = { ...complete() } as Record<string, unknown>
+    delete historical.workEveryNonFixedRestDay
+    let value: string | null = JSON.stringify([historical])
+    const repository = createSectorRepository({ getItem: () => value, setItem: (_key, next) => { value = next } })
+    expect(repository.list()[0].workEveryNonFixedRestDay).toBe(true)
+  })
+  it("conserve explicitement false lors de la migration", () => {
+    let value: string | null = JSON.stringify([{ ...complete(), workEveryNonFixedRestDay: false }])
+    const repository = createSectorRepository({ getItem: () => value, setItem: (_key, next) => { value = next } })
+    expect(repository.list()[0].workEveryNonFixedRestDay).toBe(false)
+  })
 })

@@ -129,6 +129,9 @@ export function runPlanningFlow(request: PlanningFlowRequest): PlanningFlowResul
       holidays: coreInput.holidays,
       employeeConstraints: coreInput.employeeConstraints,
       business: {
+        // Calls that predate sector-aware planning remain an explicit V2 API
+        // shape. Once sectors are supplied (including []), Sprint 3D is mandatory.
+        pipelineMode: request.sectors === undefined ? "legacy-v2" : "sprint-3d",
         employeePreferences: request.employees.map((employee) => ({ employeeId: brand<EmployeeId>(employee.id), prefersClosing: employee.preferClosing })),
         sectors: request.sectors?.map((sector) => ({
           id: sector.id,

@@ -1,8 +1,10 @@
 import { describe, expect, it } from "vitest"
 import { contractualMinutes, WEEK_DAYS, type EmployeeId } from "@/features/core/models"
 import type { PlanningGenerationInput } from "@/features/core/planning-generator"
-import { planningGenerator } from "@/features/core/planning-generator"
+import { planningGenerator as sprintAwarePlanningGenerator } from "@/features/core/planning-generator"
 import { brand, builtInRegistry, contract, demand, employee, requirement, settings, store } from "@/features/core/planning-generator/__tests__/fixtures"
+
+const planningGenerator = { generate: (input: PlanningGenerationInput) => sprintAwarePlanningGenerator.generate({ ...input, business: { ...input.business, pipelineMode: "legacy-v2" } }) }
 
 const MON = "2026-07-06", TUE = "2026-07-07"
 function scenario(): PlanningGenerationInput {

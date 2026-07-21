@@ -66,6 +66,9 @@ const demandCalculationPhase: PlanningPipelinePhase = { name: "demand-calculatio
 } }
 
 const weeklyAllocationPhase: PlanningPipelinePhase = { name: "weekly-allocation", run(state) {
+  // V2 remains available only through an explicit compatibility opt-in. The
+  // application never sets this mode, so it cannot be selected silently.
+  if (state.context.business.pipelineMode === "legacy-v2") return
   const sectors = (state.context.business.sectors ?? []).filter((sector) => sector.active)
   if (!sectors.length) { issue(state, "weekly_allocation_requires_active_sector", "blocking", this.name, "L'allocation hebdomadaire nécessite un secteur actif. La génération V2 de secours est désactivée."); return }
   if (sectors.length !== 1) { issue(state, "weekly_allocation_requires_single_sector", "blocking", this.name, "L’allocation hebdomadaire verrouillée nécessite un unique secteur actif pour cette version alpha."); return }
@@ -203,7 +206,7 @@ export function runBusinessPipeline(context: GenerationContext): GenerationPlan 
   const state: PipelineState = { context, requirements: [], shifts: [], assignments: [], rankings: [], explanations: [], issues: [], trace: [], rejected: 0, evaluations: 0, closingCounts: new Map(), repairAttempts: new Map(), allocation: null }
   for (const phase of BUSINESS_PIPELINE_PHASES) {
     state.trace.push(phase.name); phase.run(state)
-    if (state.issues.some((entry) => entry.severity === "blocking")) break
+    if ((phase.name === "validation" || phase.name === "weekly-allocation") && state.issues.some((entry) => entry.severity === "blocking")) break
   }
   return { shifts: state.shifts, assignments: state.assignments, candidatesRejectedByHardConstraints: state.rejected, constraintEvaluations: state.evaluations, assignmentRankings: state.rankings, explanations: state.explanations, issues: state.issues, phaseTrace: state.trace, repairAttempts: [...state.repairAttempts.values()].map((entry): RepairAttemptStatistics => ({ ...entry })).sort((a, b) => a.family.localeCompare(b.family)), weeklyAllocation: state.allocation ?? undefined }
 }

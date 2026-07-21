@@ -3,7 +3,7 @@ import { describe, expect, it } from "vitest"
 import type { EmployeeId } from "@/features/core/models"
 
 import type { PlanningGenerationInput } from "@/features/core/planning-generator"
-import { planningGenerator } from "@/features/core/planning-generator"
+import { planningGenerator as sprintAwarePlanningGenerator } from "@/features/core/planning-generator"
 
 import {
   brand,
@@ -15,6 +15,8 @@ import {
   settings,
   store,
 } from "@/features/core/planning-generator/__tests__/fixtures"
+
+const planningGenerator = { generate: (input: PlanningGenerationInput, options?: Parameters<typeof sprintAwarePlanningGenerator.generate>[1]) => sprintAwarePlanningGenerator.generate({ ...input, business: { ...input.business, pipelineMode: "legacy-v2" } }, options) }
 
 /** Assemble a full input with the built-in constraints registered. */
 function makeInput(
