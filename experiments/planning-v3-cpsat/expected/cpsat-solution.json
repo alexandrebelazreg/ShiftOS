@@ -1,0 +1,292 @@
+[
+  {
+    "employeeId": "arthur",
+    "date": "2026-07-20",
+    "segments": [
+      {
+        "startMinutes": 360,
+        "endMinutes": 795
+      }
+    ]
+  },
+  {
+    "employeeId": "dylan",
+    "date": "2026-07-20",
+    "segments": [
+      {
+        "startMinutes": 600,
+        "endMinutes": 1020
+      }
+    ]
+  },
+  {
+    "employeeId": "erwan",
+    "date": "2026-07-20",
+    "segments": [
+      {
+        "startMinutes": 360,
+        "endMinutes": 675
+      }
+    ]
+  },
+  {
+    "employeeId": "luca",
+    "date": "2026-07-20",
+    "segments": [
+      {
+        "startMinutes": 960,
+        "endMinutes": 1200
+      }
+    ]
+  },
+  {
+    "employeeId": "valentin",
+    "date": "2026-07-20",
+    "segments": [
+      {
+        "startMinutes": 615,
+        "endMinutes": 855
+      }
+    ]
+  },
+  {
+    "employeeId": "arthur",
+    "date": "2026-07-21",
+    "segments": [
+      {
+        "startMinutes": 360,
+        "endMinutes": 645
+      }
+    ]
+  },
+  {
+    "employeeId": "dylan",
+    "date": "2026-07-21",
+    "segments": [
+      {
+        "startMinutes": 585,
+        "endMinutes": 1035
+      }
+    ]
+  },
+  {
+    "employeeId": "erwan",
+    "date": "2026-07-21",
+    "segments": [
+      {
+        "startMinutes": 360,
+        "endMinutes": 720
+      }
+    ]
+  },
+  {
+    "employeeId": "luca",
+    "date": "2026-07-21",
+    "segments": [
+      {
+        "startMinutes": 480,
+        "endMinutes": 765
+      }
+    ]
+  },
+  {
+    "employeeId": "valentin",
+    "date": "2026-07-21",
+    "segments": [
+      {
+        "startMinutes": 930,
+        "endMinutes": 1200
+      }
+    ]
+  },
+  {
+    "employeeId": "arthur",
+    "date": "2026-07-22",
+    "segments": [
+      {
+        "startMinutes": 855,
+        "endMinutes": 1200
+      }
+    ]
+  },
+  {
+    "employeeId": "dylan",
+    "date": "2026-07-22",
+    "segments": [
+      {
+        "startMinutes": 780,
+        "endMinutes": 1020
+      }
+    ]
+  },
+  {
+    "employeeId": "erwan",
+    "date": "2026-07-22",
+    "segments": [
+      {
+        "startMinutes": 360,
+        "endMinutes": 810
+      }
+    ]
+  },
+  {
+    "employeeId": "luca",
+    "date": "2026-07-22",
+    "segments": [
+      {
+        "startMinutes": 360,
+        "endMinutes": 735
+      }
+    ]
+  },
+  {
+    "employeeId": "valentin",
+    "date": "2026-07-22",
+    "segments": [
+      {
+        "startMinutes": 480,
+        "endMinutes": 720
+      }
+    ]
+  },
+  {
+    "employeeId": "dylan",
+    "date": "2026-07-23",
+    "segments": [
+      {
+        "startMinutes": 660,
+        "endMinutes": 1200
+      }
+    ]
+  },
+  {
+    "employeeId": "erwan",
+    "date": "2026-07-23",
+    "segments": [
+      {
+        "startMinutes": 360,
+        "endMinutes": 660
+      }
+    ]
+  },
+  {
+    "employeeId": "luca",
+    "date": "2026-07-23",
+    "segments": [
+      {
+        "startMinutes": 360,
+        "endMinutes": 735
+      }
+    ]
+  },
+  {
+    "employeeId": "valentin",
+    "date": "2026-07-23",
+    "segments": [
+      {
+        "startMinutes": 585,
+        "endMinutes": 1020
+      }
+    ]
+  },
+  {
+    "employeeId": "arthur",
+    "date": "2026-07-24",
+    "segments": [
+      {
+        "startMinutes": 480,
+        "endMinutes": 1020
+      }
+    ]
+  },
+  {
+    "employeeId": "dylan",
+    "date": "2026-07-24",
+    "segments": [
+      {
+        "startMinutes": 915,
+        "endMinutes": 1200
+      }
+    ]
+  },
+  {
+    "employeeId": "erwan",
+    "date": "2026-07-24",
+    "segments": [
+      {
+        "startMinutes": 360,
+        "endMinutes": 885
+      }
+    ]
+  },
+  {
+    "employeeId": "luca",
+    "date": "2026-07-24",
+    "segments": [
+      {
+        "startMinutes": 360,
+        "endMinutes": 930
+      }
+    ]
+  },
+  {
+    "employeeId": "valentin",
+    "date": "2026-07-24",
+    "segments": [
+      {
+        "startMinutes": 570,
+        "endMinutes": 1080
+      }
+    ]
+  },
+  {
+    "employeeId": "arthur",
+    "date": "2026-07-25",
+    "segments": [
+      {
+        "startMinutes": 360,
+        "endMinutes": 960
+      }
+    ]
+  },
+  {
+    "employeeId": "dylan",
+    "date": "2026-07-25",
+    "segments": [
+      {
+        "startMinutes": 540,
+        "endMinutes": 810
+      }
+    ]
+  },
+  {
+    "employeeId": "erwan",
+    "date": "2026-07-25",
+    "segments": [
+      {
+        "startMinutes": 945,
+        "endMinutes": 1200
+      }
+    ]
+  },
+  {
+    "employeeId": "luca",
+    "date": "2026-07-25",
+    "segments": [
+      {
+        "startMinutes": 360,
+        "endMinutes": 720
+      }
+    ]
+  },
+  {
+    "employeeId": "valentin",
+    "date": "2026-07-25",
+    "segments": [
+      {
+        "startMinutes": 360,
+        "endMinutes": 870
+      }
+    ]
+  }
+]

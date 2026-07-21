@@ -1,0 +1,1258 @@
+{
+  "version": "v3.0.0",
+  "planningId": "drive_historical",
+  "sectorId": "drive",
+  "period": {
+    "start": "2026-07-20",
+    "end": "2026-07-26"
+  },
+  "timeStepMinutes": 15,
+  "employees": [
+    {
+      "id": "arthur",
+      "firstName": "arthur",
+      "lastName": "Drive",
+      "contractMinutes": 2205,
+      "workingDays": [
+        "monday",
+        "tuesday",
+        "wednesday",
+        "friday",
+        "saturday"
+      ],
+      "fixedRestDays": [
+        "thursday",
+        "sunday"
+      ],
+      "minimumDailyMinutes": 240,
+      "maximumDailyMinutes": 600,
+      "canOpen": true,
+      "canClose": true,
+      "canSplitShift": true,
+      "maximumOpenings": null,
+      "maximumClosings": 1,
+      "prefersOpening": false,
+      "prefersClosing": false
+    },
+    {
+      "id": "dylan",
+      "firstName": "dylan",
+      "lastName": "Drive",
+      "contractMinutes": 2205,
+      "workingDays": [
+        "monday",
+        "tuesday",
+        "wednesday",
+        "thursday",
+        "friday",
+        "saturday"
+      ],
+      "fixedRestDays": [
+        "sunday"
+      ],
+      "minimumDailyMinutes": 240,
+      "maximumDailyMinutes": 600,
+      "canOpen": false,
+      "canClose": true,
+      "canSplitShift": false,
+      "maximumOpenings": null,
+      "maximumClosings": 2,
+      "prefersOpening": false,
+      "prefersClosing": false
+    },
+    {
+      "id": "erwan",
+      "firstName": "erwan",
+      "lastName": "Drive",
+      "contractMinutes": 2205,
+      "workingDays": [
+        "monday",
+        "tuesday",
+        "wednesday",
+        "thursday",
+        "friday",
+        "saturday"
+      ],
+      "fixedRestDays": [
+        "sunday"
+      ],
+      "minimumDailyMinutes": 240,
+      "maximumDailyMinutes": 600,
+      "canOpen": true,
+      "canClose": true,
+      "canSplitShift": false,
+      "maximumOpenings": null,
+      "maximumClosings": 1,
+      "prefersOpening": false,
+      "prefersClosing": false
+    },
+    {
+      "id": "luca",
+      "firstName": "luca",
+      "lastName": "Drive",
+      "contractMinutes": 2205,
+      "workingDays": [
+        "monday",
+        "tuesday",
+        "wednesday",
+        "thursday",
+        "friday",
+        "saturday"
+      ],
+      "fixedRestDays": [
+        "sunday"
+      ],
+      "minimumDailyMinutes": 240,
+      "maximumDailyMinutes": 600,
+      "canOpen": true,
+      "canClose": true,
+      "canSplitShift": false,
+      "maximumOpenings": null,
+      "maximumClosings": 1,
+      "prefersOpening": false,
+      "prefersClosing": false
+    },
+    {
+      "id": "valentin",
+      "firstName": "valentin",
+      "lastName": "Drive",
+      "contractMinutes": 2205,
+      "workingDays": [
+        "monday",
+        "tuesday",
+        "wednesday",
+        "thursday",
+        "friday",
+        "saturday"
+      ],
+      "fixedRestDays": [
+        "sunday"
+      ],
+      "minimumDailyMinutes": 240,
+      "maximumDailyMinutes": 600,
+      "canOpen": true,
+      "canClose": true,
+      "canSplitShift": false,
+      "maximumOpenings": 1,
+      "maximumClosings": 1,
+      "prefersOpening": false,
+      "prefersClosing": false
+    }
+  ],
+  "days": [
+    {
+      "date": "2026-07-20",
+      "weekDay": "monday",
+      "weekKey": "2026-W30",
+      "closed": false,
+      "opensAtMinutes": 360,
+      "closesAtMinutes": 1200,
+      "budgetMinutes": 1650
+    },
+    {
+      "date": "2026-07-21",
+      "weekDay": "tuesday",
+      "weekKey": "2026-W30",
+      "closed": false,
+      "opensAtMinutes": 360,
+      "closesAtMinutes": 1200,
+      "budgetMinutes": 1650
+    },
+    {
+      "date": "2026-07-22",
+      "weekDay": "wednesday",
+      "weekKey": "2026-W30",
+      "closed": false,
+      "opensAtMinutes": 360,
+      "closesAtMinutes": 1200,
+      "budgetMinutes": 1650
+    },
+    {
+      "date": "2026-07-23",
+      "weekDay": "thursday",
+      "weekKey": "2026-W30",
+      "closed": false,
+      "opensAtMinutes": 360,
+      "closesAtMinutes": 1200,
+      "budgetMinutes": 1650
+    },
+    {
+      "date": "2026-07-24",
+      "weekDay": "friday",
+      "weekKey": "2026-W30",
+      "closed": false,
+      "opensAtMinutes": 360,
+      "closesAtMinutes": 1200,
+      "budgetMinutes": 2430
+    },
+    {
+      "date": "2026-07-25",
+      "weekDay": "saturday",
+      "weekKey": "2026-W30",
+      "closed": false,
+      "opensAtMinutes": 360,
+      "closesAtMinutes": 1200,
+      "budgetMinutes": 1995
+    },
+    {
+      "date": "2026-07-26",
+      "weekDay": "sunday",
+      "weekKey": "2026-W30",
+      "closed": true,
+      "opensAtMinutes": null,
+      "closesAtMinutes": null,
+      "budgetMinutes": 0
+    }
+  ],
+  "employeeDays": [
+    {
+      "employeeId": "arthur",
+      "date": "2026-07-20",
+      "available": true,
+      "mandatory": true,
+      "fixedRest": false,
+      "earliestStartMinutes": 360,
+      "latestEndMinutes": 1200,
+      "maximumMinutes": 600
+    },
+    {
+      "employeeId": "arthur",
+      "date": "2026-07-21",
+      "available": true,
+      "mandatory": true,
+      "fixedRest": false,
+      "earliestStartMinutes": 360,
+      "latestEndMinutes": 1200,
+      "maximumMinutes": 600
+    },
+    {
+      "employeeId": "arthur",
+      "date": "2026-07-22",
+      "available": true,
+      "mandatory": true,
+      "fixedRest": false,
+      "earliestStartMinutes": 360,
+      "latestEndMinutes": 1200,
+      "maximumMinutes": 600
+    },
+    {
+      "employeeId": "arthur",
+      "date": "2026-07-23",
+      "available": false,
+      "mandatory": false,
+      "fixedRest": true,
+      "earliestStartMinutes": 360,
+      "latestEndMinutes": 1200,
+      "maximumMinutes": 0,
+      "unavailableReason": "fixed-rest"
+    },
+    {
+      "employeeId": "arthur",
+      "date": "2026-07-24",
+      "available": true,
+      "mandatory": true,
+      "fixedRest": false,
+      "earliestStartMinutes": 360,
+      "latestEndMinutes": 1200,
+      "maximumMinutes": 600
+    },
+    {
+      "employeeId": "arthur",
+      "date": "2026-07-25",
+      "available": true,
+      "mandatory": true,
+      "fixedRest": false,
+      "earliestStartMinutes": 360,
+      "latestEndMinutes": 1200,
+      "maximumMinutes": 600
+    },
+    {
+      "employeeId": "arthur",
+      "date": "2026-07-26",
+      "available": false,
+      "mandatory": false,
+      "fixedRest": true,
+      "earliestStartMinutes": 0,
+      "latestEndMinutes": 0,
+      "maximumMinutes": 0,
+      "unavailableReason": "closed"
+    },
+    {
+      "employeeId": "dylan",
+      "date": "2026-07-20",
+      "available": true,
+      "mandatory": true,
+      "fixedRest": false,
+      "earliestStartMinutes": 360,
+      "latestEndMinutes": 1200,
+      "maximumMinutes": 600
+    },
+    {
+      "employeeId": "dylan",
+      "date": "2026-07-21",
+      "available": true,
+      "mandatory": true,
+      "fixedRest": false,
+      "earliestStartMinutes": 360,
+      "latestEndMinutes": 1200,
+      "maximumMinutes": 600
+    },
+    {
+      "employeeId": "dylan",
+      "date": "2026-07-22",
+      "available": true,
+      "mandatory": true,
+      "fixedRest": false,
+      "earliestStartMinutes": 360,
+      "latestEndMinutes": 1200,
+      "maximumMinutes": 600
+    },
+    {
+      "employeeId": "dylan",
+      "date": "2026-07-23",
+      "available": true,
+      "mandatory": true,
+      "fixedRest": false,
+      "earliestStartMinutes": 360,
+      "latestEndMinutes": 1200,
+      "maximumMinutes": 600
+    },
+    {
+      "employeeId": "dylan",
+      "date": "2026-07-24",
+      "available": true,
+      "mandatory": true,
+      "fixedRest": false,
+      "earliestStartMinutes": 360,
+      "latestEndMinutes": 1200,
+      "maximumMinutes": 600
+    },
+    {
+      "employeeId": "dylan",
+      "date": "2026-07-25",
+      "available": true,
+      "mandatory": true,
+      "fixedRest": false,
+      "earliestStartMinutes": 360,
+      "latestEndMinutes": 1200,
+      "maximumMinutes": 600
+    },
+    {
+      "employeeId": "dylan",
+      "date": "2026-07-26",
+      "available": false,
+      "mandatory": false,
+      "fixedRest": true,
+      "earliestStartMinutes": 0,
+      "latestEndMinutes": 0,
+      "maximumMinutes": 0,
+      "unavailableReason": "closed"
+    },
+    {
+      "employeeId": "erwan",
+      "date": "2026-07-20",
+      "available": true,
+      "mandatory": true,
+      "fixedRest": false,
+      "earliestStartMinutes": 360,
+      "latestEndMinutes": 1200,
+      "maximumMinutes": 600
+    },
+    {
+      "employeeId": "erwan",
+      "date": "2026-07-21",
+      "available": true,
+      "mandatory": true,
+      "fixedRest": false,
+      "earliestStartMinutes": 360,
+      "latestEndMinutes": 1200,
+      "maximumMinutes": 600
+    },
+    {
+      "employeeId": "erwan",
+      "date": "2026-07-22",
+      "available": true,
+      "mandatory": true,
+      "fixedRest": false,
+      "earliestStartMinutes": 360,
+      "latestEndMinutes": 1200,
+      "maximumMinutes": 600
+    },
+    {
+      "employeeId": "erwan",
+      "date": "2026-07-23",
+      "available": true,
+      "mandatory": true,
+      "fixedRest": false,
+      "earliestStartMinutes": 360,
+      "latestEndMinutes": 1200,
+      "maximumMinutes": 600
+    },
+    {
+      "employeeId": "erwan",
+      "date": "2026-07-24",
+      "available": true,
+      "mandatory": true,
+      "fixedRest": false,
+      "earliestStartMinutes": 360,
+      "latestEndMinutes": 1200,
+      "maximumMinutes": 600
+    },
+    {
+      "employeeId": "erwan",
+      "date": "2026-07-25",
+      "available": true,
+      "mandatory": true,
+      "fixedRest": false,
+      "earliestStartMinutes": 360,
+      "latestEndMinutes": 1200,
+      "maximumMinutes": 600
+    },
+    {
+      "employeeId": "erwan",
+      "date": "2026-07-26",
+      "available": false,
+      "mandatory": false,
+      "fixedRest": true,
+      "earliestStartMinutes": 0,
+      "latestEndMinutes": 0,
+      "maximumMinutes": 0,
+      "unavailableReason": "closed"
+    },
+    {
+      "employeeId": "luca",
+      "date": "2026-07-20",
+      "available": true,
+      "mandatory": true,
+      "fixedRest": false,
+      "earliestStartMinutes": 360,
+      "latestEndMinutes": 1200,
+      "maximumMinutes": 600
+    },
+    {
+      "employeeId": "luca",
+      "date": "2026-07-21",
+      "available": true,
+      "mandatory": true,
+      "fixedRest": false,
+      "earliestStartMinutes": 360,
+      "latestEndMinutes": 1200,
+      "maximumMinutes": 600
+    },
+    {
+      "employeeId": "luca",
+      "date": "2026-07-22",
+      "available": true,
+      "mandatory": true,
+      "fixedRest": false,
+      "earliestStartMinutes": 360,
+      "latestEndMinutes": 1200,
+      "maximumMinutes": 600
+    },
+    {
+      "employeeId": "luca",
+      "date": "2026-07-23",
+      "available": true,
+      "mandatory": true,
+      "fixedRest": false,
+      "earliestStartMinutes": 360,
+      "latestEndMinutes": 1200,
+      "maximumMinutes": 600
+    },
+    {
+      "employeeId": "luca",
+      "date": "2026-07-24",
+      "available": true,
+      "mandatory": true,
+      "fixedRest": false,
+      "earliestStartMinutes": 360,
+      "latestEndMinutes": 1200,
+      "maximumMinutes": 600
+    },
+    {
+      "employeeId": "luca",
+      "date": "2026-07-25",
+      "available": true,
+      "mandatory": true,
+      "fixedRest": false,
+      "earliestStartMinutes": 360,
+      "latestEndMinutes": 1200,
+      "maximumMinutes": 600
+    },
+    {
+      "employeeId": "luca",
+      "date": "2026-07-26",
+      "available": false,
+      "mandatory": false,
+      "fixedRest": true,
+      "earliestStartMinutes": 0,
+      "latestEndMinutes": 0,
+      "maximumMinutes": 0,
+      "unavailableReason": "closed"
+    },
+    {
+      "employeeId": "valentin",
+      "date": "2026-07-20",
+      "available": true,
+      "mandatory": true,
+      "fixedRest": false,
+      "earliestStartMinutes": 360,
+      "latestEndMinutes": 1200,
+      "maximumMinutes": 600
+    },
+    {
+      "employeeId": "valentin",
+      "date": "2026-07-21",
+      "available": true,
+      "mandatory": true,
+      "fixedRest": false,
+      "earliestStartMinutes": 360,
+      "latestEndMinutes": 1200,
+      "maximumMinutes": 600
+    },
+    {
+      "employeeId": "valentin",
+      "date": "2026-07-22",
+      "available": true,
+      "mandatory": true,
+      "fixedRest": false,
+      "earliestStartMinutes": 360,
+      "latestEndMinutes": 1200,
+      "maximumMinutes": 600
+    },
+    {
+      "employeeId": "valentin",
+      "date": "2026-07-23",
+      "available": true,
+      "mandatory": true,
+      "fixedRest": false,
+      "earliestStartMinutes": 360,
+      "latestEndMinutes": 1200,
+      "maximumMinutes": 600
+    },
+    {
+      "employeeId": "valentin",
+      "date": "2026-07-24",
+      "available": true,
+      "mandatory": true,
+      "fixedRest": false,
+      "earliestStartMinutes": 360,
+      "latestEndMinutes": 1200,
+      "maximumMinutes": 600
+    },
+    {
+      "employeeId": "valentin",
+      "date": "2026-07-25",
+      "available": true,
+      "mandatory": true,
+      "fixedRest": false,
+      "earliestStartMinutes": 360,
+      "latestEndMinutes": 1200,
+      "maximumMinutes": 600
+    },
+    {
+      "employeeId": "valentin",
+      "date": "2026-07-26",
+      "available": false,
+      "mandatory": false,
+      "fixedRest": true,
+      "earliestStartMinutes": 0,
+      "latestEndMinutes": 0,
+      "maximumMinutes": 0,
+      "unavailableReason": "closed"
+    }
+  ],
+  "demandSlots": [
+    {
+      "id": "req_drive_2026-07-20_0600",
+      "date": "2026-07-20",
+      "startMinutes": 360,
+      "endMinutes": 420,
+      "requiredEmployees": 2,
+      "maximumEmployees": null
+    },
+    {
+      "id": "req_drive_2026-07-20_0700",
+      "date": "2026-07-20",
+      "startMinutes": 420,
+      "endMinutes": 480,
+      "requiredEmployees": 2,
+      "maximumEmployees": null
+    },
+    {
+      "id": "req_drive_2026-07-20_0800",
+      "date": "2026-07-20",
+      "startMinutes": 480,
+      "endMinutes": 540,
+      "requiredEmployees": 1,
+      "maximumEmployees": null
+    },
+    {
+      "id": "req_drive_2026-07-20_0900",
+      "date": "2026-07-20",
+      "startMinutes": 540,
+      "endMinutes": 600,
+      "requiredEmployees": 1,
+      "maximumEmployees": null
+    },
+    {
+      "id": "req_drive_2026-07-20_1000",
+      "date": "2026-07-20",
+      "startMinutes": 600,
+      "endMinutes": 660,
+      "requiredEmployees": 3,
+      "maximumEmployees": null
+    },
+    {
+      "id": "req_drive_2026-07-20_1100",
+      "date": "2026-07-20",
+      "startMinutes": 660,
+      "endMinutes": 720,
+      "requiredEmployees": 3,
+      "maximumEmployees": null
+    },
+    {
+      "id": "req_drive_2026-07-20_1200",
+      "date": "2026-07-20",
+      "startMinutes": 720,
+      "endMinutes": 780,
+      "requiredEmployees": 1,
+      "maximumEmployees": null
+    },
+    {
+      "id": "req_drive_2026-07-20_1300",
+      "date": "2026-07-20",
+      "startMinutes": 780,
+      "endMinutes": 840,
+      "requiredEmployees": 1,
+      "maximumEmployees": null
+    },
+    {
+      "id": "req_drive_2026-07-20_1400",
+      "date": "2026-07-20",
+      "startMinutes": 840,
+      "endMinutes": 900,
+      "requiredEmployees": 1,
+      "maximumEmployees": null
+    },
+    {
+      "id": "req_drive_2026-07-20_1500",
+      "date": "2026-07-20",
+      "startMinutes": 900,
+      "endMinutes": 960,
+      "requiredEmployees": 1,
+      "maximumEmployees": null
+    },
+    {
+      "id": "req_drive_2026-07-20_1600",
+      "date": "2026-07-20",
+      "startMinutes": 960,
+      "endMinutes": 1020,
+      "requiredEmployees": 2,
+      "maximumEmployees": null
+    },
+    {
+      "id": "req_drive_2026-07-20_1700",
+      "date": "2026-07-20",
+      "startMinutes": 1020,
+      "endMinutes": 1080,
+      "requiredEmployees": 1,
+      "maximumEmployees": null
+    },
+    {
+      "id": "req_drive_2026-07-20_1800",
+      "date": "2026-07-20",
+      "startMinutes": 1080,
+      "endMinutes": 1140,
+      "requiredEmployees": 1,
+      "maximumEmployees": null
+    },
+    {
+      "id": "req_drive_2026-07-20_1900",
+      "date": "2026-07-20",
+      "startMinutes": 1140,
+      "endMinutes": 1200,
+      "requiredEmployees": 1,
+      "maximumEmployees": null
+    },
+    {
+      "id": "req_drive_2026-07-21_0600",
+      "date": "2026-07-21",
+      "startMinutes": 360,
+      "endMinutes": 420,
+      "requiredEmployees": 2,
+      "maximumEmployees": null
+    },
+    {
+      "id": "req_drive_2026-07-21_0700",
+      "date": "2026-07-21",
+      "startMinutes": 420,
+      "endMinutes": 480,
+      "requiredEmployees": 2,
+      "maximumEmployees": null
+    },
+    {
+      "id": "req_drive_2026-07-21_0800",
+      "date": "2026-07-21",
+      "startMinutes": 480,
+      "endMinutes": 540,
+      "requiredEmployees": 1,
+      "maximumEmployees": null
+    },
+    {
+      "id": "req_drive_2026-07-21_0900",
+      "date": "2026-07-21",
+      "startMinutes": 540,
+      "endMinutes": 600,
+      "requiredEmployees": 1,
+      "maximumEmployees": null
+    },
+    {
+      "id": "req_drive_2026-07-21_1000",
+      "date": "2026-07-21",
+      "startMinutes": 600,
+      "endMinutes": 660,
+      "requiredEmployees": 3,
+      "maximumEmployees": null
+    },
+    {
+      "id": "req_drive_2026-07-21_1100",
+      "date": "2026-07-21",
+      "startMinutes": 660,
+      "endMinutes": 720,
+      "requiredEmployees": 3,
+      "maximumEmployees": null
+    },
+    {
+      "id": "req_drive_2026-07-21_1200",
+      "date": "2026-07-21",
+      "startMinutes": 720,
+      "endMinutes": 780,
+      "requiredEmployees": 1,
+      "maximumEmployees": null
+    },
+    {
+      "id": "req_drive_2026-07-21_1300",
+      "date": "2026-07-21",
+      "startMinutes": 780,
+      "endMinutes": 840,
+      "requiredEmployees": 1,
+      "maximumEmployees": null
+    },
+    {
+      "id": "req_drive_2026-07-21_1400",
+      "date": "2026-07-21",
+      "startMinutes": 840,
+      "endMinutes": 900,
+      "requiredEmployees": 1,
+      "maximumEmployees": null
+    },
+    {
+      "id": "req_drive_2026-07-21_1500",
+      "date": "2026-07-21",
+      "startMinutes": 900,
+      "endMinutes": 960,
+      "requiredEmployees": 1,
+      "maximumEmployees": null
+    },
+    {
+      "id": "req_drive_2026-07-21_1600",
+      "date": "2026-07-21",
+      "startMinutes": 960,
+      "endMinutes": 1020,
+      "requiredEmployees": 2,
+      "maximumEmployees": null
+    },
+    {
+      "id": "req_drive_2026-07-21_1700",
+      "date": "2026-07-21",
+      "startMinutes": 1020,
+      "endMinutes": 1080,
+      "requiredEmployees": 1,
+      "maximumEmployees": null
+    },
+    {
+      "id": "req_drive_2026-07-21_1800",
+      "date": "2026-07-21",
+      "startMinutes": 1080,
+      "endMinutes": 1140,
+      "requiredEmployees": 1,
+      "maximumEmployees": null
+    },
+    {
+      "id": "req_drive_2026-07-21_1900",
+      "date": "2026-07-21",
+      "startMinutes": 1140,
+      "endMinutes": 1200,
+      "requiredEmployees": 1,
+      "maximumEmployees": null
+    },
+    {
+      "id": "req_drive_2026-07-22_0600",
+      "date": "2026-07-22",
+      "startMinutes": 360,
+      "endMinutes": 420,
+      "requiredEmployees": 2,
+      "maximumEmployees": null
+    },
+    {
+      "id": "req_drive_2026-07-22_0700",
+      "date": "2026-07-22",
+      "startMinutes": 420,
+      "endMinutes": 480,
+      "requiredEmployees": 2,
+      "maximumEmployees": null
+    },
+    {
+      "id": "req_drive_2026-07-22_0800",
+      "date": "2026-07-22",
+      "startMinutes": 480,
+      "endMinutes": 540,
+      "requiredEmployees": 1,
+      "maximumEmployees": null
+    },
+    {
+      "id": "req_drive_2026-07-22_0900",
+      "date": "2026-07-22",
+      "startMinutes": 540,
+      "endMinutes": 600,
+      "requiredEmployees": 1,
+      "maximumEmployees": null
+    },
+    {
+      "id": "req_drive_2026-07-22_1000",
+      "date": "2026-07-22",
+      "startMinutes": 600,
+      "endMinutes": 660,
+      "requiredEmployees": 3,
+      "maximumEmployees": null
+    },
+    {
+      "id": "req_drive_2026-07-22_1100",
+      "date": "2026-07-22",
+      "startMinutes": 660,
+      "endMinutes": 720,
+      "requiredEmployees": 3,
+      "maximumEmployees": null
+    },
+    {
+      "id": "req_drive_2026-07-22_1200",
+      "date": "2026-07-22",
+      "startMinutes": 720,
+      "endMinutes": 780,
+      "requiredEmployees": 1,
+      "maximumEmployees": null
+    },
+    {
+      "id": "req_drive_2026-07-22_1300",
+      "date": "2026-07-22",
+      "startMinutes": 780,
+      "endMinutes": 840,
+      "requiredEmployees": 1,
+      "maximumEmployees": null
+    },
+    {
+      "id": "req_drive_2026-07-22_1400",
+      "date": "2026-07-22",
+      "startMinutes": 840,
+      "endMinutes": 900,
+      "requiredEmployees": 1,
+      "maximumEmployees": null
+    },
+    {
+      "id": "req_drive_2026-07-22_1500",
+      "date": "2026-07-22",
+      "startMinutes": 900,
+      "endMinutes": 960,
+      "requiredEmployees": 1,
+      "maximumEmployees": null
+    },
+    {
+      "id": "req_drive_2026-07-22_1600",
+      "date": "2026-07-22",
+      "startMinutes": 960,
+      "endMinutes": 1020,
+      "requiredEmployees": 2,
+      "maximumEmployees": null
+    },
+    {
+      "id": "req_drive_2026-07-22_1700",
+      "date": "2026-07-22",
+      "startMinutes": 1020,
+      "endMinutes": 1080,
+      "requiredEmployees": 1,
+      "maximumEmployees": null
+    },
+    {
+      "id": "req_drive_2026-07-22_1800",
+      "date": "2026-07-22",
+      "startMinutes": 1080,
+      "endMinutes": 1140,
+      "requiredEmployees": 1,
+      "maximumEmployees": null
+    },
+    {
+      "id": "req_drive_2026-07-22_1900",
+      "date": "2026-07-22",
+      "startMinutes": 1140,
+      "endMinutes": 1200,
+      "requiredEmployees": 1,
+      "maximumEmployees": null
+    },
+    {
+      "id": "req_drive_2026-07-23_0600",
+      "date": "2026-07-23",
+      "startMinutes": 360,
+      "endMinutes": 420,
+      "requiredEmployees": 2,
+      "maximumEmployees": null
+    },
+    {
+      "id": "req_drive_2026-07-23_0700",
+      "date": "2026-07-23",
+      "startMinutes": 420,
+      "endMinutes": 480,
+      "requiredEmployees": 2,
+      "maximumEmployees": null
+    },
+    {
+      "id": "req_drive_2026-07-23_0800",
+      "date": "2026-07-23",
+      "startMinutes": 480,
+      "endMinutes": 540,
+      "requiredEmployees": 1,
+      "maximumEmployees": null
+    },
+    {
+      "id": "req_drive_2026-07-23_0900",
+      "date": "2026-07-23",
+      "startMinutes": 540,
+      "endMinutes": 600,
+      "requiredEmployees": 1,
+      "maximumEmployees": null
+    },
+    {
+      "id": "req_drive_2026-07-23_1000",
+      "date": "2026-07-23",
+      "startMinutes": 600,
+      "endMinutes": 660,
+      "requiredEmployees": 3,
+      "maximumEmployees": null
+    },
+    {
+      "id": "req_drive_2026-07-23_1100",
+      "date": "2026-07-23",
+      "startMinutes": 660,
+      "endMinutes": 720,
+      "requiredEmployees": 3,
+      "maximumEmployees": null
+    },
+    {
+      "id": "req_drive_2026-07-23_1200",
+      "date": "2026-07-23",
+      "startMinutes": 720,
+      "endMinutes": 780,
+      "requiredEmployees": 1,
+      "maximumEmployees": null
+    },
+    {
+      "id": "req_drive_2026-07-23_1300",
+      "date": "2026-07-23",
+      "startMinutes": 780,
+      "endMinutes": 840,
+      "requiredEmployees": 1,
+      "maximumEmployees": null
+    },
+    {
+      "id": "req_drive_2026-07-23_1400",
+      "date": "2026-07-23",
+      "startMinutes": 840,
+      "endMinutes": 900,
+      "requiredEmployees": 1,
+      "maximumEmployees": null
+    },
+    {
+      "id": "req_drive_2026-07-23_1500",
+      "date": "2026-07-23",
+      "startMinutes": 900,
+      "endMinutes": 960,
+      "requiredEmployees": 1,
+      "maximumEmployees": null
+    },
+    {
+      "id": "req_drive_2026-07-23_1600",
+      "date": "2026-07-23",
+      "startMinutes": 960,
+      "endMinutes": 1020,
+      "requiredEmployees": 2,
+      "maximumEmployees": null
+    },
+    {
+      "id": "req_drive_2026-07-23_1700",
+      "date": "2026-07-23",
+      "startMinutes": 1020,
+      "endMinutes": 1080,
+      "requiredEmployees": 1,
+      "maximumEmployees": null
+    },
+    {
+      "id": "req_drive_2026-07-23_1800",
+      "date": "2026-07-23",
+      "startMinutes": 1080,
+      "endMinutes": 1140,
+      "requiredEmployees": 1,
+      "maximumEmployees": null
+    },
+    {
+      "id": "req_drive_2026-07-23_1900",
+      "date": "2026-07-23",
+      "startMinutes": 1140,
+      "endMinutes": 1200,
+      "requiredEmployees": 1,
+      "maximumEmployees": null
+    },
+    {
+      "id": "req_drive_2026-07-24_0600",
+      "date": "2026-07-24",
+      "startMinutes": 360,
+      "endMinutes": 420,
+      "requiredEmployees": 2,
+      "maximumEmployees": null
+    },
+    {
+      "id": "req_drive_2026-07-24_0700",
+      "date": "2026-07-24",
+      "startMinutes": 420,
+      "endMinutes": 480,
+      "requiredEmployees": 1,
+      "maximumEmployees": null
+    },
+    {
+      "id": "req_drive_2026-07-24_0800",
+      "date": "2026-07-24",
+      "startMinutes": 480,
+      "endMinutes": 540,
+      "requiredEmployees": 3,
+      "maximumEmployees": null
+    },
+    {
+      "id": "req_drive_2026-07-24_0900",
+      "date": "2026-07-24",
+      "startMinutes": 540,
+      "endMinutes": 600,
+      "requiredEmployees": 1,
+      "maximumEmployees": null
+    },
+    {
+      "id": "req_drive_2026-07-24_1000",
+      "date": "2026-07-24",
+      "startMinutes": 600,
+      "endMinutes": 660,
+      "requiredEmployees": 4,
+      "maximumEmployees": null
+    },
+    {
+      "id": "req_drive_2026-07-24_1100",
+      "date": "2026-07-24",
+      "startMinutes": 660,
+      "endMinutes": 720,
+      "requiredEmployees": 1,
+      "maximumEmployees": null
+    },
+    {
+      "id": "req_drive_2026-07-24_1200",
+      "date": "2026-07-24",
+      "startMinutes": 720,
+      "endMinutes": 780,
+      "requiredEmployees": 1,
+      "maximumEmployees": null
+    },
+    {
+      "id": "req_drive_2026-07-24_1300",
+      "date": "2026-07-24",
+      "startMinutes": 780,
+      "endMinutes": 840,
+      "requiredEmployees": 1,
+      "maximumEmployees": null
+    },
+    {
+      "id": "req_drive_2026-07-24_1400",
+      "date": "2026-07-24",
+      "startMinutes": 840,
+      "endMinutes": 900,
+      "requiredEmployees": 1,
+      "maximumEmployees": null
+    },
+    {
+      "id": "req_drive_2026-07-24_1500",
+      "date": "2026-07-24",
+      "startMinutes": 900,
+      "endMinutes": 960,
+      "requiredEmployees": 1,
+      "maximumEmployees": null
+    },
+    {
+      "id": "req_drive_2026-07-24_1600",
+      "date": "2026-07-24",
+      "startMinutes": 960,
+      "endMinutes": 1020,
+      "requiredEmployees": 3,
+      "maximumEmployees": null
+    },
+    {
+      "id": "req_drive_2026-07-24_1700",
+      "date": "2026-07-24",
+      "startMinutes": 1020,
+      "endMinutes": 1080,
+      "requiredEmployees": 2,
+      "maximumEmployees": null
+    },
+    {
+      "id": "req_drive_2026-07-24_1800",
+      "date": "2026-07-24",
+      "startMinutes": 1080,
+      "endMinutes": 1140,
+      "requiredEmployees": 1,
+      "maximumEmployees": null
+    },
+    {
+      "id": "req_drive_2026-07-24_1900",
+      "date": "2026-07-24",
+      "startMinutes": 1140,
+      "endMinutes": 1200,
+      "requiredEmployees": 1,
+      "maximumEmployees": null
+    },
+    {
+      "id": "req_drive_2026-07-25_0600",
+      "date": "2026-07-25",
+      "startMinutes": 360,
+      "endMinutes": 420,
+      "requiredEmployees": 4,
+      "maximumEmployees": null
+    },
+    {
+      "id": "req_drive_2026-07-25_0700",
+      "date": "2026-07-25",
+      "startMinutes": 420,
+      "endMinutes": 480,
+      "requiredEmployees": 1,
+      "maximumEmployees": null
+    },
+    {
+      "id": "req_drive_2026-07-25_0800",
+      "date": "2026-07-25",
+      "startMinutes": 480,
+      "endMinutes": 540,
+      "requiredEmployees": 1,
+      "maximumEmployees": null
+    },
+    {
+      "id": "req_drive_2026-07-25_0900",
+      "date": "2026-07-25",
+      "startMinutes": 540,
+      "endMinutes": 600,
+      "requiredEmployees": 1,
+      "maximumEmployees": null
+    },
+    {
+      "id": "req_drive_2026-07-25_1000",
+      "date": "2026-07-25",
+      "startMinutes": 600,
+      "endMinutes": 660,
+      "requiredEmployees": 1,
+      "maximumEmployees": null
+    },
+    {
+      "id": "req_drive_2026-07-25_1100",
+      "date": "2026-07-25",
+      "startMinutes": 660,
+      "endMinutes": 720,
+      "requiredEmployees": 4,
+      "maximumEmployees": null
+    },
+    {
+      "id": "req_drive_2026-07-25_1200",
+      "date": "2026-07-25",
+      "startMinutes": 720,
+      "endMinutes": 780,
+      "requiredEmployees": 1,
+      "maximumEmployees": null
+    },
+    {
+      "id": "req_drive_2026-07-25_1300",
+      "date": "2026-07-25",
+      "startMinutes": 780,
+      "endMinutes": 840,
+      "requiredEmployees": 1,
+      "maximumEmployees": null
+    },
+    {
+      "id": "req_drive_2026-07-25_1400",
+      "date": "2026-07-25",
+      "startMinutes": 840,
+      "endMinutes": 900,
+      "requiredEmployees": 1,
+      "maximumEmployees": null
+    },
+    {
+      "id": "req_drive_2026-07-25_1500",
+      "date": "2026-07-25",
+      "startMinutes": 900,
+      "endMinutes": 960,
+      "requiredEmployees": 1,
+      "maximumEmployees": null
+    },
+    {
+      "id": "req_drive_2026-07-25_1600",
+      "date": "2026-07-25",
+      "startMinutes": 960,
+      "endMinutes": 1020,
+      "requiredEmployees": 1,
+      "maximumEmployees": null
+    },
+    {
+      "id": "req_drive_2026-07-25_1700",
+      "date": "2026-07-25",
+      "startMinutes": 1020,
+      "endMinutes": 1080,
+      "requiredEmployees": 1,
+      "maximumEmployees": null
+    },
+    {
+      "id": "req_drive_2026-07-25_1800",
+      "date": "2026-07-25",
+      "startMinutes": 1080,
+      "endMinutes": 1140,
+      "requiredEmployees": 1,
+      "maximumEmployees": null
+    },
+    {
+      "id": "req_drive_2026-07-25_1900",
+      "date": "2026-07-25",
+      "startMinutes": 1140,
+      "endMinutes": 1200,
+      "requiredEmployees": 1,
+      "maximumEmployees": null
+    }
+  ],
+  "rules": {
+    "minimumShiftMinutes": 240,
+    "maximumShiftMinutes": 600,
+    "minimumRestMinutes": 720,
+    "maximumConsecutiveWorkedDays": 6,
+    "maximumConsecutiveWorkedDaysSource": "derived-fallback",
+    "splitShiftAllowed": true,
+    "maximumSplitMinutes": 90,
+    "minimumOpeningsPerDay": 1,
+    "exactClosingsPerDay": 1
+  },
+  "objectives": [
+    "coverage-deficit",
+    "contract-deviation",
+    "avoidable-surplus",
+    "opening-fairness",
+    "closing-fairness",
+    "preference-satisfaction"
+  ]
+}

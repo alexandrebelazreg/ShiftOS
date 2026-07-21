@@ -1,0 +1,79 @@
+{
+  "environment": {
+    "python": "3.12.10",
+    "ortools": "9.15.6755",
+    "platform": "Windows-11-10.0.26200-SP0",
+    "machine": "AMD64"
+  },
+  "solverParameters": {
+    "random_seed": 1,
+    "num_search_workers": 1,
+    "max_time_in_seconds": 900.0
+  },
+  "problemFingerprint": "p3_29f16d47dacffd2b",
+  "solutionFingerprint": "s3_f3b385d087d38f7c",
+  "model": {
+    "candidates": 20875,
+    "shiftBooleans": 20875,
+    "demandSlots": 84
+  },
+  "passes": [
+    {
+      "pass": "1-under-covered-slots",
+      "status": "OPTIMAL",
+      "objective": 1,
+      "bestBound": 1.0,
+      "proven": true,
+      "seconds": 259.2
+    },
+    {
+      "pass": "2-deficit-minutes",
+      "status": "OPTIMAL",
+      "objective": 60,
+      "bestBound": 60.0,
+      "proven": true,
+      "seconds": 105.8
+    }
+  ],
+  "proof": {
+    "statement": "Optimum lexicographique prouve sur les deux premiers objectifs, pour le probleme serialise, avec shifts continus et regles actuellement modelisees.",
+    "level1_underCoveredSlots": {
+      "value": 1,
+      "proven": true
+    },
+    "level2_deficitMinutes": {
+      "value": 60,
+      "proven": true,
+      "conditionedOn": "underCoveredSlots == 1"
+    },
+    "solutionIsUnique": false,
+    "note": "Solution de reference reproductible a parametres fixes, pas l'unique optimum."
+  },
+  "coveredRules": [
+    "contrats hebdomadaires exacts",
+    "budgets journaliers exacts",
+    "jours obligatoires et repos fixes",
+    "disponibilités par salarié et par date",
+    "durées de shift minimale et maximale",
+    "pas de temps",
+    "capacités d'ouverture et de fermeture",
+    "ouvertures par jour ouvert (minimum)",
+    "fermetures par jour ouvert (exactes)",
+    "plafonds individuels d'ouvertures et de fermetures",
+    "repos minimum entre deux journées",
+    "couverture des créneaux de besoin"
+  ],
+  "uncoveredRulesAffectingFeasibility": [
+    "shifts avec coupure : non modélisés — seuls les shifts continus sont énumérés",
+    "maximumConsecutiveWorkedDays : non contraint ; une vraie règle configurée plus restrictive que le fallback dérivé restreindrait l'espace",
+    "maximumEmployees : ignoré ; s'il constitue une contrainte dure, il restreint l'espace"
+  ],
+  "unoptimisedSecondaryObjectives": [
+    "préférences prefersOpening / prefersClosing",
+    "équité des ouvertures et des fermetures",
+    "écart à la répartition individuelle souhaitée",
+    "choix métier du créneau à sacrifier lorsque plusieurs optima existent"
+  ],
+  "secondaryObjectivesCaveat": "Ces objectifs ne conservent (1, 60) que s'ils sont optimises APRES avoir fixe explicitement underCoveredSlots == 1 et deficitMinutes == 60.",
+  "assignments": 29
+}
