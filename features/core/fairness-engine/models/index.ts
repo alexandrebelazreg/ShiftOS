@@ -1,0 +1,6 @@
+export * from "@/features/core/fairness-engine/models/FairnessInput"
+export * from "@/features/core/fairness-engine/models/EmployeeValue"
+export * from "@/features/core/fairness-engine/models/FairnessDimensionScore"
+export * from "@/features/core/fairness-engine/models/DetectedImbalance"
+export * from "@/features/core/fairness-engine/models/FairnessWarning"
+export * from "@/features/core/fairness-engine/models/FairnessReport"

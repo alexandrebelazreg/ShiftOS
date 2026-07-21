@@ -39,3 +39,7 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# source archives (livraisons, conservées localement mais hors historique)
+/docs.zip
+/sprint3d-code.zip

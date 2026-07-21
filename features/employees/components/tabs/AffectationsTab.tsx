@@ -1,0 +1,10 @@
+"use client"
+import { useEffect, useState } from "react"
+import { Controller, useWatch, useFormContext } from "react-hook-form"
+import { SecteursTab } from "@/features/employees/components/tabs/SecteursTab"
+import type { EmployeeFormValues } from "@/features/employees/types/employee.types"
+import { createSetupRepository } from "@/features/onboarding/setup-repository"
+import type { SetupSector } from "@/features/onboarding/setup-readiness"
+import { activeCompetencyNames } from "@/features/sectors"
+/* eslint-disable react-hooks/set-state-in-effect */
+export function AffectationsTab() { const { control } = useFormContext<EmployeeFormValues>(); const sectors = useWatch({ control, name: "sectors" }); const [available, setAvailable] = useState<readonly SetupSector[]>([]); useEffect(() => setAvailable(createSetupRepository(window.localStorage).listSectors()), []); const selected = available.filter((sector) => sectors.includes(sector.name)); return <div className="space-y-6"><SecteursTab />{selected.length > 0 ? <Controller control={control} name="competencies" render={({ field }) => <div className="space-y-3 rounded-lg border p-4"><p className="text-sm font-medium">Compétences</p><p className="text-sm text-muted-foreground">Choisissez les compétences pour chaque secteur affecté.</p>{selected.map((sector) => <div key={sector.id} className="space-y-2"><p className="text-sm font-medium">{sector.name}</p><div className="flex flex-wrap gap-2">{activeCompetencyNames(sector).map((skill) => { const checked = (field.value[sector.name] ?? []).includes(skill); return <label key={skill} className="flex items-center gap-2 rounded border px-3 py-2 text-sm"><input type="checkbox" checked={checked} onChange={() => { const current = field.value[sector.name] ?? []; field.onChange({ ...field.value, [sector.name]: checked ? current.filter((value) => value !== skill) : [...current, skill] }) }} />{skill}</label> })}</div></div>)}</div>} /> : <p className="rounded-lg border border-dashed p-4 text-sm text-muted-foreground">Sélectionnez d’abord un secteur pour renseigner les compétences.</p>}</div> }
