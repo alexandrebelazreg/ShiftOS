@@ -419,11 +419,14 @@ export function buildPlanningProblemV3(
     maximumShiftMinutes:
       input.store.planningSettings.maxShiftDuration ?? input.settings.maximumDailyMinutes ?? 0,
     minimumRestMinutes: input.settings.minimumRestMinutes ?? 0,
-    maximumConsecutiveWorkedDays: null,
+    // No configuration field exists for this rule yet, so the value is derived
+    // and tagged as such rather than left silently null.
+    maximumConsecutiveWorkedDays: defaultMaximumConsecutiveWorkedDays(days),
+    maximumConsecutiveWorkedDaysSource: "derived-fallback",
     splitShiftAllowed: sector.splitShiftAllowed,
     maximumSplitMinutes: sector.maximumSplitDuration,
-    openingsPerDay: 1,
-    closingsPerDay: 1,
+    minimumOpeningsPerDay: 1,
+    exactClosingsPerDay: 1,
   }
   if (rules.maximumShiftMinutes <= 0) {
     fail({
@@ -451,6 +454,38 @@ export function buildPlanningProblemV3(
       objectives: PLANNING_OBJECTIVES_V3,
     },
   }
+}
+
+/**
+ * STRUCTURAL FALLBACK for the consecutive-worked-days cap.
+ *
+ * This is not a business rule, and it is not a legal or regulatory limit. It is
+ * the longest run of consecutive OPEN days in the horizon — a fact about the
+ * opening pattern and nothing more.
+ *
+ * It exists only because the application model currently has no configuration
+ * field for this rule: there is nothing to read. Leaving `null` would drop the
+ * constraint silently, so the builder emits this value instead and tags it
+ * `derived-fallback` so no caller can mistake it for a configured rule.
+ *
+ * It is deliberately NON-BINDING: being the structural maximum, it can never
+ * make a previously feasible schedule infeasible, so it changes no planning.
+ *
+ * When the store configuration gains a real field, this function must be
+ * replaced by reading that configuration, and a missing value must then raise a
+ * structured error like every other missing input in this builder — not fall
+ * back here.
+ */
+export function defaultMaximumConsecutiveWorkedDays(
+  days: readonly { readonly closed: boolean }[]
+): number {
+  let longest = 0
+  let current = 0
+  for (const day of days) {
+    current = day.closed ? 0 : current + 1
+    longest = Math.max(longest, current)
+  }
+  return Math.max(1, longest)
 }
 
 /** "HH:mm" → minutes since midnight, or null when malformed. */

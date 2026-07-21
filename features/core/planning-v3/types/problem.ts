@@ -122,13 +122,30 @@ export interface PlanningRulesV3 {
   readonly minimumRestMinutes: number
   /** Null means the rule is not enforced. */
   readonly maximumConsecutiveWorkedDays: number | null
+  /**
+   * Where `maximumConsecutiveWorkedDays` comes from.
+   *
+   * - `configured`: read from the application configuration; a real rule.
+   * - `derived-fallback`: no configuration field exists, so the builder emitted
+   *   a structural, non-binding value. It must NOT be read as a business,
+   *   legal or regulatory limit.
+   */
+  readonly maximumConsecutiveWorkedDaysSource: "configured" | "derived-fallback"
   readonly splitShiftAllowed: boolean
   /** Longest gap allowed inside a split shift; null when splits are forbidden. */
   readonly maximumSplitMinutes: number | null
-  /** How many employees must start exactly at opening, on every open day. */
-  readonly openingsPerDay: number
-  /** How many employees must finish exactly at closing, on every open day. */
-  readonly closingsPerDay: number
+  /**
+   * How many employees must start exactly at opening, AT LEAST, on every open
+   * day. A minimum rather than an exact count: a peak that demands four people
+   * at 06:00 needs four of them to start at 06:00.
+   */
+  readonly minimumOpeningsPerDay: number
+  /**
+   * How many employees must finish exactly at closing, EXACTLY, on every open
+   * day. Unlike opening, closing is a single responsibility — one person locks
+   * up — so a second closer is a defect, not extra coverage.
+   */
+  readonly exactClosingsPerDay: number
 }
 
 /** The complete, immutable problem. */

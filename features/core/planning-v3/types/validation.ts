@@ -31,6 +31,7 @@ export const PLANNING_RULES_V3 = [
   "opening-count",
   "closing-count",
   "coverage-deficit",
+  "avoidable-surplus",
   "declared-metrics",
   "time-step",
   "solution-integrity",
@@ -49,6 +50,16 @@ export interface PlanningViolationV3 {
   readonly rule: PlanningRuleCodeV3
   readonly severity: PlanningViolationSeverityV3
   readonly message: string
+  /**
+   * True when a human must knowingly accept THIS entry before the schedule can
+   * be published.
+   *
+   * Carried per entry rather than inferred from the severity: a degradation is
+   * not automatically a decision. Some describe a real cost someone has to own
+   * — a coverage shortfall, avoidable surplus — while a purely informative one
+   * added later must not silently start gating publication.
+   */
+  readonly requiresExplicitAcceptance?: boolean
   readonly employeeId?: EmployeeId
   readonly date?: IsoDate
   /** The value the rule requires, when the rule is numeric. */
@@ -82,6 +93,25 @@ export interface PlanningSolverProofV3 {
   /** Objective values in the problem's lexicographic order. */
   readonly objectiveValues: readonly number[]
   readonly note: string
+
+  /**
+   * Whether the enumerated candidate space covers every legal shift for the
+   * rules the proof announces. `incomplete` forbids `kind: "optimal"`.
+   */
+  readonly candidateSpace?: "complete" | "incomplete"
+  readonly candidatesGenerated?: number
+  readonly dailyPatternsEvaluated?: number
+  readonly weeklyStatesEvaluated?: number
+  readonly branchesPrunedByBound?: number
+  readonly durationMs?: number
+  readonly bestObjective?: readonly number[]
+  /** Best proven lower bound, when the search ended before exhausting. */
+  readonly lowerBound?: readonly number[] | null
+  /** Why the search stopped: `exhausted`, `timeout`, `state-limit`, … */
+  readonly stopCause?: string
+  readonly deterministic?: boolean
+  /** False while the split-shift space is not enumerated. */
+  readonly splitShiftsSupported?: boolean
 }
 
 /** Figures the validator recomputes from scratch, for display and comparison. */
@@ -111,6 +141,18 @@ export interface PlanningValidationReportV3 {
   readonly version: PlanningValidationVersionV3
   /** True when no blocking violation was found. */
   readonly validHardConstraints: boolean
+  /**
+   * True when at least one reported entry is itself flagged
+   * `requiresExplicitAcceptance`. Never derived from "are there degradations at
+   * all" — that would make any future informative degradation gate publication.
+   *
+   * `validHardConstraints === true && requiresExplicitAcceptance === true` is a
+   * normal, expected outcome: the contracts simply cannot cover everything the
+   * demand asks for.
+   */
+  readonly requiresExplicitAcceptance: boolean
+  /** Demand slots left short, the headline number for a coverage shortfall. */
+  readonly underCoveredSlots: number
   readonly violations: readonly PlanningViolationV3[]
   readonly degradations: readonly PlanningViolationV3[]
   readonly informations: readonly PlanningViolationV3[]

@@ -276,11 +276,11 @@ export function validatePlanningSolutionV3(
         }
       }
     }
-    if (openers.length !== problem.rules.openingsPerDay) {
-      add("opening-count", "blocking", `Le ${day.date} compte ${openers.length} ouverture(s) pour ${problem.rules.openingsPerDay} attendue(s).`, { date: day.date, expected: problem.rules.openingsPerDay, actual: openers.length })
+    if (openers.length < problem.rules.minimumOpeningsPerDay) {
+      add("opening-count", "blocking", `Le ${day.date} compte ${openers.length} ouverture(s) pour ${problem.rules.minimumOpeningsPerDay} attendue(s) au minimum.`, { date: day.date, expected: problem.rules.minimumOpeningsPerDay, actual: openers.length })
     }
-    if (closers.length !== problem.rules.closingsPerDay) {
-      add("closing-count", "blocking", `Le ${day.date} compte ${closers.length} fermeture(s) pour ${problem.rules.closingsPerDay} attendue(s).`, { date: day.date, expected: problem.rules.closingsPerDay, actual: closers.length })
+    if (closers.length !== problem.rules.exactClosingsPerDay) {
+      add("closing-count", "blocking", `Le ${day.date} compte ${closers.length} fermeture(s) pour ${problem.rules.exactClosingsPerDay} attendue(s).`, { date: day.date, expected: problem.rules.exactClosingsPerDay, actual: closers.length })
     }
   }
 
@@ -298,6 +298,8 @@ export function validatePlanningSolutionV3(
   // ── Coverage ──────────────────────────────────────────────────────────────
   let totalDeficitMinutes = 0
   let requiredMinutes = 0
+  let underCoveredSlots = 0
+  const coverageDegradations: PlanningViolationV3[] = []
   for (const slot of problem.demandSlots) {
     const span = slot.endMinutes - slot.startMinutes
     requiredMinutes += slot.requiredEmployees * span
@@ -311,7 +313,23 @@ export function validatePlanningSolutionV3(
     if (covered < slot.requiredEmployees) {
       const missing = (slot.requiredEmployees - covered) * span
       totalDeficitMinutes += missing
-      add("coverage-deficit", "blocking", `Le ${slot.date} de ${clock(slot.startMinutes)} à ${clock(slot.endMinutes)} : ${covered} salarié(s) présent(s) pour ${slot.requiredEmployees} requis (déficit ${missing} minutes).`, { date: slot.date, expected: slot.requiredEmployees, actual: covered })
+      underCoveredSlots++
+      // A coverage shortfall is a DEGRADATION, never a blocking violation.
+      // Contracted minutes are finite: when the demand exceeds what the
+      // contracts can cover, every possible schedule is short somewhere. Making
+      // that blocking would mean no schedule is ever publishable — Sprint 3D.1
+      // itself runs with four under-covered slots. The shortfall is real and
+      // must be seen, so it is surfaced as a degradation requiring an explicit
+      // acceptance before publication.
+      coverageDegradations.push({
+        rule: "coverage-deficit",
+        severity: "degradation",
+        requiresExplicitAcceptance: true,
+        message: `Le ${slot.date} de ${clock(slot.startMinutes)} à ${clock(slot.endMinutes)} : ${covered} salarié(s) présent(s) pour ${slot.requiredEmployees} requis (déficit ${missing} minutes).`,
+        date: slot.date,
+        expected: slot.requiredEmployees,
+        actual: covered,
+      })
     }
   }
 
@@ -344,11 +362,12 @@ export function validatePlanningSolutionV3(
   }
 
   // ── Degradations and information ──────────────────────────────────────────
-  const degradations: PlanningViolationV3[] = []
+  const degradations: PlanningViolationV3[] = [...coverageDegradations]
   if (avoidableSurplusMinutes > 0) {
     degradations.push({
-      rule: "coverage-deficit",
+      rule: "avoidable-surplus",
       severity: "degradation",
+      requiresExplicitAcceptance: true,
       message: `${avoidableSurplusMinutes} minutes de surplus évitable : des heures sont posées hors besoin sans y être contraintes par le contrat.`,
       expected: 0,
       actual: avoidableSurplusMinutes,
@@ -378,6 +397,12 @@ export function validatePlanningSolutionV3(
   return {
     version: PLANNING_VALIDATION_V3_VERSION,
     validHardConstraints: violations.length === 0,
+    // Only entries that ASK for a decision gate publication. Counting every
+    // degradation would mean a future informative one silently starts blocking.
+    requiresExplicitAcceptance: [...violations, ...degradations, ...informations].some(
+      (entry) => entry.requiresExplicitAcceptance === true
+    ),
+    underCoveredSlots,
     violations,
     degradations,
     informations,

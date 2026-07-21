@@ -79,6 +79,21 @@ describe("validateur V3 — solution de référence", () => {
     expect(validate(problem, baseline).proof.kind).toBe("none")
   })
 
+  it("n'exige aucune acceptation quand rien ne la demande", () => {
+    const report = validate(problem, baseline)
+    // The report always carries an informative entry; it must not gate anything.
+    expect(report.informations.length).toBeGreaterThan(0)
+    expect(report.informations.every((entry) => entry.requiresExplicitAcceptance !== true)).toBe(true)
+    expect(report.requiresExplicitAcceptance).toBe(false)
+  })
+
+  it("dérive maximumConsecutiveWorkedDays et en expose la provenance", () => {
+    // No configuration field exists, so the value is the structural maximum —
+    // six open days here — and is tagged as derived, never as a real rule.
+    expect(problem.rules.maximumConsecutiveWorkedDaysSource).toBe("derived-fallback")
+    expect(problem.rules.maximumConsecutiveWorkedDays).toBe(6)
+  })
+
   it("produit une empreinte déterministe et sensible au moindre changement", () => {
     expect(validate(problem, baseline).fingerprint).toBe(validate(problem, baseline).fingerprint)
     const moved = withDay(baseline, "bruno", MONDAY, seg(600, 871))
@@ -241,14 +256,29 @@ describe("validateur V3 — détection des corruptions", () => {
 
   it("13. déficit de couverture samedi à 06:00", () => {
     // Chloé starts an hour late on Saturday, leaving 06:00–07:00 uncovered.
+    // A shortfall is a DEGRADATION: the schedule stays legal, but it may not be
+    // published until someone knowingly accepts the gap.
     const solution = withDay(baseline, "chloe", SATURDAY, seg(420, 780))
     const report = validate(problem, solution)
-    expect(brokenRules(report)).toContain("coverage-deficit")
-    const deficit = report.violations.find((v) => v.rule === "coverage-deficit")
+
+    const deficit = report.degradations.find((v) => v.rule === "coverage-deficit")
+    expect(deficit).toBeDefined()
+    expect(deficit?.severity).toBe("degradation")
     expect(deficit?.date).toBe(SATURDAY)
     expect(deficit?.actual).toBe(0)
     expect(deficit?.expected).toBe(1)
+    expect(report.underCoveredSlots).toBe(1)
+    // The shortfall is what asks for a decision — not the mere presence of a
+    // degradation in the report.
+    expect(deficit?.requiresExplicitAcceptance).toBe(true)
+    expect(report.requiresExplicitAcceptance).toBe(true)
+
+    // The shortfall alone never blocks: the only blocking rule here is the
+    // missing opener, which is a genuine hard-constraint breach.
+    expect(brokenRules(report)).not.toContain("coverage-deficit")
+    expect(brokenRules(report)).toEqual(["opening-count"])
   })
+
 
   it("14. mauvais calcul du surplus structurel", () => {
     // The generator commits to a figure; the validator recomputes it and
