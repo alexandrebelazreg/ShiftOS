@@ -29,6 +29,7 @@ const PROBLEM_PATH = join(ROOT, "fixtures", "drive-problem.json")
 const SOLUTION_PATH = join(ROOT, "expected", "cpsat-solution.json")
 
 const problem = buildDriveProblem()
+const assignments = JSON.parse(readFileSync(SOLUTION_PATH, "utf8")) as PlanningAssignmentV3[]
 
 describe("spike CP-SAT — la fixture reste fidèle au builder V3", () => {
   it("régénère un problème identique au fichier committé", () => {
@@ -57,7 +58,6 @@ describe("spike CP-SAT — la fixture reste fidèle au builder V3", () => {
 })
 
 describe("spike CP-SAT — la solution committée passe le validateur V3A", () => {
-  const assignments = JSON.parse(readFileSync(SOLUTION_PATH, "utf8")) as PlanningAssignmentV3[]
   const report = validatePlanningSolutionV3(problem, {
     version: PLANNING_SOLUTION_V3_VERSION,
     problemFingerprint: fingerprintProblem(problem),
@@ -156,5 +156,122 @@ describe("spike CP-SAT — la solution committée passe le validateur V3A", () =
         expect(rest).toBeGreaterThanOrEqual(problem.rules.minimumRestMinutes)
       }
     }
+  })
+})
+
+/**
+ * Business cost of a shortfall: missing employee-minutes weighted by the budget
+ * of the day they fall on.
+ *
+ * Implemented here in TypeScript so the ordering the third CP-SAT pass encodes
+ * is checked by something other than the Python model that produced it.
+ */
+function businessDeficitCost(
+  slots: readonly { date: string; startMinutes: number; endMinutes: number; requiredEmployees: number }[],
+  budgetByDate: Readonly<Record<string, number>>,
+  assignments: readonly PlanningAssignmentV3[]
+): { cost: number; underCovered: number; deficitMinutes: number } {
+  let cost = 0
+  let underCovered = 0
+  let deficitMinutes = 0
+  for (const slot of slots) {
+    const covered = assignments.filter(
+      (a) =>
+        a.date === slot.date &&
+        a.segments.some((s) => s.startMinutes <= slot.startMinutes && s.endMinutes >= slot.endMinutes)
+    ).length
+    const missing = slot.requiredEmployees - covered
+    if (missing <= 0) continue
+    const minutes = missing * (slot.endMinutes - slot.startMinutes)
+    underCovered++
+    deficitMinutes += minutes
+    cost += minutes * budgetByDate[slot.date]
+  }
+  return { cost, underCovered, deficitMinutes }
+}
+
+describe("spike CP-SAT — les budgets journaliers sont des contraintes exactes", () => {
+  it("fige les budgets Drive avant toute résolution", () => {
+    // The solver picks employees, durations and start times. It can never move
+    // a minute between two days, nor change a budget: these are inputs.
+    expect(problem.days.filter((d) => !d.closed).map((d) => d.budgetMinutes))
+      .toEqual([1_650, 1_650, 1_650, 1_650, 2_430, 1_995])
+    expect(problem.days.filter((d) => d.closed).every((d) => d.budgetMinutes === 0)).toBe(true)
+    // The budgets exhaust the contracts exactly, which is what makes them rigid.
+    expect(problem.days.reduce((sum, d) => sum + d.budgetMinutes, 0))
+      .toBe(problem.employees.reduce((sum, e) => sum + e.contractMinutes, 0))
+  })
+})
+
+describe("spike CP-SAT — le troisième objectif protège les jours à budget élevé", () => {
+  const budgetByDate = Object.fromEntries(problem.days.map((d) => [d.date, d.budgetMinutes]))
+  const slots = problem.demandSlots.map((s) => ({
+    date: s.date,
+    startMinutes: s.startMinutes,
+    endMinutes: s.endMinutes,
+    requiredEmployees: s.requiredEmployees,
+  }))
+
+  it("place le déficit sur le jour au budget le plus faible qui puisse le porter", () => {
+    const measured = businessDeficitCost(slots, budgetByDate, assignments)
+    expect(measured.underCovered).toBe(1)
+    expect(measured.deficitMinutes).toBe(60)
+    // 60 minutes on a 1 650-minute day. The pass-2 solution before the third
+    // objective existed sat on the 1 995-minute Saturday, at 119 700.
+    expect(measured.cost).toBe(99_000)
+    expect(measured.cost).toBeLessThan(60 * 1_995)
+
+    const deficitDay = problem.days.find((d) =>
+      slots.some(
+        (s) =>
+          s.date === d.date &&
+          s.requiredEmployees >
+            assignments.filter(
+              (a) =>
+                a.date === s.date &&
+                a.segments.some((g) => g.startMinutes <= s.startMinutes && g.endMinutes >= s.endMinutes)
+            ).length
+      )
+    )!
+    const openBudgets = problem.days.filter((d) => !d.closed).map((d) => d.budgetMinutes)
+    expect(deficitDay.budgetMinutes).toBe(Math.min(...openBudgets))
+  })
+
+  it("classe un déficit à budget faible devant un déficit équivalent à budget élevé", () => {
+    // A TEST OF THE RANKING FORMULA, on a two-day case independent of Drive.
+    //
+    // It checks the ordering the third pass encodes; it does NOT run CP-SAT and
+    // is NOT evidence that the solver arbitrates this artificial case. The
+    // effective demonstration of pass 3 is the Drive case, where the business
+    // cost drops from 119 700 to 99 000.
+    //
+    // At equal slots and equal minutes, the higher-budget day is the one
+    // protected. Neither day is intrinsically less important.
+    const budgets = { "2030-01-01": 1_650, "2030-01-02": 2_430 }
+    const twoDaySlots = [
+      { date: "2030-01-01", startMinutes: 360, endMinutes: 420, requiredEmployees: 2 },
+      { date: "2030-01-02", startMinutes: 360, endMinutes: 420, requiredEmployees: 2 },
+    ]
+    const person = (id: string, date: string) => ({
+      employeeId: id as unknown as PlanningAssignmentV3["employeeId"],
+      date,
+      segments: [{ startMinutes: 360, endMinutes: 420 }],
+    })
+
+    // Variant A leaves the LOW-budget day one person short.
+    const variantA = [person("a", "2030-01-01"), person("a", "2030-01-02"), person("b", "2030-01-02")]
+    // Variant B leaves the HIGH-budget day short. Same shortfall, same minutes.
+    const variantB = [person("a", "2030-01-01"), person("b", "2030-01-01"), person("a", "2030-01-02")]
+
+    const a = businessDeficitCost(twoDaySlots, budgets, variantA)
+    const b = businessDeficitCost(twoDaySlots, budgets, variantB)
+
+    // The first two objectives are strictly identical — nothing is traded away.
+    expect(a.underCovered).toBe(b.underCovered)
+    expect(a.deficitMinutes).toBe(b.deficitMinutes)
+    // Only the third objective separates them, and it prefers variant A.
+    expect(a.cost).toBe(60 * 1_650)
+    expect(b.cost).toBe(60 * 2_430)
+    expect(a.cost).toBeLessThan(b.cost)
   })
 })

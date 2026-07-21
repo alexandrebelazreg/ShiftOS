@@ -18,45 +18,113 @@ d'approche ? Ce spike répond en mesurant, pas en supposant.
 |---|---|---|---|
 | Sprint 3D.1 (V2, en production) | 4 | — | aucune |
 | Prototype DFS V3B | 10 | 1 440 | aucune |
-| **CP-SAT** | **1** | **60** | **optimum lexicographique prouvé sur 2 niveaux** *(portée ci-dessous)* |
+| **CP-SAT** | **1** | **60** | **optimum lexicographique prouvé sur 3 niveaux** *(portée ci-dessous)* |
 
-Il reste **un créneau d'une heure court d'un seul salarié**. *Quel* créneau
-varie selon l'optimum retourné : la solution committée sacrifie l'ouverture du
-samedi (3 présents pour 4 requis), une autre exécution sacrifiait celle du jeudi
-(1 pour 2). Les deux sont des optima équivalents — voir « portée de la preuve ».
+Il reste **un créneau d'une heure court d'un seul salarié** : l'ouverture du
+jeudi, 1 présent pour 2 requis. C'est le troisième objectif qui l'y place —
+jeudi est un jour à 1 650 minutes, contre 1 995 le samedi où le déficit se
+posait avant. Plusieurs plannings atteignent encore ce même optimum ; voir
+« portée de la preuve ».
+
+## Budgets journaliers — contraintes exactes, jamais négociables
+
+Les budgets sont des **entrées figées avant la résolution**, pas des variables.
+
+Le solveur choisit : les salariés, les durées, les heures de début et de fin.
+Il ne peut pas : déplacer des minutes d'un jour à l'autre, augmenter ou réduire
+un budget, ni compenser un dépassement du vendredi par un déficit du lundi.
+
+Pour Drive, ils valent exactement :
+
+| lundi | mardi | mercredi | jeudi | vendredi | samedi |
+|---|---|---|---|---|---|
+| 1 650 | 1 650 | 1 650 | 1 650 | **2 430** | **1 995** |
+
+Leur somme égale exactement le total contractuel (11 025 minutes), ce qui les
+rend rigides : il n'existe aucun jeu. Aucun mode de budget flexible n'existe.
+
+## Le troisième objectif — protéger les journées à budget élevé
+
+Pour chaque créneau déficitaire :
+
+```
+businessDeficitCost = deficitEmployeeMinutes × dailyBudgetMinutes
+```
+
+Le coût total est la somme sur tous les créneaux. Entiers uniquement.
+
+**Ce que fait exactement cet objectif.** À nombre de créneaux et minutes de
+déficit identiques, le troisième objectif protège davantage les journées
+disposant du budget journalier le plus élevé. Le budget journalier est ici le
+critère métier choisi pour départager des solutions déjà équivalentes sur les
+deux premiers objectifs.
+
+Aucune journée n'est intrinsèquement moins importante qu'une autre : toutes les
+règles dures s'appliquent partout de la même façon. Le budget sert uniquement de
+clé de tri entre solutions par ailleurs indistinguables.
+
+**Justification.** À la troisième passe, le déficit total `D` est déjà figé par
+la passe 2. Minimiser `Σ dᵢ · Bᵢ` sous `Σ dᵢ = D` est un objectif linéaire sur un
+total constant : son minimum porte le déficit sur le jour au budget `Bᵢ` le plus
+faible parmi ceux qui peuvent l'accueillir, ce qui revient exactement à préserver
+en priorité ceux au budget le plus élevé. Sacrifier une heure un jour à 2 430
+minutes coûte 145 800, contre 99 000 un jour à 1 650.
+
+Ce troisième objectif n'est activé qu'**après** avoir ajouté comme contraintes
+`underCoveredSlots == 1` et `deficitMinutes == 60`. Il ne peut donc jamais
+dégrader les deux niveaux déjà prouvés. Aucune somme pondérée ne combine les
+trois objectifs.
+
+**Effet mesuré sur Drive** : avant la passe 3, le déficit se posait le samedi
+(budget 1 995, coût 119 700). Après, il se pose le jeudi (budget 1 650, coût
+**99 000**), soit 20 % de coût métier en moins — et 99 000 est prouvé minimal.
+
+### Ce que démontre quoi
+
+**La démonstration effective de la passe 3 est le cas Drive** : 119 700 → 99 000,
+prouvé optimal, sur le vrai problème.
+
+Le petit cas à deux budgets dans `cpsat-experiment.test.ts` est **un test de la
+formule de classement**, rien de plus. Il vérifie que `businessDeficitCost`
+ordonne correctement deux variantes de déficit équivalentes sur les deux premiers
+objectifs. Il **ne lance pas CP-SAT** et ne prouve **pas** que le solveur
+arbitrerait lui-même ce cas artificiel.
+
+Cette distinction est délibérée. Avec des budgets journaliers exacts, la capacité
+en renforts d'une journée est fixée par son budget : dans un cas artificiel
+simple, le déficit tombe de lui-même sur le jour au budget le plus faible, et un
+test construit ainsi passerait **même sans la passe 3** — il ne prouverait donc
+rien. Un arbitrage réellement libre n'apparaît que dans des instances riches
+comme Drive, où l'agencement intra-journée et les pics multiples créent de vraies
+égalités.
 
 ## Portée exacte de la preuve
 
-> **Optimum lexicographique prouvé sur les deux premiers objectifs, pour le
+> **Optimum lexicographique prouvé sur les trois premiers objectifs, pour le
 > problème sérialisé, avec shifts continus et règles actuellement modélisées.**
 
-Cette formulation est la seule correcte. Ne **pas** écrire « planning Drive
-globalement optimal » : ce n'est pas ce qui a été démontré.
-
-Deux passes lexicographiques, chacune avec sa propre preuve :
+Ne **pas** écrire « planning Drive globalement optimal » : ce n'est pas ce qui a
+été démontré.
 
 | Passe | Objectif | Valeur | Borne | Statut |
 |---|---|---|---|---|
 | 1 | minimiser `underCoveredSlots` | 1 | 1.0 | `OPTIMAL` |
 | 2 | à `underCoveredSlots == 1`, minimiser `deficitMinutes` | 60 | 60.0 | `OPTIMAL` |
+| 3 | à (1, 60) fixés, minimiser `businessDeficitCost` | 99 000 | 99 000.0 | `OPTIMAL` |
 
-Borne = objectif sur les deux passes. Les **deux seuls** niveaux prouvés sont
-donc :
+Borne = objectif sur les trois passes. Les **trois seuls** niveaux prouvés sont
+ceux-là. Rien d'autre n'est prouvé.
 
-1. `underCoveredSlots = 1` ;
-2. `deficitMinutes = 60` **parmi les solutions ayant exactement un créneau
-   sous-couvert**.
+**L'unicité du planning ne l'est toujours pas.** Même après la passe 3,
+plusieurs plannings atteignent (1, 60, 99 000) — vérifié en interdisant la
+solution trouvée et en redemandant au solveur, qui en produit une autre.
 
-Rien d'autre n'est prouvé.
-
-**L'unicité du planning ne l'est pas.** Plusieurs plannings atteignent (1, 60) —
-vérifié en interdisant la solution trouvée et en redemandant au solveur, qui en
-produit une autre en 75 s. `expected/cpsat-solution.json` est une **solution de
-référence reproductible**, pas l'unique optimum.
-
-Conséquence pratique : **le créneau sacrifié n'est pas déterminé par la preuve**.
-Choisir lequel relève d'un critère métier de rang inférieur que le modèle
-n'exprime pas encore — à ajouter avant toute mise en production.
+Le spike **n'invente aucun quatrième critère métier** : ni salarié, ni jour, ni
+ouverture ou fermeture privilégiés, ni somme d'identifiants. L'ordre des
+affectations dans le fichier est un **départage canonique purement technique**
+(tri par date puis identifiant) destiné à rendre le fichier reproductible —
+jamais une préférence métier. Le choix entre variantes équivalentes revient au
+manager.
 
 ## Règles couvertes
 
@@ -158,6 +226,20 @@ Les empreintes du rapport sont recalculées côté Python par une réimplémenta
 de `fingerprint.ts`. Qu'elles coïncident avec la valeur TypeScript
 (`p3_29f16d47dacffd2b`) est une contre-vérification : les deux côtés décrivent
 bien le même problème.
+
+## Cible future — l'arbitrage du manager
+
+Non développé ici, et volontairement : ni composant React, ni sélecteur de
+variantes, ni verrouillage de shifts, ni réparateur local, ni appel CP-SAT
+depuis Next.js. Seulement la direction visée :
+
+- le solveur propose une ou plusieurs variantes équivalentes ;
+- le manager choisit celle qu'il préfère ;
+- il peut ensuite modifier manuellement les horaires ;
+- chaque modification est auditée par le validateur V3 ;
+- une violation bloquante empêche la publication ;
+- une dégradation peut être acceptée explicitement ;
+- une régénération future doit pouvoir respecter des shifts verrouillés.
 
 ## Pourquoi ce code n'est pas dans le produit
 

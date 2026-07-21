@@ -12,9 +12,17 @@ JSON and it solves a different week.
 
 Solving is lexicographic in two explicit passes, never a weighted sum:
   pass 1 — minimise the number of under-covered slots;
-  pass 2 — freeze that count, then minimise the missing employee-minutes.
+  pass 2 — freeze that count, then minimise the missing employee-minutes;
+  pass 3 — freeze both, then minimise the BUSINESS cost of the shortfall,
+           each missing minute weighted by the budget of the day it falls on,
+           so that at equal slots and equal minutes the days with the HIGHEST
+           daily budget are the ones protected.
 Each pass records its own status, objective, bound and duration, because
-"optimal on pass 1" says nothing about pass 2.
+"optimal on pass 1" says nothing about passes 2 and 3.
+
+Daily budgets are EXACT INPUT CONSTRAINTS, fixed before solving. The solver
+chooses employees, durations and start times; it can never move minutes between
+days or change a budget.
 
 RULES NOT MODELLED — see README. Chief among them: split shifts are not
 enumerated, so every claim here is scoped to continuous shifts.
@@ -289,7 +297,7 @@ def build_model(problem):
                           ).OnlyEnforceIf([works[(ei, di)], works[(ei, dj)]])
 
     # Coverage.
-    under, shortfall = [], []
+    under, shortfall, business = [], [], []
     for di, day in enumerate(days):
         for slot in slots_of.get(day["date"], []):
             covering = [x[(ei, di, ci)] for ei in range(len(employees))
@@ -307,9 +315,19 @@ def build_model(problem):
             miss = model.NewIntVar(0, need * span, f"miss_{di}_{slot['startMinutes']}")
             model.Add(miss >= (need - covered) * span)
             shortfall.append(miss)
+            # Business cost of THIS slot's shortfall: missing employee-minutes
+            # weighted by the budget of the day they fall on. Integers only.
+            # With the total deficit already fixed by pass 2, minimising
+            # sum(miss_i * budget_i) is a linear objective over a fixed total,
+            # so its minimum puts the shortfall on the lowest-budget day that
+            # can carry it — i.e. at equal slots and equal minutes it protects
+            # the days with the highest daily budget. No day is intrinsically
+            # less important: the budget is only a tie-break between solutions
+            # already equivalent on the first two objectives.
+            business.append((miss, day["budgetMinutes"]))
 
     return model, {"x": x, "pool": pool, "under": under, "shortfall": shortfall,
-                   "candidates": total_candidates}
+                   "business": business, "candidates": total_candidates}
 
 
 def make_solver(args):
@@ -403,14 +421,28 @@ def main():
         print("ERREUR : aucune solution sur la passe 2.", file=sys.stderr)
         return 2
 
-    # Honest wording: each pass carries its own proof, or none.
+    # ── Pass 3 — freeze both, minimise the business cost of the shortfall ──
+    # Only now, with the two proven levels pinned as CONSTRAINTS, may a business
+    # preference speak. Weighting earlier — or folding all three into a single
+    # weighted sum — would let a cheap business gain pay for a worse shortfall.
+    model.Add(sum(h["shortfall"]) == second["objective"])
+    model.Minimize(sum(miss * budget for miss, budget in h["business"]))
+    third = run_pass(solver, model, "3-business-deficit-cost")
+    print(f"[passe 3] statut={third['status']} objectif={third['objective']} "
+          f"borne={third['bestBound']} prouve={third['proven']} {third['seconds']}s")
+    if third["objective"] is None:
+        print("ERREUR : aucune solution sur la passe 3.", file=sys.stderr)
+        return 2
+
     # Each pass carries its own proof, or none. The claim is ALWAYS scoped: an
     # optimum for the serialised problem, continuous shifts and the rules
     # currently modelled — never a "globally optimal Drive week".
     first_proven = first["proven"] and first["bestBound"] == first["objective"]
     second_proven = second["proven"] and second["bestBound"] == second["objective"]
+    third_proven = third["proven"] and third["bestBound"] == third["objective"]
     print("\n=== portee de la preuve ===")
-    print("Optimum lexicographique prouve sur les deux premiers objectifs, pour le")
+    levels = "trois" if (first_proven and second_proven and third_proven) else "deux"
+    print(f"Optimum lexicographique prouve sur les {levels} premiers objectifs, pour le")
     print("probleme serialise, avec shifts continus et regles actuellement modelisees.")
     print(f"  niveau 1 - underCoveredSlots = {first['objective']} : "
           + ("PROUVE" if first_proven
@@ -419,6 +451,10 @@ def main():
           f"{first['objective']} creneau(x) : "
           + ("PROUVE" if second_proven
              else f"NON PROUVE (meilleure valeur trouvee : {second['objective']})"))
+    print(f"  niveau 3 - businessDeficitCost = {third['objective']} a "
+          f"({first['objective']}, {second['objective']}) fixes : "
+          + ("PROUVE" if third_proven
+             else f"NON PROUVE (meilleure valeur trouvee : {third['objective']})"))
     print("Le planning retourne est une solution de reference reproductible,")
     print("PAS l'unique optimum : plusieurs plannings peuvent atteindre ces valeurs.")
 
@@ -449,7 +485,7 @@ def main():
         "solutionFingerprint": fingerprint_solution(assignments, problem_fingerprint),
         "model": {"candidates": h["candidates"], "shiftBooleans": len(h["x"]),
                   "demandSlots": len(h["under"])},
-        "passes": [first, second],
+        "passes": [first, second, third],
         "proof": {
             "statement": "Optimum lexicographique prouve sur les deux premiers "
                          "objectifs, pour le probleme serialise, avec shifts continus "
@@ -458,7 +494,29 @@ def main():
             "level2_deficitMinutes": {"value": second["objective"], "proven": second_proven,
                                       "conditionedOn": "underCoveredSlots == "
                                                        f"{first['objective']}"},
+            "level3_businessDeficitCost": {
+                "objectiveCode": "business-deficit-cost",
+                "incumbentValue": third["objective"],
+                "bestBound": third["bestBound"],
+                "status": third["status"],
+                "provenOptimal": third_proven,
+                "elapsedSeconds": third["seconds"],
+                "definition": "somme sur les creneaux deficitaires de "
+                              "(deficitEmployeeMinutes x dailyBudgetMinutes)",
+                "conditionedOn": f"underCoveredSlots == {first['objective']} ET "
+                                 f"deficitMinutes == {second['objective']}",
+            },
+            "objectivesProven": (3 if (first_proven and second_proven and third_proven)
+                                 else 2 if (first_proven and second_proven)
+                                 else 1 if first_proven else 0),
             "solutionIsUnique": False,
+            "canonicalTieBreak": "Aucun quatrieme critere metier. L'ordre des "
+                                 "affectations dans le fichier est un departage "
+                                 "canonique TECHNIQUE (tri par date puis identifiant), "
+                                 "jamais une preference metier.",
+            "remainingBusinessChoice": "Si plusieurs solutions restent equivalentes "
+                                       "apres la passe 3, le choix revient au manager "
+                                       "dans l'interface, pas au solveur.",
             "note": "Solution de reference reproductible a parametres fixes, pas "
                     "l'unique optimum.",
         },
