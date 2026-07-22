@@ -1,3 +1,7 @@
+import type {
+  PlanningRegenerationRequest,
+  RegeneratedShiftEdit,
+} from "@/features/core/planning-contract/types/regeneration"
 import type { ShiftEditState } from "@/features/planning/board/model/shift-edit-state"
 
 /**
@@ -9,27 +13,21 @@ import type { ShiftEditState } from "@/features/planning/board/model/shift-edit-
  * When the V3 backend exists, it will take a `PlanningProblemV3` plus one of
  * these and hand the pair to CP-SAT; nothing here needs to change for that.
  *
+ * The two request TYPES now live in the Core contract, and are re-exported here
+ * so every existing import keeps working. They had to move the day the
+ * solver-facing request needed to name them: a type an engine receives cannot
+ * be owned by a module inside the UI feature tree. The shape is byte-identical
+ * and there is still exactly one definition of it.
+ *
  * Deliberately NOT here (and not this sprint): any endpoint, Python service,
  * CP-SAT call, local repair, or lock persistence. The request is built, shown,
  * and — for now — goes no further than the confirmation dialog.
  */
 
-export interface RegeneratedShiftEdit {
-  readonly shiftId: string
-  readonly startMinute: number
-  readonly endMinute: number
-}
-
-export interface PlanningRegenerationRequest {
-  /** Keep pinned shifts exactly where they are. */
-  readonly preserveLockedShifts: boolean
-  /** Keep the manager's manual moves and resizes. */
-  readonly preserveManualEdits: boolean
-  /** Ask the solver to disturb the untouched rest of the week as little as it can. */
-  readonly minimizeOtherChanges: boolean
-  readonly lockedShiftIds: readonly string[]
-  readonly editedShifts: readonly RegeneratedShiftEdit[]
-}
+export type {
+  PlanningRegenerationRequest,
+  RegeneratedShiftEdit,
+} from "@/features/core/planning-contract/types/regeneration"
 
 /** The three toggles the dialog offers, mapped onto the request's booleans. */
 export interface RegenerationOptions {
