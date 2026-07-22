@@ -1,6 +1,10 @@
 import type { PlanningProblemV3 } from "@/features/core/planning-v3/types/problem"
 
 import type {
+  PlanningBaselineShiftV3,
+  PlanningBaselineV3,
+} from "@/features/core/planning-contract/types/baseline"
+import type {
   PlanningRegenerationRequest,
   RegeneratedShiftEdit,
 } from "@/features/core/planning-contract/types/regeneration"
@@ -30,15 +34,58 @@ import type { SolvePlanningRequest } from "@/features/core/planning-contract/typ
  */
 export function buildSolvePlanningRequest(
   problem: PlanningProblemV3,
-  regeneration?: PlanningRegenerationRequest | null
+  regeneration?: PlanningRegenerationRequest | null,
+  baseline?: PlanningBaselineV3 | null
 ): SolvePlanningRequest {
+  const withBaseline =
+    baseline === undefined || baseline === null ? {} : { baseline: normalizeBaseline(baseline) }
+
   if (regeneration === undefined || regeneration === null) {
-    return Object.freeze({ problem })
+    return Object.freeze({ problem, ...withBaseline })
   }
 
   return Object.freeze({
     problem,
     regeneration: normalizeRegeneration(regeneration),
+    ...withBaseline,
+  })
+}
+
+/**
+ * The reference schedule, canonicalised like everything else in the request.
+ *
+ * Deduplicated by `shiftId` — the id is what a lock names, so two shifts
+ * sharing one would make "keep s_42 exactly where it is" ambiguous — and each
+ * shift's segments are sorted by start, so a drift measured against this
+ * baseline cannot change because a caller listed segments in another order.
+ */
+function normalizeBaseline(baseline: PlanningBaselineV3): PlanningBaselineV3 {
+  const byShiftId = new Map<string, PlanningBaselineShiftV3>()
+  for (const shift of baseline.shifts) {
+    byShiftId.set(
+      shift.shiftId,
+      Object.freeze({
+        shiftId: shift.shiftId,
+        employeeId: shift.employeeId,
+        date: shift.date,
+        segments: Object.freeze(
+          [...shift.segments]
+            .sort((left, right) => left.startMinutes - right.startMinutes)
+            .map((segment) =>
+              Object.freeze({
+                startMinutes: segment.startMinutes,
+                endMinutes: segment.endMinutes,
+              })
+            )
+        ),
+      })
+    )
+  }
+
+  return Object.freeze({
+    shifts: Object.freeze(
+      [...byShiftId.values()].sort((left, right) => left.shiftId.localeCompare(right.shiftId))
+    ),
   })
 }
 

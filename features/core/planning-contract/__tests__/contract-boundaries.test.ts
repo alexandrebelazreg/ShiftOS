@@ -108,6 +108,22 @@ describe("frontière d'import du contrat de planification", () => {
     const reexported = importsOf(join(CONTRACT_ROOT, "index.ts"))
     expect(reexported.filter((specifier) => specifier.includes("adapters"))).toEqual([])
   })
+
+  it("ne réexporte pas CP-SAT depuis le barrel des adaptateurs", () => {
+    // CP-SAT reaches `node:child_process`, which cannot be bundled for a
+    // browser. One re-export from this barrel would break every UI module that
+    // only wanted a type from it.
+    const reexported = importsOf(join(CONTRACT_ROOT, "adapters", "index.ts"))
+    expect(reexported.filter((specifier) => specifier.includes("cp-sat"))).toEqual([])
+  })
+
+  it("confine les API Node au seul adaptateur qui en a besoin", () => {
+    const offenders = files
+      .filter((file) => importsOf(file).some((specifier) => specifier.startsWith("node:")))
+      .map((file) => file.replace(CONTRACT_ROOT, ""))
+    // Exactly one file may touch the OS, and it is the process boundary.
+    expect(offenders).toEqual([join(sep, "adapters", "cp-sat", "run-python.ts")])
+  })
 })
 
 /**

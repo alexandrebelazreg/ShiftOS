@@ -1,0 +1,450 @@
+import { describe, expect, it } from "vitest"
+
+import { buildDriveProblem } from "@/features/core/planning-v3/__tests__/drive-problem"
+import { tinyProblem } from "@/features/core/planning-v3/__tests__/tiny-problems"
+import type { EmployeeId } from "@/features/core/models"
+import type { PlanningProblemV3 } from "@/features/core/planning-v3/types/problem"
+import type { PlanningSolutionV3 } from "@/features/core/planning-v3/types/solution"
+
+import { createCpSatAdapter } from "@/features/core/planning-contract/adapters/cp-sat"
+import { buildSolvePlanningRequest } from "@/features/core/planning-contract/build-request"
+import { checkSolvePlanningResponse } from "@/features/core/planning-contract/invariants"
+import type { PlanningBaselineV3 } from "@/features/core/planning-contract/types/baseline"
+import type { PlanningRegenerationRequest } from "@/features/core/planning-contract/types/regeneration"
+
+/**
+ * CP-SAT for real: a spawned Python process, OR-Tools, the whole boundary.
+ *
+ * SKIPPED unless `RUN_CPSAT=1`. Solving the Drive week takes minutes, and a
+ * suite that quietly costs minutes is a suite people stop running. Everything
+ * that can be checked without a solver already is, in `cp-sat-unit.test.ts`;
+ * what remains here is the part no fake can vouch for — that the model really
+ * honours a lock, that the numbers the spike published still hold, and that a
+ * preservation the week cannot absorb produces an honest answer rather than a
+ * quietly relaxed one.
+ *
+ *   npx vitest run features/core/planning-contract/__tests__/cp-sat-integration.test.ts
+ *   (with RUN_CPSAT=1 in the environment)
+ */
+
+const ENABLED = process.env.RUN_CPSAT === "1"
+const LONG = 900_000
+
+const employee = (id: string): EmployeeId => id as unknown as EmployeeId
+
+function regeneration(
+  overrides: Partial<PlanningRegenerationRequest> = {}
+): PlanningRegenerationRequest {
+  return {
+    preserveLockedShifts: true,
+    preserveManualEdits: true,
+    minimizeOtherChanges: false,
+    lockedShiftIds: [],
+    editedShifts: [],
+    ...overrides,
+  }
+}
+
+/** The three business figures, recomputed from the schedule itself. */
+function businessFigures(problem: PlanningProblemV3, solution: PlanningSolutionV3) {
+  const budgetByDate = new Map(problem.days.map((day) => [day.date, day.budgetMinutes]))
+  let underCoveredSlots = 0
+  let deficitMinutes = 0
+  let businessDeficitCost = 0
+
+  for (const slot of problem.demandSlots) {
+    const covered = solution.assignments.filter(
+      (assignment) =>
+        assignment.date === slot.date &&
+        assignment.segments.some(
+          (segment) =>
+            segment.startMinutes <= slot.startMinutes && segment.endMinutes >= slot.endMinutes
+        )
+    ).length
+    const missing = slot.requiredEmployees - covered
+    if (missing <= 0) continue
+    const minutes = missing * (slot.endMinutes - slot.startMinutes)
+    underCoveredSlots += 1
+    deficitMinutes += minutes
+    businessDeficitCost += minutes * (budgetByDate.get(slot.date) ?? 0)
+  }
+  return { underCoveredSlots, deficitMinutes, businessDeficitCost }
+}
+
+/** The solved week, re-expressed as the board would hand it back. */
+function baselineOf(solution: PlanningSolutionV3): PlanningBaselineV3 {
+  return {
+    shifts: solution.assignments.map((assignment, index) => ({
+      shiftId: `b${index}`,
+      employeeId: assignment.employeeId,
+      date: assignment.date,
+      segments: assignment.segments,
+    })),
+  }
+}
+
+describe.skipIf(!ENABLED)("CP-SAT réel — résolution simple", () => {
+  it(
+    "résout un problème sans régénération et rend une réponse conforme",
+    async () => {
+      const problem = tinyProblem()
+      const adapter = createCpSatAdapter({ timeoutSeconds: 30 })
+      const response = await adapter(buildSolvePlanningRequest(problem))
+
+      expect(response.metadata.engine).toBe("cp-sat")
+      expect(["optimal", "feasible"]).toContain(response.outcome)
+      expect(response.solution).not.toBeNull()
+      expect(response.diagnostics.blocking).toBe(false)
+      expect(checkSolvePlanningResponse(response)).toEqual([])
+      // The tiny problem forbids split shifts, so the space is complete and the
+      // optimum is genuinely claimable.
+      expect(response.metadata.candidateSpace).toBe("complete")
+      expect(response.outcome).toBe("optimal")
+    },
+    LONG
+  )
+})
+
+describe.skipIf(!ENABLED)("CP-SAT réel — préservations", () => {
+  it(
+    "reproduit exactement un shift verrouillé",
+    async () => {
+      const problem = tinyProblem()
+      const adapter = createCpSatAdapter({ timeoutSeconds: 30 })
+
+      const free = await adapter(buildSolvePlanningRequest(problem))
+      const baseline = baselineOf(free.solution!)
+      const pinned = baseline.shifts[0]
+
+      const response = await adapter(
+        buildSolvePlanningRequest(
+          problem,
+          regeneration({ lockedShiftIds: [pinned.shiftId] }),
+          baseline
+        )
+      )
+
+      expect(response.metadata.respectedLocks).toBe(true)
+      expect(response.metadata.unmetPreservations).toEqual([])
+      const kept = response.solution!.assignments.find(
+        (assignment) =>
+          String(assignment.employeeId) === String(pinned.employeeId) &&
+          assignment.date === pinned.date
+      )
+      expect(kept?.segments).toEqual(pinned.segments)
+      expect(checkSolvePlanningResponse(response)).toEqual([])
+    },
+    LONG
+  )
+
+  it(
+    "impose exactement les minutes d'une retouche manuelle",
+    async () => {
+      // Slack on purpose. With an exact daily budget AND an opening and a
+      // closing to place, a two-employee day has exactly one shape and NO edit
+      // is absorbable — the honest answer would be `infeasible`, which is a
+      // different test. Here the day is long enough and the coverage rules
+      // quiet enough that shortening one shift can be paid back elsewhere.
+      const problem = tinyProblem({
+        employees: [
+          { id: "e1", contractMinutes: 480, canOpen: true, canClose: true },
+          { id: "e2", contractMinutes: 480, canOpen: true, canClose: true },
+        ],
+        openMinutes: 480,
+        closeMinutes: 1_200,
+        budgetMinutes: 480,
+        slotRequirement: 0,
+        rules: {
+          minimumShiftMinutes: 60,
+          maximumShiftMinutes: 720,
+          minimumOpeningsPerDay: 0,
+          exactClosingsPerDay: 0,
+        },
+      })
+      const adapter = createCpSatAdapter({ timeoutSeconds: 30 })
+      const free = await adapter(buildSolvePlanningRequest(problem))
+      const baseline = baselineOf(free.solution!)
+      const target = baseline.shifts.find((shift) => String(shift.employeeId) === "e1")!
+
+      const response = await adapter(
+        buildSolvePlanningRequest(
+          problem,
+          regeneration({
+            editedShifts: [{ shiftId: target.shiftId, startMinute: 540, endMinute: 660 }],
+          }),
+          baseline
+        )
+      )
+
+      expect(response.outcome).not.toBe("invalid-problem")
+      expect(response.metadata.respectedManualEdits).toBe(true)
+      const edited = response.solution!.assignments.find(
+        (assignment) =>
+          String(assignment.employeeId) === "e1" && assignment.date === target.date
+      )
+      expect(edited?.segments).toEqual([{ startMinutes: 540, endMinutes: 660 }])
+      expect(checkSolvePlanningResponse(response)).toEqual([])
+    },
+    LONG
+  )
+
+  it(
+    "reste honnête face à une préservation que la semaine ne peut pas absorber",
+    async () => {
+      // e1 must work both days and is contracted for 240 minutes in total. An
+      // edit that spends all 240 on the first day leaves nothing for the
+      // second, which is mandatory. Nothing is relaxed: the answer is a proof.
+      const problem = tinyProblem()
+      const baseline: PlanningBaselineV3 = {
+        shifts: [
+          {
+            shiftId: "s1",
+            employeeId: employee("e1"),
+            date: "2026-07-20",
+            segments: [{ startMinutes: 480, endMinutes: 600 }],
+          },
+        ],
+      }
+      const adapter = createCpSatAdapter({ timeoutSeconds: 30 })
+      const response = await adapter(
+        buildSolvePlanningRequest(
+          problem,
+          regeneration({ editedShifts: [{ shiftId: "s1", startMinute: 480, endMinute: 720 }] }),
+          baseline
+        )
+      )
+
+      // Only on a proof. The constraint was kept, CP-SAT exhausted the model,
+      // and the answer is a demonstration rather than a relaxation.
+      expect(response.outcome).toBe("infeasible")
+      expect(response.solution).toBeNull()
+      expect(response.metadata.optimality).toBe("none")
+      expect(response.metadata.stopCause).toBe("exhausted")
+      expect(response.diagnostics.entries[0].message).toContain("préservation")
+      // Named, not blamed: the search never separated their contribution from
+      // the week's own rigidity.
+      const named = response.diagnostics.entries.find(
+        (entry) => entry.code === "preservations-participating-in-infeasibility"
+      )
+      expect(named?.message).toContain("s1")
+      expect(named?.message).toContain("nécessairement l'unique cause")
+      expect(checkSolvePlanningResponse(response)).toEqual([])
+    },
+    LONG
+  )
+
+  it(
+    "refuse la requête plutôt que de résoudre sans un verrou introuvable",
+    async () => {
+      const problem = tinyProblem()
+      const adapter = createCpSatAdapter({ timeoutSeconds: 30 })
+      const response = await adapter(
+        buildSolvePlanningRequest(problem, regeneration({ lockedShiftIds: ["disparu"] }), {
+          shifts: [],
+        })
+      )
+
+      expect(response.outcome).toBe("invalid-problem")
+      expect(response.solution).toBeNull()
+      expect(response.metadata.stopCause).toBe("not-started")
+      expect(checkSolvePlanningResponse(response)).toEqual([])
+    },
+    LONG
+  )
+
+  it(
+    "résout normalement quand la préservation est connue et compatible",
+    async () => {
+      // The counterpart of the refusals: a demand it CAN express becomes a hard
+      // constraint and the week is solved with it, not around it.
+      const problem = tinyProblem()
+      const adapter = createCpSatAdapter({ timeoutSeconds: 30 })
+      const free = await adapter(buildSolvePlanningRequest(problem))
+      const baseline = baselineOf(free.solution!)
+
+      const response = await adapter(
+        buildSolvePlanningRequest(
+          problem,
+          regeneration({ lockedShiftIds: baseline.shifts.map((shift) => shift.shiftId) }),
+          baseline
+        )
+      )
+
+      expect(response.solution).not.toBeNull()
+      expect(response.metadata.unmetPreservations).toEqual([])
+      // Every baseline shift was pinned, so the schedule must be the baseline.
+      expect(response.solution!.assignments).toEqual(free.solution!.assignments)
+      expect(checkSolvePlanningResponse(response)).toEqual([])
+    },
+    LONG
+  )
+
+  it(
+    "ne rend jamais un planning ayant omis une préservation demandée",
+    async () => {
+      const problem = tinyProblem()
+      const adapter = createCpSatAdapter({ timeoutSeconds: 30 })
+      const free = await adapter(buildSolvePlanningRequest(problem))
+      const baseline = baselineOf(free.solution!)
+
+      const requests = [
+        // No baseline at all.
+        buildSolvePlanningRequest(problem, regeneration({ lockedShiftIds: ["x"] })),
+        // Unknown id.
+        buildSolvePlanningRequest(problem, regeneration({ lockedShiftIds: ["x"] }), baseline),
+        // Illegal retouch.
+        buildSolvePlanningRequest(
+          problem,
+          regeneration({
+            editedShifts: [{ shiftId: baseline.shifts[0].shiftId, startMinute: 485, endMinute: 605 }],
+          }),
+          baseline
+        ),
+        // Perfectly usable lock.
+        buildSolvePlanningRequest(
+          problem,
+          regeneration({ lockedShiftIds: [baseline.shifts[0].shiftId] }),
+          baseline
+        ),
+      ]
+
+      for (const request of requests) {
+        const response = await adapter(request)
+        if (response.solution !== null) {
+          expect(response.metadata.respectedLocks).toBe(true)
+          expect(response.metadata.respectedManualEdits).toBe(true)
+        } else {
+          expect(["invalid-problem", "infeasible"]).toContain(response.outcome)
+        }
+        expect(checkSolvePlanningResponse(response)).toEqual([])
+      }
+    },
+    LONG
+  )
+})
+
+describe.skipIf(!ENABLED)("CP-SAT réel — la semaine Drive", () => {
+  it(
+    "retrouve (1, 60, 99 000) sans aucune préservation",
+    async () => {
+      const problem = buildDriveProblem()
+      const adapter = createCpSatAdapter({ timeoutSeconds: 600 })
+      const response = await adapter(buildSolvePlanningRequest(problem))
+
+      expect(response.solution).not.toBeNull()
+      expect(businessFigures(problem, response.solution!)).toEqual({
+        underCoveredSlots: 1,
+        deficitMinutes: 60,
+        businessDeficitCost: 99_000,
+      })
+      // Drive ALLOWS split shifts and this model does not enumerate them, so the
+      // space is incomplete and no optimum may be announced — however thoroughly
+      // the three passes were proven.
+      expect(response.metadata.candidateSpace).toBe("incomplete")
+      expect(response.outcome).toBe("feasible")
+      expect(checkSolvePlanningResponse(response)).toEqual([])
+    },
+    LONG
+  )
+
+  it(
+    "ne dégrade aucun des trois objectifs sous une préservation compatible",
+    async () => {
+      const problem = buildDriveProblem()
+      const adapter = createCpSatAdapter({ timeoutSeconds: 600 })
+
+      const free = await adapter(buildSolvePlanningRequest(problem))
+      const baseline = baselineOf(free.solution!)
+      const pinned = baseline.shifts[0]
+
+      const response = await adapter(
+        buildSolvePlanningRequest(
+          problem,
+          regeneration({ lockedShiftIds: [pinned.shiftId], minimizeOtherChanges: true }),
+          baseline
+        )
+      )
+
+      // A lock taken FROM the reference solution cannot make it worse: the
+      // reference itself is still available to the solver.
+      expect(businessFigures(problem, response.solution!)).toEqual({
+        underCoveredSlots: 1,
+        deficitMinutes: 60,
+        businessDeficitCost: 99_000,
+      })
+      expect(response.metadata.respectedLocks).toBe(true)
+      expect(response.metadata.minimizedOtherChanges).toBe(true)
+      expect(response.metadata.unmetPreservations).toEqual([])
+      expect(checkSolvePlanningResponse(response)).toEqual([])
+    },
+    LONG
+  )
+})
+
+describe.skipIf(!ENABLED)("CP-SAT réel — arrêts et pannes", () => {
+  it(
+    "rend timeout-without-solution quand le budget expire avant toute solution",
+    async () => {
+      const problem = buildDriveProblem()
+      const adapter = createCpSatAdapter({ timeoutSeconds: 2 })
+      const response = await adapter(buildSolvePlanningRequest(problem))
+
+      expect(response.outcome).toBe("timeout-without-solution")
+      expect(response.solution).toBeNull()
+      expect(response.metadata.stopCause).toBe("timeout")
+      // The distinction this outcome exists for.
+      expect(response.outcome).not.toBe("infeasible")
+      expect(checkSolvePlanningResponse(response)).toEqual([])
+    },
+    LONG
+  )
+
+  it(
+    "rend cancelled quand l'appelant coupe un processus en cours",
+    async () => {
+      const problem = buildDriveProblem()
+      const signal = { aborted: false }
+      const adapter = createCpSatAdapter({ timeoutSeconds: 600, signal })
+      setTimeout(() => {
+        signal.aborted = true
+      }, 1_500)
+
+      const response = await adapter(buildSolvePlanningRequest(problem))
+      expect(response.outcome).toBe("cancelled")
+      expect(response.metadata.stopCause).toBe("cancelled")
+      expect(checkSolvePlanningResponse(response)).toEqual([])
+    },
+    LONG
+  )
+
+  it(
+    "rend backend-error quand l'interpréteur Python est introuvable",
+    async () => {
+      const adapter = createCpSatAdapter({
+        pythonExecutable: "python-qui-nexiste-pas",
+        timeoutSeconds: 10,
+      })
+      const response = await adapter(buildSolvePlanningRequest(tinyProblem()))
+
+      expect(response.outcome).toBe("backend-error")
+      expect(response.metadata.stopCause).toBe("backend-error")
+      expect(checkSolvePlanningResponse(response)).toEqual([])
+    },
+    LONG
+  )
+
+  it(
+    "rend backend-error quand le script est absent",
+    async () => {
+      const adapter = createCpSatAdapter({
+        scriptPath: "experiments/planning-v3-cpsat/script-absent.py",
+        timeoutSeconds: 10,
+      })
+      const response = await adapter(buildSolvePlanningRequest(tinyProblem()))
+
+      expect(response.outcome).toBe("backend-error")
+      expect(checkSolvePlanningResponse(response)).toEqual([])
+    },
+    LONG
+  )
+})

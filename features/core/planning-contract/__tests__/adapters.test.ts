@@ -4,7 +4,6 @@ import { tinyProblem } from "@/features/core/planning-v3/__tests__/tiny-problems
 
 import {
   createDfsPrototypeAdapter,
-  solveWithCpSat,
   solveWithDfsPrototype,
   solveWithLegacyV2Adapter,
 } from "@/features/core/planning-contract/adapters"
@@ -26,14 +25,10 @@ const request = buildSolvePlanningRequest(problem)
  * Held as the neutral type on purpose: from here on nothing in this file can
  * tell which engine it is calling, which is the property being tested.
  */
-const ADAPTERS: readonly PlanningSolveAdapter[] = [
-  solveWithLegacyV2Adapter,
-  solveWithDfsPrototype,
-  solveWithCpSat,
-]
+const ADAPTERS: readonly PlanningSolveAdapter[] = [solveWithLegacyV2Adapter, solveWithDfsPrototype]
 
 describe("adaptateurs — API unique", () => {
-  it("expose la même signature pour les trois moteurs", () => {
+  it("expose la même signature pour chaque moteur du barrel navigateur", () => {
     for (const adapter of ADAPTERS) {
       expect(typeof adapter).toBe("function")
       expect(adapter.length).toBe(1)
@@ -73,40 +68,15 @@ describe("adaptateur V2 hérité — refus du contrat", () => {
   })
 })
 
-describe("adaptateur CP-SAT — déclaré, non branché", () => {
-  it("lève engine-not-implemented au lieu de retomber sur le prototype", async () => {
-    // No fallback between engines: a caller that asked for a proven optimum must
-    // never silently receive a best-effort search instead.
-    try {
-      await solveWithCpSat(request)
-      expect.unreachable("CP-SAT aurait dû refuser")
-    } catch (error) {
-      expect(error).toBeInstanceOf(PlanningEngineNotImplementedError)
-      expect((error as PlanningContractError).code).toBe("engine-not-implemented")
-      expect((error as PlanningContractError).engine).toBe("cp-sat")
-    }
-  })
-
-  it("se distingue du refus V2 : capable d'exprimer la requête, pas branché", async () => {
-    const codes: string[] = []
-    for (const adapter of [solveWithLegacyV2Adapter, solveWithCpSat]) {
-      await adapter(request).catch((error: PlanningContractError) => codes.push(error.code))
-    }
-    expect(codes).toEqual(["unsupported-request-contract", "engine-not-implemented"])
-  })
-})
-
 describe("toBackendErrorResponse — la forme uniforme d'un échec", () => {
   it("normalise n'importe quelle erreur en backend-error conforme", async () => {
-    for (const adapter of [solveWithLegacyV2Adapter, solveWithCpSat]) {
-      const response = await adapter(request).catch((error: unknown) =>
-        toBackendErrorResponse("v2", error, request)
-      )
-      expect(response.outcome).toBe("backend-error")
-      expect(response.solution).toBeNull()
-      expect(response.metadata.stopCause).toBe("backend-error")
-      expect(checkSolvePlanningResponse(response)).toEqual([])
-    }
+    const response = await solveWithLegacyV2Adapter(request).catch((error: unknown) =>
+      toBackendErrorResponse("v2", error, request)
+    )
+    expect(response.outcome).toBe("backend-error")
+    expect(response.solution).toBeNull()
+    expect(response.metadata.stopCause).toBe("backend-error")
+    expect(checkSolvePlanningResponse(response)).toEqual([])
   })
 
   it("ne conclut jamais à une infaisabilité, quelle que soit l'erreur", () => {

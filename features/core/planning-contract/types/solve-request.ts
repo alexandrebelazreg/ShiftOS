@@ -1,5 +1,6 @@
 import type { PlanningProblemV3 } from "@/features/core/planning-v3/types/problem"
 
+import type { PlanningBaselineV3 } from "@/features/core/planning-contract/types/baseline"
 import type { PlanningRegenerationRequest } from "@/features/core/planning-contract/types/regeneration"
 
 /**
@@ -14,7 +15,7 @@ import type { PlanningRegenerationRequest } from "@/features/core/planning-contr
  * answer from the types. This request closes that hole: the problem, the local
  * edits, the locks and the regeneration options travel together or not at all.
  *
- * Deliberately only two fields. Timeouts, state ceilings and cancellation
+ * Deliberately no solver knobs. Timeouts, state ceilings and cancellation
  * belong to the ADAPTER that runs a particular engine — a CP-SAT deadline means
  * nothing to a DFS prototype — and putting them here would leak engine
  * vocabulary back into the one shape the UI is allowed to know.
@@ -27,6 +28,15 @@ export interface SolvePlanningRequest {
    * because `minimizeOtherChanges` is an intent on its own.
    */
   readonly regeneration?: PlanningRegenerationRequest
+  /**
+   * The schedule the locks, the edits and the stability objective refer to.
+   *
+   * Travels with the regeneration or not at all: a lock is an id, and an id
+   * without the schedule that minted it names nothing. An engine given locks
+   * and no baseline cannot honour them and must say so — see
+   * `PlanningBaselineV3`.
+   */
+  readonly baseline?: PlanningBaselineV3
 }
 
 /** What the request actually asks an engine to preserve. */

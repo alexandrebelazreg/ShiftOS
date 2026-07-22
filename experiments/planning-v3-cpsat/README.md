@@ -251,3 +251,91 @@ spike.
 
 Ce dossier existe pour rendre le résultat **reproductible et auditable avant**
 cette décision, pas pour la préempter.
+
+---
+
+# Le service `cpsat_service.py` — CP-SAT derrière le contrat V3
+
+Ajouté après le spike. Le modèle n'a pas changé de nature : il vit désormais
+dans `cpsat_model.py`, importé **à la fois** par le script de référence
+`cpsat_drive.py` et par le service. Deux copies auraient commencé identiques
+puis divergé, et les nombres publiés plus haut auraient cessé sans bruit de
+décrire ce que le produit résout.
+
+Toujours pas de service HTTP, pas de FastAPI, pas de Flask, pas de démon : une
+enveloppe JSON sur stdin, une enveloppe JSON sur stdout, le processus se
+termine. C'est la plus petite chose qui soit encore une vraie frontière de
+processus.
+
+## Protocole `planning-v3-cpsat/1`
+
+Version vérifiée **des deux côtés** et refusée en cas d'écart. Une enveloppe
+d'une autre version diffère le plus dangereusement par un champ dont l'absence
+se lit comme un défaut légal : un Python plus ancien qui ignore `preservation`
+rendrait un planning jetant tous les verrous, et cela ressemblerait à un succès.
+
+**Requête**
+
+| champ | rôle |
+|---|---|
+| `protocolVersion` | `planning-v3-cpsat/1` |
+| `requestId` | empreinte du problème — traçable et déterministe |
+| `problem` | le `PlanningProblemV3` sérialisé |
+| `preservation.lockedAssignments` | verrous **déjà résolus** : salarié, jour, minutes |
+| `preservation.editedAssignments` | retouches déjà résolues, même forme |
+| `preservation.baselineAssignments` | planning de référence pour la passe 4 |
+| `preservation.minimizeOtherChanges` | pose ou non la passe 4 |
+| `options` | `timeoutSeconds`, `seed`, `workers` |
+
+La résolution d'un `shiftId` en salarié/jour/minutes se fait **en TypeScript**,
+où elle est pure et testée unitairement. Python ne reçoit jamais d'identifiant
+de shift à interpréter.
+
+**Réponse** — `status` ∈ `solved | infeasible | invalid-problem | no-solution |
+error`, plus `passes`, `candidateSpace`, `stopCause`,
+`unmatchedPreservations`, `stability`, `problemFingerprint`,
+`solutionFingerprint`, `environment`, `error`.
+
+`infeasible` est une **preuve** ; `no-solution` est une phrase sur l'horloge.
+Les confondre laisserait une machine lente déclarer une semaine impossible.
+
+## Verrous et retouches — contraintes dures
+
+Chaque affectation préservée épingle **exactement un booléen de candidat** à 1
+— même salarié, même jour, même début, même fin — **avant** tout objectif. Une
+affectation qu'aucun candidat n'exprime est **signalée**, jamais arrondie au
+shift légal le plus proche : « on a gardé votre shift, à peu près » est la seule
+réponse qui rendrait tout le contrat de préservation sans valeur.
+
+L'asymétrie entre les deux est voulue. Un verrou introuvable est une promesse
+non tenue : on résout sans lui et on le déclare. Une retouche illégale rend la
+**requête** malformée : on refuse avant même de lancer le processus.
+
+## Passe 4 — ce que `minimizeOtherChanges` mesure exactement
+
+Posée **en dernier**, après que les trois niveaux métier ont été figés en
+contraintes d'égalité. La stabilité est un confort ; la couverture ne l'est pas.
+
+Une seule unité — la **minute** — pour tous les types de changement, donc aucun
+poids arbitraire :
+
+| cas | dérive comptée |
+|---|---|
+| shift conservé | `abs(débutNouveau − débutAncien) + abs(finNouvelle − finAncienne)` |
+| shift supprimé | toute la durée du shift de référence |
+| shift ajouté | toute la durée du nouveau shift |
+| changement de salarié ou de jour | une suppression **plus** un ajout — déjà compté |
+
+La référence est le planning que le manager a **sous les yeux**, retouches
+comprises : utiliser la géométrie d'avant compterait son propre changement
+délibéré comme une dérive et pousserait le solveur à le défaire.
+
+## Ce que le service ne fait toujours pas
+
+Il n'est **branché nulle part**. Aucun composant React, aucun `PlanningView`,
+aucun sélecteur de moteur ne l'atteint ; `CURRENT_PLANNING_ENGINE_VERSION` vaut
+toujours `v2`. L'adaptateur TypeScript vit dans
+`features/core/planning-contract/adapters/cp-sat/` et n'est **pas** réexporté
+depuis le barrel des adaptateurs, parce qu'il touche `node:child_process`.
+
+Ce sprint rend CP-SAT **conforme**, pas **actif**.

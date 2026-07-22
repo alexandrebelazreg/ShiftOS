@@ -6,6 +6,12 @@
  * bundle, and the composition layer that picks an engine must have to say so
  * explicitly, in one place, by importing this file.
  *
+ * CP-SAT is deliberately NOT exported here. It reaches `node:child_process` to
+ * run its model in a subprocess, which cannot be bundled for a browser, so a
+ * single re-export from this barrel would break every UI module that only
+ * wanted a type. It lives at `@/features/core/planning-contract/adapters/cp-sat`
+ * and is imported on purpose, from a server module.
+ *
  * Every adapter satisfies `PlanningSolveAdapter`. A caller that holds one of
  * them as that type cannot tell which it is holding, which is the property the
  * whole contract exists to buy.
@@ -18,7 +24,3 @@ export {
   PROTOTYPE_PRESERVATION_SUPPORT,
   solveWithDfsPrototype,
 } from "@/features/core/planning-contract/adapters/solve-with-dfs-prototype"
-export {
-  CP_SAT_PRESERVATION_TARGET,
-  solveWithCpSat,
-} from "@/features/core/planning-contract/adapters/solve-with-cp-sat"

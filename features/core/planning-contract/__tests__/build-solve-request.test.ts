@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest"
 import { tinyProblem } from "@/features/core/planning-v3/__tests__/tiny-problems"
 
 import { buildSolvePlanningRequest } from "@/features/core/planning-contract/build-request"
+import type { PlanningBaselineV3 } from "@/features/core/planning-contract/types/baseline"
 import type { PlanningRegenerationRequest } from "@/features/core/planning-contract/types/regeneration"
 import { requestedPreservations } from "@/features/core/planning-contract/types/solve-request"
 
@@ -144,6 +145,66 @@ describe("buildSolvePlanningRequest — forme canonique", () => {
       regeneration({ lockedShiftIds: ["a", "b"], editedShifts: [...edits].reverse() })
     )
     expect(left).toEqual(right)
+  })
+})
+
+describe("buildSolvePlanningRequest — planning de référence", () => {
+  const shift = (shiftId: string, start: number, end: number) => ({
+    shiftId,
+    employeeId: "e1" as unknown as PlanningBaselineV3["shifts"][number]["employeeId"],
+    date: "2026-07-20",
+    segments: [{ startMinutes: start, endMinutes: end }],
+  })
+
+  it("reste absent quand la requête n'en porte pas", () => {
+    expect(buildSolvePlanningRequest(problem).baseline).toBeUndefined()
+    expect(buildSolvePlanningRequest(problem, regeneration()).baseline).toBeUndefined()
+  })
+
+  it("accompagne une première génération si l'appelant en fournit un", () => {
+    const request = buildSolvePlanningRequest(problem, null, { shifts: [shift("s1", 480, 600)] })
+    expect(request.baseline?.shifts).toHaveLength(1)
+  })
+
+  it("dédoublonne par identifiant, parce qu'un verrou nomme un identifiant", () => {
+    // Two shifts sharing an id would make "keep s1 exactly where it is"
+    // ambiguous, which is the one thing a lock may never be.
+    const request = buildSolvePlanningRequest(problem, regeneration(), {
+      shifts: [shift("s1", 480, 600), shift("s1", 540, 660)],
+    })
+    expect(request.baseline?.shifts).toEqual([
+      { shiftId: "s1", employeeId: "e1", date: "2026-07-20", segments: [{ startMinutes: 540, endMinutes: 660 }] },
+    ])
+  })
+
+  it("trie les shifts et leurs segments, pour une dérive reproductible", () => {
+    const request = buildSolvePlanningRequest(problem, regeneration(), {
+      shifts: [
+        shift("s2", 600, 720),
+        {
+          ...shift("s1", 0, 0),
+          segments: [
+            { startMinutes: 600, endMinutes: 660 },
+            { startMinutes: 480, endMinutes: 540 },
+          ],
+        },
+      ],
+    })
+    expect(request.baseline?.shifts.map((entry) => entry.shiftId)).toEqual(["s1", "s2"])
+    expect(request.baseline?.shifts[0].segments).toEqual([
+      { startMinutes: 480, endMinutes: 540 },
+      { startMinutes: 600, endMinutes: 660 },
+    ])
+  })
+
+  it("gèle le planning de référence comme le reste de la requête", () => {
+    const request = buildSolvePlanningRequest(problem, regeneration(), {
+      shifts: [shift("s1", 480, 600)],
+    })
+    expect(Object.isFrozen(request.baseline)).toBe(true)
+    expect(Object.isFrozen(request.baseline?.shifts)).toBe(true)
+    expect(Object.isFrozen(request.baseline?.shifts[0])).toBe(true)
+    expect(Object.isFrozen(request.baseline?.shifts[0].segments)).toBe(true)
   })
 })
 
