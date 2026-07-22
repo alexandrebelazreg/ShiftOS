@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useId, useState } from "react"
+import { useEffect, useId } from "react"
 
 import { cn } from "@/lib/utils"
 
@@ -15,18 +15,22 @@ interface PlanningRegenerateDialogProps {
   readonly options: RegenerationOptions
   readonly onChangeOptions: (options: RegenerationOptions) => void
   readonly onCancel: () => void
+  /** Regenerate now with the active engine (V2). The real, existing capability. */
+  readonly onRegenerateNow: () => void
+  readonly busy?: boolean
 }
 
 /**
- * The regeneration intent dialog.
+ * The regeneration dialog, honest about two different things.
  *
- * This sprint it collects an intent and nothing more: no solver is called, and
- * the primary action is honest about it — clicking "Régénérer" reveals that the
- * feature arrives with V3 rather than pretending V2 can honour locks. Cancelling
- * or closing changes nothing at all; the local edits and locks are untouched.
+ * The active engine (V2) can regenerate the week right now — that capability is
+ * kept, not quietly dropped. What it cannot yet do is honour the manager's locks
+ * and manual edits; that arrives with V3. So the dialog offers a working
+ * "Régénérer maintenant" and, separately, previews the V3 request it is
+ * preparing — never a button that leads only to a "coming with V3" message.
  *
- * Purely presentational: options are lifted to the caller, and the summary is a
- * ViewModel it only displays.
+ * Purely presentational: options are lifted to the caller, the summary is a
+ * ViewModel it only displays, and regenerating is a callback it does not own.
  */
 export function PlanningRegenerateDialog({
   open,
@@ -34,17 +38,13 @@ export function PlanningRegenerateDialog({
   options,
   onChangeOptions,
   onCancel,
+  onRegenerateNow,
+  busy = false,
 }: PlanningRegenerateDialogProps) {
-  const [acknowledged, setAcknowledged] = useState(false)
   const titleId = useId()
   const lockedId = useId()
   const editsId = useId()
   const minimizeId = useId()
-
-  // Every opening starts fresh: a prior acknowledgement must not carry over.
-  useEffect(() => {
-    if (open) setAcknowledged(false)
-  }, [open])
 
   useEffect(() => {
     if (!open) return
@@ -75,72 +75,85 @@ export function PlanningRegenerateDialog({
           Régénérer le planning
         </h2>
 
-        <p className="mt-3 text-sm text-muted-foreground">Respecter lors de la régénération :</p>
-        <div className="mt-2 space-y-2">
-          <Option
-            id={lockedId}
-            checked={options.preserveLockedShifts}
-            onChange={(value) => set({ preserveLockedShifts: value })}
-            label="Mes shifts verrouillés"
-          />
-          <Option
-            id={editsId}
-            checked={options.preserveManualEdits}
-            onChange={(value) => set({ preserveManualEdits: value })}
-            label="Mes modifications manuelles"
-          />
-          <Option
-            id={minimizeId}
-            checked={options.minimizeOtherChanges}
-            onChange={(value) => set({ minimizeOtherChanges: value })}
-            label="Limiter les changements sur le reste du planning"
-          />
-        </div>
-
-        <div className="mt-4 rounded-md border bg-muted/30 p-3 text-sm">
-          {summary.isEmpty ? (
-            <p className="text-muted-foreground">Aucun verrou ni modification locale à préserver.</p>
-          ) : (
-            <ul className="space-y-1">
-              <li>
-                🔒 {summary.lockedShiftCount} shift{summary.lockedShiftCount > 1 ? "s" : ""} verrouillé
-                {summary.lockedShiftCount > 1 ? "s" : ""}
-              </li>
-              <li>
-                ✏️ {summary.editedShiftCount} shift{summary.editedShiftCount > 1 ? "s" : ""} modifié
-                {summary.editedShiftCount > 1 ? "s" : ""}
-              </li>
-            </ul>
-          )}
-        </div>
-
-        {acknowledged ? (
-          <p className="mt-4 rounded-md border border-amber-500/40 bg-amber-50 p-3 text-sm text-amber-800 dark:bg-amber-950/40 dark:text-amber-300">
-            La régénération respectant les verrous sera disponible avec le moteur V3.
+        <p className="mt-3 text-sm">
+          <span className="font-medium">Régénérer avec le moteur actuel</span> recalcule le planning
+          de la semaine.
+        </p>
+        {summary.isEmpty ? (
+          <p className="mt-1 text-sm text-muted-foreground">
+            Aucun verrou ni modification locale à conserver.
           </p>
-        ) : null}
+        ) : (
+          <p className="mt-1 text-sm text-amber-700 dark:text-amber-400">
+            Attention : {countLabel(summary)} ne seront pas conservés par le moteur actuel.
+          </p>
+        )}
+
+        <div className="mt-4 rounded-md border border-dashed p-3">
+          <p className="text-xs font-medium text-muted-foreground">
+            À respecter à l’avenir (moteur V3)
+          </p>
+          <div className="mt-2 space-y-2">
+            <Option
+              id={lockedId}
+              checked={options.preserveLockedShifts}
+              onChange={(value) => set({ preserveLockedShifts: value })}
+              label="Mes shifts verrouillés"
+            />
+            <Option
+              id={editsId}
+              checked={options.preserveManualEdits}
+              onChange={(value) => set({ preserveManualEdits: value })}
+              label="Mes modifications manuelles"
+            />
+            <Option
+              id={minimizeId}
+              checked={options.minimizeOtherChanges}
+              onChange={(value) => set({ minimizeOtherChanges: value })}
+              label="Limiter les changements sur le reste du planning"
+            />
+          </div>
+          <p className="mt-2 text-xs text-muted-foreground">
+            La régénération respectant les verrous et vos modifications sera disponible avec le
+            moteur V3.
+          </p>
+        </div>
 
         <footer className="mt-5 flex justify-end gap-2">
           <button
             type="button"
             onClick={onCancel}
-            className="rounded-md border px-3 py-1.5 text-sm transition hover:bg-muted"
+            disabled={busy}
+            className="rounded-md border px-3 py-1.5 text-sm transition hover:bg-muted disabled:opacity-50"
           >
-            {acknowledged ? "Fermer" : "Annuler"}
+            Annuler
           </button>
-          {acknowledged ? null : (
-            <button
-              type="button"
-              onClick={() => setAcknowledged(true)}
-              className="rounded-md bg-primary px-3 py-1.5 text-sm text-primary-foreground transition hover:brightness-110"
-            >
-              Régénérer
-            </button>
-          )}
+          <button
+            type="button"
+            onClick={onRegenerateNow}
+            disabled={busy}
+            className="rounded-md bg-primary px-3 py-1.5 text-sm text-primary-foreground transition hover:brightness-110 disabled:opacity-50"
+          >
+            {busy ? "Régénération…" : "Régénérer maintenant"}
+          </button>
         </footer>
       </div>
     </div>
   )
+}
+
+/** "2 verrous et 1 modification", pluralised, for the not-preserved warning. */
+function countLabel(summary: RegenerationSummary): string {
+  const parts: string[] = []
+  if (summary.lockedShiftCount > 0) {
+    parts.push(`${summary.lockedShiftCount} verrou${summary.lockedShiftCount > 1 ? "s" : ""}`)
+  }
+  if (summary.editedShiftCount > 0) {
+    parts.push(
+      `${summary.editedShiftCount} modification${summary.editedShiftCount > 1 ? "s" : ""}`
+    )
+  }
+  return parts.join(" et ")
 }
 
 interface OptionProps {

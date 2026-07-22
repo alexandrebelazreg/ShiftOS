@@ -7,8 +7,16 @@ import type {
   PlanningBoardInput,
   PlanningBoardSelection,
 } from "@/features/planning/board/model/board-input"
-import type { WeekOption } from "@/features/planning/board/model/week"
 import { buildPlanningBoard } from "@/features/planning/board/model/board-view-model"
+import {
+  describeWeek,
+  hasPlanningForWeek,
+  needsWeekChangeConfirmation,
+  primaryPlanningAction,
+  resolveTargetWeek,
+  resolveWeekChangeChoice,
+  type WeekChangeRequest,
+} from "@/features/planning/board/model/header-controls"
 import type { DragBounds, EditableShift } from "@/features/planning/board/model/shift-edit"
 import {
   applyShiftEdit,
@@ -35,21 +43,29 @@ import {
   type RegenerationOptions,
 } from "@/features/planning/board/model/regeneration-request"
 import { PlanningDayView } from "@/features/planning/board/ui/PlanningDayView"
+import { PlanningEmptyWeek } from "@/features/planning/board/ui/PlanningEmptyWeek"
 import { PlanningEmployeeView } from "@/features/planning/board/ui/PlanningEmployeeView"
 import { PlanningRegenerateDialog } from "@/features/planning/board/ui/PlanningRegenerateDialog"
 import { PlanningSectorView } from "@/features/planning/board/ui/PlanningSectorView"
 import { PlanningSummary } from "@/features/planning/board/ui/PlanningSummary"
 import { PlanningToolbar } from "@/features/planning/board/ui/PlanningToolbar"
+import { PlanningWeekChangeDialog } from "@/features/planning/board/ui/PlanningWeekChangeDialog"
 
 interface PlanningBoardProps {
   readonly input: PlanningBoardInput
-  /** Week navigation belongs to whoever owns the data, not to the board. */
-  readonly onPreviousWeek?: () => void
-  readonly onNextWeek?: () => void
-  readonly weekOptions?: readonly WeekOption[]
+  /** The week the header shows and navigates from. Owned by whoever has the data. */
   readonly selectedWeek?: string
-  readonly onSelectWeek?: (monday: string) => void
-  /** Générer / Enregistrer / Publier, rendered inside the control bar. */
+  /** Land on this Monday. The board asks first if there is unsaved work. */
+  readonly onChangeWeek?: (monday: string) => void
+  /** Persist the current planning; resolves true on success. For "save then change". */
+  readonly onSaveRequest?: () => Promise<boolean>
+  /** Run the active engine (V2) for the selected week — generate or regenerate. */
+  readonly onGenerate?: () => void
+  /** Whether a generation is currently running, to disable the trigger. */
+  readonly generating?: boolean
+  /** Unsaved editor state, ORed with the board's own local edits/locks. */
+  readonly dirty?: boolean
+  /** Enregistrer / Publier and the published-state actions. */
   readonly actions?: ReactNode
   /**
    * Raised when the local edits reach — or leave — a state that must not be
@@ -75,17 +91,20 @@ interface PlanningBoardProps {
  */
 export function PlanningBoard({
   input,
-  onPreviousWeek,
-  onNextWeek,
-  weekOptions,
   selectedWeek,
-  onSelectWeek,
+  onChangeWeek,
+  onSaveRequest,
+  onGenerate,
+  generating = false,
+  dirty = false,
   actions,
   onPersistenceBlockChange,
 }: PlanningBoardProps) {
   const [selection, setSelection] = useState<PlanningBoardSelection>(() => ({
     view: "sector",
-    sectorId: input.sectors[0]?.id ?? null,
+    // All sectors visible by default: the multiselect starts inclusive, and the
+    // manager narrows down rather than having to opt every sector back in.
+    sectorIds: input.sectors.map((sector) => sector.id),
     date: input.days.find((day) => !day.closed)?.date ?? null,
     employeeId: null,
   }))
@@ -101,6 +120,10 @@ export function PlanningBoard({
   const [regenerateOptions, setRegenerateOptions] = useState<RegenerationOptions>(
     DEFAULT_REGENERATION_OPTIONS
   )
+  // The week the navigation wants to land on while unsaved work is in the way,
+  // and whether a save-then-change is currently running.
+  const [pendingWeek, setPendingWeek] = useState<string | null>(null)
+  const [weekChangeBusy, setWeekChangeBusy] = useState(false)
 
   // A new generation replaces the schedule wholesale, so local edits made
   // against the previous one must not survive it.
@@ -111,6 +134,9 @@ export function PlanningBoard({
     setModifiedAt(null)
     setRegenerateOpen(false)
     setRegenerateOptions(DEFAULT_REGENERATION_OPTIONS)
+    setPendingWeek(null)
+    // Show every sector of the freshly generated planning.
+    setSelection((current) => ({ ...current, sectorIds: input.sectors.map((sector) => sector.id) }))
   }, [input])
 
   const editedInput = useMemo(() => applyShiftEdits(input, editState), [input, editState])
@@ -184,35 +210,112 @@ export function PlanningBoard({
   // The counts the regeneration dialog shows. Cheap, read straight off the state.
   const localWork = summarizeLocalWork(editState)
 
+  // The week the header shows versus the week the loaded planning belongs to.
+  // They diverge the moment the manager navigates away without generating, and
+  // that divergence — not a global "any planning exists" — decides everything:
+  // the primary action, whether the grid renders, whether save/publish appear.
+  const currentWeek = selectedWeek ?? input.periodStart
+  const generatedPlanningWeek = input.periodStart
+  const hasPlanning = hasPlanningForWeek(currentWeek, generatedPlanningWeek)
+  const weekLabel = describeWeek(currentWeek)
+  // Unsaved only means anything while the loaded planning is on screen.
+  const unsaved = hasPlanning && (dirty || hasLocalChanges(editState))
+
+  const clearLocalEdits = () => {
+    setEditState(EMPTY_EDIT_STATE)
+    setSelectedShiftId(null)
+    setLastEditedShiftId(null)
+    setModifiedAt(null)
+  }
+
+  const requestWeekChange = (request: WeekChangeRequest) => {
+    const target = resolveTargetWeek(currentWeek, request)
+    if (target === currentWeek) return
+    if (needsWeekChangeConfirmation(unsaved)) setPendingWeek(target)
+    else onChangeWeek?.(target)
+  }
+
+  const toggleSector = (sectorId: string) =>
+    setSelection((current) => {
+      const next = new Set(current.sectorIds)
+      if (next.has(sectorId)) next.delete(sectorId)
+      else next.add(sectorId)
+      return { ...current, sectorIds: [...next] }
+    })
+
+  const toggleAllSectors = (selectAll: boolean) =>
+    update({ sectorIds: selectAll ? input.sectors.map((sector) => sector.id) : [] })
+
+  const applyWeekChange = (outcome: ReturnType<typeof resolveWeekChangeChoice>, target: string) => {
+    if (outcome.discardLocalEdits) clearLocalEdits()
+    if (outcome.changeWeek) onChangeWeek?.(target)
+  }
+
+  const confirmDiscardAndChange = () => {
+    const target = pendingWeek
+    setPendingWeek(null)
+    if (target === null) return
+    applyWeekChange(resolveWeekChangeChoice("discard", true), target)
+  }
+
+  const confirmSaveAndChange = async () => {
+    const target = pendingWeek
+    if (target === null) return
+    setWeekChangeBusy(true)
+    const saved = onSaveRequest ? await onSaveRequest() : true
+    setWeekChangeBusy(false)
+    setPendingWeek(null)
+    // Change (and discard) only if the save actually succeeded; otherwise stay
+    // put and let the owner surface the error.
+    applyWeekChange(resolveWeekChangeChoice("save", saved), target)
+  }
+
   return (
     <div className="space-y-4">
-      <div className="flex justify-end">
-        <button
-          type="button"
-          onClick={() => setRegenerateOpen(true)}
-          className="rounded-md border px-3 py-1.5 text-sm font-medium transition hover:bg-muted"
-        >
-          Régénérer
-        </button>
-      </div>
-
       <PlanningToolbar
         toolbar={board.toolbar}
+        weekLabel={weekLabel}
         onChangeView={(view) => update({ view })}
-        onSelectSector={(sectorId) => update({ sectorId })}
+        onToggleSector={toggleSector}
+        onToggleAllSectors={toggleAllSectors}
         onSelectDate={(date: IsoDate) => update({ date })}
-        onPreviousWeek={() => onPreviousWeek?.()}
-        onNextWeek={() => onNextWeek?.()}
-        weekOptions={weekOptions}
-        selectedWeek={selectedWeek}
-        onSelectWeek={onSelectWeek}
+        onPreviousWeek={() => requestWeekChange({ type: "previous" })}
+        onNextWeek={() => requestWeekChange({ type: "next" })}
+        hasPlanning={hasPlanning}
+        unsavedLabel={unsaved ? "● Modifications non enregistrées" : null}
+        primaryAction={
+          primaryPlanningAction(hasPlanning) === "regenerate" ? (
+            <button
+              type="button"
+              onClick={() => setRegenerateOpen(true)}
+              disabled={generating}
+              className="rounded-md border px-3 py-1.5 text-sm font-medium transition hover:bg-muted disabled:opacity-50"
+            >
+              Régénérer
+            </button>
+          ) : (
+            <button
+              type="button"
+              onClick={() => onGenerate?.()}
+              disabled={generating}
+              className="rounded-md bg-primary px-3 py-1.5 text-sm font-medium text-primary-foreground transition hover:brightness-110 disabled:opacity-50"
+            >
+              {generating ? "Génération…" : "Générer cette semaine"}
+            </button>
+          )
+        }
         actions={actions}
       />
 
-      {/* No fixed side panel: the grid gets the full width, and per-employee
-          detail lives in its own view where it has room to breathe. Selecting
-          someone here switches to it rather than shrinking the schedule. */}
-      {board.toolbar.view === "sector" ? (
+      {/* The loaded planning belongs to one week; showing it under any other
+          would be a lie. A different week gets an honest empty state instead. */}
+      {!hasPlanning ? (
+        <PlanningEmptyWeek
+          weekTitle={weekLabel.title}
+          onGenerate={() => onGenerate?.()}
+          disabled={generating}
+        />
+      ) : board.toolbar.view === "sector" ? (
         <PlanningSectorView
           sectorView={board.sectorView}
           onSelectEmployee={(employeeId: EmployeeId) =>
@@ -263,16 +366,29 @@ export function PlanningBoard({
 
       {/* The verdict reads AFTER the schedule: a manager looks at the week
           first, then at what to check before publishing it. */}
-      <PlanningSummary summary={board.summary} />
+      {hasPlanning ? <PlanningSummary summary={board.summary} /> : null}
 
-      {/* Regeneration is intent-only this sprint: the dialog collects the
-          preferences and states plainly that honouring them needs V3. */}
+      {/* Régénérer runs the active engine now; the V3 lock-respecting variant is
+          previewed but clearly marked as future — never a dead-end. */}
       <PlanningRegenerateDialog
         open={regenerateOpen}
         summary={localWork}
         options={regenerateOptions}
         onChangeOptions={setRegenerateOptions}
         onCancel={() => setRegenerateOpen(false)}
+        onRegenerateNow={() => {
+          setRegenerateOpen(false)
+          onGenerate?.()
+        }}
+        busy={generating}
+      />
+
+      <PlanningWeekChangeDialog
+        open={pendingWeek !== null}
+        busy={weekChangeBusy}
+        onCancel={() => setPendingWeek(null)}
+        onDiscardAndChange={confirmDiscardAndChange}
+        onSaveAndChange={() => void confirmSaveAndChange()}
       />
     </div>
   )

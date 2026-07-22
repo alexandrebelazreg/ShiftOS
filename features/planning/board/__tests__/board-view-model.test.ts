@@ -75,7 +75,7 @@ function input(): PlanningBoardInput {
 
 const selection = (patch: Partial<PlanningBoardSelection> = {}): PlanningBoardSelection => ({
   view: "sector",
-  sectorId: "drive",
+  sectorIds: ["drive"],
   date: "2026-07-20",
   employeeId: null,
   ...patch,
@@ -109,7 +109,7 @@ describe("board — les deux vues lisent les mêmes données", () => {
 describe("board — synchronisation des filtres", () => {
   it("changer de secteur met à jour les deux vues", () => {
     const drive = buildPlanningBoard(input(), selection())
-    const caisse = buildPlanningBoard(input(), selection({ sectorId: "caisse" }))
+    const caisse = buildPlanningBoard(input(), selection({ sectorIds: ["caisse"] }))
 
     // s4 belongs to Caisse only; it must appear there and nowhere else.
     expect(drive.sectorView.rows.flatMap((r) => Object.values(r.shiftsByDate).flat()).map((s) => s.id))

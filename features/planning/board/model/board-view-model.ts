@@ -237,17 +237,20 @@ export function buildPlanningBoard(
   input: PlanningBoardInput,
   selection: PlanningBoardSelection
 ): PlanningBoardViewModel {
-  const sectorId = selection.sectorId ?? input.sectors[0]?.id ?? null
+  // The selected sectors as a set. Empty shows nothing; every id shows the
+  // union — the multiselect states its choice explicitly, no "null means all".
+  const selectedSectors = new Set(selection.sectorIds)
+  const inSelection = (sectorId: string) => selectedSectors.has(sectorId)
   const days = [...input.days].sort((left, right) => left.date.localeCompare(right.date))
   const openDays = days.filter((day) => !day.closed)
   const date = selection.date ?? openDays[0]?.date ?? days[0]?.date ?? null
 
   // ONE filtered set. Both views read it; neither re-filters.
-  const shifts = input.shifts.filter((shift) => sectorId === null || shift.sectorId === sectorId)
-  const employees = input.employees.filter(
-    (employee) => sectorId === null || employee.sectorIds.includes(sectorId)
+  const shifts = input.shifts.filter((shift) => inSelection(shift.sectorId))
+  const employees = input.employees.filter((employee) =>
+    employee.sectorIds.some(inSelection)
   )
-  const demand = input.demand.filter((slot) => sectorId === null || slot.sectorId === sectorId)
+  const demand = input.demand.filter((slot) => inSelection(slot.sectorId))
 
   const day = days.find((item) => item.date === date) ?? null
   const open = day?.opensAtMinutes ?? null
@@ -274,7 +277,7 @@ export function buildPlanningBoard(
       sectors: input.sectors.map((sector) => ({
         id: sector.id,
         name: sector.name,
-        selected: sector.id === sectorId,
+        selected: inSelection(sector.id),
       })),
       days: days.map((item) => ({
         date: item.date,

@@ -20,6 +20,7 @@ import {
   adaptEditorStateToBoard,
   buildPlanningBoard,
   decidePublication,
+  hasPlanningForWeek,
   listWeekOptions,
   mondayOf,
   weekPeriod,
@@ -103,7 +104,9 @@ export function PlanningView({ initialStore }: { initialStore: StoreConfig | nul
       boardInput
         ? buildPlanningBoard(boardInput, {
             view: "sector",
-            sectorId: null,
+            // The publish gate weighs the whole planning, so the summary reads
+            // every sector, not whichever ones the board happens to be filtered to.
+            sectorIds: boardInput.sectors.map((sector) => sector.id),
             date: null,
             employeeId: null,
           }).summary
@@ -203,6 +206,16 @@ export function PlanningView({ initialStore }: { initialStore: StoreConfig | nul
     })
   }
 
+  /** Save and report whether it succeeded — for the board's "save then change week". */
+  async function saveAndReport(): Promise<boolean> {
+    let ok = false
+    await withPersistence(async () => {
+      await persistCurrent()
+      ok = true
+    })
+    return ok
+  }
+
   function publishNow() {
     // Second reading of the same gate, with the acceptance granted. The dialog
     // can only be reached through `handlePublish`, but publication is the one
@@ -293,6 +306,13 @@ export function PlanningView({ initialStore }: { initialStore: StoreConfig | nul
 
   const currentStatus: PlanningStatus = record?.status ?? "draft"
   const readOnly = currentStatus !== "draft"
+  // The loaded planning belongs to one week; when the manager is looking at any
+  // other week, nothing tied to it — grid, detailed editor, publish dialog —
+  // may render, so the S30 planning never appears under an S31 header.
+  const selectedWeekHasPlanning = hasPlanningForWeek(
+    targetWeek,
+    boardInput ? boardInput.periodStart : null
+  )
 
   return (
     <div className="space-y-6">
@@ -421,23 +441,15 @@ export function PlanningView({ initialStore }: { initialStore: StoreConfig | nul
               the adapter above it. */}
           <PlanningBoard
             input={boardInput}
-            weekOptions={weekOptions}
             selectedWeek={targetWeek}
-            onSelectWeek={setTargetWeek}
+            onChangeWeek={setTargetWeek}
+            onSaveRequest={saveAndReport}
+            onGenerate={handleGenerate}
+            generating={state.status === "loading"}
+            dirty={isDirty}
             onPersistenceBlockChange={setEditsBlockPersistence}
             actions={
               <>
-                <StatusBadge status={currentStatus} />
-                <span className="text-xs text-muted-foreground">
-                  {isDirty ? "● Non enregistré" : "✓ Enregistré"}
-                </span>
-                <Button
-                  size="sm"
-                  onClick={handleGenerate}
-                  disabled={!initialStore || !setup.ready || setup.isLoading || isLoading || state.status === "loading"}
-                >
-                  {state.status === "loading" ? "Génération…" : "Générer"}
-                </Button>
                 {currentStatus === "draft" ? (
                   <>
                     <Button
@@ -470,23 +482,25 @@ export function PlanningView({ initialStore }: { initialStore: StoreConfig | nul
             }
           />
 
-          <details className="rounded-lg border p-3 text-sm">
-            <summary className="cursor-pointer font-medium">Éditeur détaillé (existant)</summary>
-            <div className="mt-3">
-          <PlanningEditor
-            key={`${record?.id ?? "new"}_${editorInstance}`}
-            initialState={editorState}
-            readOnly={readOnly}
-            diagnostic={state.status === "done" && state.result.status === "success" && state.result.generation.status === "blocked"}
-            onStateChange={(next) => {
-              setEditorState(next)
-              setIsDirty(true)
-            }}
-          />
-            </div>
-          </details>
+          {selectedWeekHasPlanning ? (
+            <details className="rounded-lg border p-3 text-sm">
+              <summary className="cursor-pointer font-medium">Éditeur détaillé (existant)</summary>
+              <div className="mt-3">
+                <PlanningEditor
+                  key={`${record?.id ?? "new"}_${editorInstance}`}
+                  initialState={editorState}
+                  readOnly={readOnly}
+                  diagnostic={state.status === "done" && state.result.status === "success" && state.result.generation.status === "blocked"}
+                  onStateChange={(next) => {
+                    setEditorState(next)
+                    setIsDirty(true)
+                  }}
+                />
+              </div>
+            </details>
+          ) : null}
 
-          {boardSummary ? (
+          {selectedWeekHasPlanning && boardSummary ? (
             <PlanningPublishDialog
               open={publishDialogOpen}
               summary={boardSummary}

@@ -92,7 +92,12 @@ export interface PlanningBoardInput {
 /** What the user is currently looking at. Pure UI state, no domain meaning. */
 export interface PlanningBoardSelection {
   readonly view: "sector" | "day" | "employee"
-  readonly sectorId: string | null
+  /**
+   * Sectors currently shown, as an explicit set. An empty array shows nothing;
+   * every id shows the union of all sectors. There is no "null means all"
+   * sentinel — the caller always states exactly which sectors it wants.
+   */
+  readonly sectorIds: readonly string[]
   readonly date: IsoDate | null
   readonly employeeId: EmployeeId | null
 }

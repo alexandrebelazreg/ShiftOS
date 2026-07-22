@@ -1,5 +1,6 @@
 export * from "@/features/planning/board/model/board-input"
 export * from "@/features/planning/board/model/board-view-model"
+export * from "@/features/planning/board/model/header-controls"
 export * from "@/features/planning/board/model/publish-decision"
 export * from "@/features/planning/board/model/regeneration-request"
 export * from "@/features/planning/board/model/shift-edit"
