@@ -10,7 +10,12 @@ import {
   editedShiftCount,
   EMPTY_EDIT_STATE,
   hasEdits,
+  hasLocalChanges,
+  isShiftLocked,
+  lockedShiftCount,
   resetShiftEdits,
+  setShiftLock,
+  toggleShiftLock,
   undoShiftEdit,
 } from "@/features/planning/board/model/shift-edit-state"
 
@@ -107,5 +112,69 @@ describe("état d'édition — recalcul du planning affiché", () => {
     expect(shift.opensDay).toBe(true)
     // The generated input is never mutated.
     expect(INPUT.shifts[0].startMinutes).toBe(540)
+  })
+})
+
+describe("verrous — pose et retrait", () => {
+  it("verrouille un shift", () => {
+    const locked = toggleShiftLock(EMPTY_EDIT_STATE, "s1")
+    expect(isShiftLocked(locked, "s1")).toBe(true)
+    expect(lockedShiftCount(locked)).toBe(1)
+    expect(hasLocalChanges(locked)).toBe(true)
+    // A lock is not a geometry edit: it neither dirties the plan nor undo.
+    expect(hasEdits(locked)).toBe(false)
+    expect(canUndo(locked)).toBe(false)
+  })
+
+  it("déverrouille un shift", () => {
+    const locked = toggleShiftLock(EMPTY_EDIT_STATE, "s1")
+    const unlocked = toggleShiftLock(locked, "s1")
+    expect(isShiftLocked(unlocked, "s1")).toBe(false)
+    expect(lockedShiftCount(unlocked)).toBe(0)
+  })
+
+  it("verrouille plusieurs shifts indépendamment", () => {
+    let state = setShiftLock(EMPTY_EDIT_STATE, "s1", true)
+    state = setShiftLock(state, "s2", true)
+    expect(isShiftLocked(state, "s1")).toBe(true)
+    expect(isShiftLocked(state, "s2")).toBe(true)
+    expect(lockedShiftCount(state)).toBe(2)
+    // Unlocking one leaves the other pinned.
+    state = setShiftLock(state, "s1", false)
+    expect(isShiftLocked(state, "s1")).toBe(false)
+    expect(isShiftLocked(state, "s2")).toBe(true)
+  })
+
+  it("ne mute jamais l'état d'origine", () => {
+    const locked = setShiftLock(EMPTY_EDIT_STATE, "s1", true)
+    expect(isShiftLocked(EMPTY_EDIT_STATE, "s1")).toBe(false)
+    expect(locked).not.toBe(EMPTY_EDIT_STATE)
+  })
+})
+
+describe("verrous — survie aux modifications locales", () => {
+  it("conserve les verrous après une édition locale", () => {
+    const locked = setShiftLock(EMPTY_EDIT_STATE, "s1", true)
+    const edited = applyShiftEdit(locked, "s2", OPEN_SHIFT)
+    expect(isShiftLocked(edited, "s1")).toBe(true)
+    expect(hasEdits(edited)).toBe(true)
+  })
+
+  it("conserve les verrous après un Undo", () => {
+    const locked = setShiftLock(EMPTY_EDIT_STATE, "s1", true)
+    const edited = applyShiftEdit(locked, "s2", OPEN_SHIFT)
+    const undone = undoShiftEdit(edited)
+    expect(isShiftLocked(undone, "s1")).toBe(true)
+    // The edit is gone, the lock stays.
+    expect(hasEdits(undone)).toBe(false)
+  })
+
+  it("efface les verrous après Réinitialiser", () => {
+    let state = setShiftLock(EMPTY_EDIT_STATE, "s1", true)
+    state = applyShiftEdit(state, "s2", OPEN_SHIFT)
+    const reset = resetShiftEdits()
+    expect(isShiftLocked(reset, "s1")).toBe(false)
+    expect(lockedShiftCount(reset)).toBe(0)
+    expect(hasLocalChanges(reset)).toBe(false)
   })
 })

@@ -25,6 +25,8 @@ interface PlanningShiftBarProps {
   readonly selected?: boolean
   /** Committed on mouse-up with the shift's new geometry. */
   readonly onEdit?: (next: EditableShift) => void
+  /** Pinned by the manager. Local only this sprint: it marks, it never forbids. */
+  readonly locked?: boolean
 }
 
 type DragState = {
@@ -54,6 +56,7 @@ export function PlanningShiftBar({
   bounds,
   selected = false,
   onEdit,
+  locked = false,
 }: PlanningShiftBarProps) {
   const editing = editable !== undefined && bounds !== undefined && onEdit !== undefined
   const [preview, setPreview] = useState<EditableShift | null>(null)
@@ -150,11 +153,20 @@ export function PlanningShiftBar({
             "text-[11px] font-medium shadow-sm transition",
             "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
             editing ? "cursor-grab active:cursor-grabbing touch-none" : "hover:brightness-95",
-            selected && "ring-2 ring-primary ring-offset-1",
+            // Selection wins the ring; a lock keeps a quieter amber one so the
+            // two states never fight over the same visual channel.
+            selected
+              ? "ring-2 ring-primary ring-offset-1"
+              : locked && "ring-1 ring-amber-500/80",
             KIND_SURFACE[shift.kind]
           )}
-          title={`${shift.kindLabel} · ${shift.label} · ${shift.durationLabel}`}
+          title={`${shift.kindLabel} · ${shift.label} · ${shift.durationLabel}${locked ? " · verrouillé" : ""}`}
         >
+          {locked && index === 0 ? (
+            <span className="mr-1 shrink-0 text-[10px] leading-none" aria-label="Verrouillé">
+              🔒
+            </span>
+          ) : null}
           <span className="truncate tabular-nums">{bodyLabel(index)}</span>
         </button>
       ))}

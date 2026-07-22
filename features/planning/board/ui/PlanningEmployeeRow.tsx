@@ -19,6 +19,8 @@ interface PlanningEmployeeRowProps {
   readonly onEditShift?: (shiftId: string, next: EditableShift) => void
   /** The employee's worked-time change since generation. Shown once edited. */
   readonly delta?: ShiftDeltaVM
+  /** Ids of pinned shifts, so each bar can wear its padlock. */
+  readonly lockedShiftIds?: ReadonlySet<string>
 }
 
 /**
@@ -40,6 +42,7 @@ export function PlanningEmployeeRow({
   onSelectShift,
   onEditShift,
   delta,
+  lockedShiftIds,
 }: PlanningEmployeeRowProps) {
   const editing = editableById !== undefined && bounds !== undefined
 
@@ -89,6 +92,7 @@ export function PlanningEmployeeRow({
                 editable={editing ? editableById!.get(shift.id) : undefined}
                 bounds={bounds}
                 selected={editing && shift.id === selectedShiftId}
+                locked={lockedShiftIds?.has(shift.id) ?? false}
                 onSelect={() =>
                   editing ? onSelectShift?.(shift.id, row.employeeId) : onSelect()
                 }

@@ -12,6 +12,12 @@ import type { EditableShift } from "@/features/planning/board/model/shift-edit"
  *
  * The history is a stack of previous override maps, so undo restores a whole
  * consistent state rather than trying to invert one move.
+ *
+ * Locks live here too, as a third kind of local change alongside the overrides.
+ * They are deliberately NOT part of the undo history: undoing a drag must not
+ * silently unlock a shift the manager pinned. They DO clear on reset, because
+ * reset means "back to exactly what the engine produced", which had no locks.
+ * This is the shape the V3 integration will read: generation + edits + locks.
  */
 
 export interface ShiftOverride {
@@ -20,18 +26,35 @@ export interface ShiftOverride {
   readonly segments: readonly { readonly startMinutes: number; readonly endMinutes: number }[]
 }
 
+/** The lock model, kept intentionally poor: an id and a boolean, nothing engine. */
+export interface LockedShift {
+  readonly shiftId: string
+  readonly locked: boolean
+}
+
 type OverrideMap = Readonly<Record<string, ShiftOverride>>
 
 export interface ShiftEditState {
   readonly overrides: OverrideMap
   /** Previous override maps, oldest first. Undo pops the last one. */
   readonly history: readonly OverrideMap[]
+  /** Ids of shifts the manager pinned. Local only; no effect on generation yet. */
+  readonly lockedShiftIds: ReadonlySet<string>
 }
 
-export const EMPTY_EDIT_STATE: ShiftEditState = { overrides: {}, history: [] }
+export const EMPTY_EDIT_STATE: ShiftEditState = {
+  overrides: {},
+  history: [],
+  lockedShiftIds: new Set(),
+}
 
 export function hasEdits(state: ShiftEditState): boolean {
   return Object.keys(state.overrides).length > 0
+}
+
+/** Any local change at all — a geometry edit OR a lock. Drives "Réinitialiser". */
+export function hasLocalChanges(state: ShiftEditState): boolean {
+  return hasEdits(state) || state.lockedShiftIds.size > 0
 }
 
 export function canUndo(state: ShiftEditState): boolean {
@@ -41,6 +64,38 @@ export function canUndo(state: ShiftEditState): boolean {
 /** How many shifts currently differ from what the engine produced. */
 export function editedShiftCount(state: ShiftEditState): number {
   return Object.keys(state.overrides).length
+}
+
+// ── Locks ────────────────────────────────────────────────────────────────────
+
+export function isShiftLocked(state: ShiftEditState, shiftId: string): boolean {
+  return state.lockedShiftIds.has(shiftId)
+}
+
+export function lockedShiftCount(state: ShiftEditState): number {
+  return state.lockedShiftIds.size
+}
+
+/**
+ * Set a shift's lock to an explicit value. Returns a new state with a fresh set
+ * so the old one is never mutated; the overrides and the undo history are left
+ * exactly as they were — locking is orthogonal to editing.
+ */
+export function setShiftLock(
+  state: ShiftEditState,
+  shiftId: string,
+  locked: boolean
+): ShiftEditState {
+  if (isShiftLocked(state, shiftId) === locked) return state
+  const next = new Set(state.lockedShiftIds)
+  if (locked) next.add(shiftId)
+  else next.delete(shiftId)
+  return { ...state, lockedShiftIds: next }
+}
+
+/** Flip a shift's lock — the single action the toolbar button performs. */
+export function toggleShiftLock(state: ShiftEditState, shiftId: string): ShiftEditState {
+  return setShiftLock(state, shiftId, !isShiftLocked(state, shiftId))
 }
 
 /**
@@ -54,6 +109,7 @@ export function applyShiftEdit(
   shift: EditableShift
 ): ShiftEditState {
   return {
+    ...state,
     overrides: {
       ...state.overrides,
       [shiftId]: {
@@ -66,11 +122,14 @@ export function applyShiftEdit(
   }
 }
 
-/** Step back one edit. A no-op when nothing has been edited yet. */
+/**
+ * Step back one edit. A no-op when nothing has been edited yet. Locks are kept:
+ * they are not part of the geometry history, so undoing a drag leaves them be.
+ */
 export function undoShiftEdit(state: ShiftEditState): ShiftEditState {
   const previous = state.history[state.history.length - 1]
   if (previous === undefined) return state
-  return { overrides: previous, history: state.history.slice(0, -1) }
+  return { ...state, overrides: previous, history: state.history.slice(0, -1) }
 }
 
 /** Drop every local change and go back to the generated schedule. */

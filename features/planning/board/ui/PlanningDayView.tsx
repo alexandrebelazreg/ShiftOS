@@ -17,10 +17,16 @@ interface PlanningDayViewProps {
   readonly onSelectShift?: (shiftId: string, employeeId: EmployeeId) => void
   readonly onEditShift?: (shiftId: string, next: EditableShift) => void
   readonly deltasByEmployee?: ReadonlyMap<EmployeeId, ShiftDeltaVM>
+  /** Shift-lock wiring. The selected shift can be pinned or released. */
+  readonly lockedShiftIds?: ReadonlySet<string>
+  readonly selectedShiftLocked?: boolean
+  readonly onToggleLock?: (shiftId: string) => void
   /** Local-edit controls and read-outs. Shown once a shift has been touched. */
   readonly verdict?: DayEditVerdictVM | null
   readonly canUndo?: boolean
   readonly hasEdits?: boolean
+  /** Whether anything at all can be reset — a geometry edit OR a lock. */
+  readonly canReset?: boolean
   readonly onUndo?: () => void
   readonly onReset?: () => void
   /** "20/07/2025 10:32" and "Luca Zanuso (+30 min, fin à 13:15)". */
@@ -38,9 +44,13 @@ export function PlanningDayView({
   onSelectShift,
   onEditShift,
   deltasByEmployee,
+  lockedShiftIds,
+  selectedShiftLocked = false,
+  onToggleLock,
   verdict,
   canUndo = false,
   hasEdits = false,
+  canReset = false,
   onUndo,
   onReset,
   modifiedAtLabel,
@@ -58,6 +68,20 @@ export function PlanningDayView({
       <div className="flex flex-wrap items-center justify-between gap-3">
         <h2 className="text-sm font-semibold">{dayView.dateLabel}</h2>
         <div className="flex flex-wrap items-center gap-3">
+          {/* Contextual to the selection: a shift must be picked before it can
+              be pinned. The lock is local this sprint — it marks, never forbids. */}
+          {selectedShiftId && onToggleLock ? (
+            <button
+              type="button"
+              onClick={() => onToggleLock(selectedShiftId)}
+              className={cn(
+                "rounded-md border px-2.5 py-1 text-xs font-medium transition hover:bg-muted",
+                selectedShiftLocked && "border-amber-500/80 text-amber-700 dark:text-amber-400"
+              )}
+            >
+              {selectedShiftLocked ? "🔓 Déverrouiller ce shift" : "🔒 Verrouiller ce shift"}
+            </button>
+          ) : null}
           {hasEdits && verdict ? (
             <div className="rounded-lg border px-3 py-1.5" role="status">
               <div className="flex items-center gap-2">
@@ -99,11 +123,11 @@ export function PlanningDayView({
           <button
             type="button"
             onClick={onReset}
-            disabled={!hasEdits}
+            disabled={!canReset}
             className="rounded-md border px-2.5 py-1 text-left text-xs leading-tight transition hover:bg-muted disabled:opacity-50"
           >
             <span className="block font-medium">Réinitialiser les modifications</span>
-            <span className="block text-muted-foreground">Supprime toutes les modifications</span>
+            <span className="block text-muted-foreground">Supprime tout, éditions et verrous</span>
           </button>
         </div>
       </div>
@@ -117,6 +141,7 @@ export function PlanningDayView({
         onSelectShift={onSelectShift}
         onEditShift={onEditShift}
         deltasByEmployee={hasEdits ? deltasByEmployee : undefined}
+        lockedShiftIds={lockedShiftIds}
       />
 
       {hasEdits ? (

@@ -16,6 +16,7 @@ interface PlanningTimelineProps {
   readonly onSelectShift?: (shiftId: string, employeeId: EmployeeId) => void
   readonly onEditShift?: (shiftId: string, next: EditableShift) => void
   readonly deltasByEmployee?: ReadonlyMap<EmployeeId, ShiftDeltaVM>
+  readonly lockedShiftIds?: ReadonlySet<string>
 }
 
 /**
@@ -31,6 +32,7 @@ export function PlanningTimeline({
   onSelectShift,
   onEditShift,
   deltasByEmployee,
+  lockedShiftIds,
 }: PlanningTimelineProps) {
   return (
     <div className="overflow-x-auto rounded-lg border">
@@ -69,6 +71,7 @@ export function PlanningTimeline({
             onSelectShift={onSelectShift}
             onEditShift={onEditShift}
             delta={deltasByEmployee?.get(row.employeeId)}
+            lockedShiftIds={lockedShiftIds}
           />
         ))}
       </div>

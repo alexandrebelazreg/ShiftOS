@@ -16,7 +16,10 @@ import {
   canUndo,
   EMPTY_EDIT_STATE,
   hasEdits,
+  hasLocalChanges,
+  isShiftLocked,
   resetShiftEdits,
+  toggleShiftLock,
   undoShiftEdit,
   type ShiftEditState,
 } from "@/features/planning/board/model/shift-edit-state"
@@ -26,8 +29,14 @@ import {
   describeLastEdit,
   editsBlockPersistence,
 } from "@/features/planning/board/model/shift-edit-diff"
+import {
+  DEFAULT_REGENERATION_OPTIONS,
+  summarizeLocalWork,
+  type RegenerationOptions,
+} from "@/features/planning/board/model/regeneration-request"
 import { PlanningDayView } from "@/features/planning/board/ui/PlanningDayView"
 import { PlanningEmployeeView } from "@/features/planning/board/ui/PlanningEmployeeView"
+import { PlanningRegenerateDialog } from "@/features/planning/board/ui/PlanningRegenerateDialog"
 import { PlanningSectorView } from "@/features/planning/board/ui/PlanningSectorView"
 import { PlanningSummary } from "@/features/planning/board/ui/PlanningSummary"
 import { PlanningToolbar } from "@/features/planning/board/ui/PlanningToolbar"
@@ -86,6 +95,12 @@ export function PlanningBoard({
   // anything: which shift moved last, and when.
   const [lastEditedShiftId, setLastEditedShiftId] = useState<string | null>(null)
   const [modifiedAt, setModifiedAt] = useState<Date | null>(null)
+  // The regeneration intent dialog: its open flag and the three toggles. This
+  // sprint the intent is collected and shown, never sent to any solver.
+  const [regenerateOpen, setRegenerateOpen] = useState(false)
+  const [regenerateOptions, setRegenerateOptions] = useState<RegenerationOptions>(
+    DEFAULT_REGENERATION_OPTIONS
+  )
 
   // A new generation replaces the schedule wholesale, so local edits made
   // against the previous one must not survive it.
@@ -94,6 +109,8 @@ export function PlanningBoard({
     setSelectedShiftId(null)
     setLastEditedShiftId(null)
     setModifiedAt(null)
+    setRegenerateOpen(false)
+    setRegenerateOptions(DEFAULT_REGENERATION_OPTIONS)
   }, [input])
 
   const editedInput = useMemo(() => applyShiftEdits(input, editState), [input, editState])
@@ -164,8 +181,21 @@ export function PlanningBoard({
   const update = (patch: Partial<PlanningBoardSelection>) =>
     setSelection((current) => ({ ...current, ...patch }))
 
+  // The counts the regeneration dialog shows. Cheap, read straight off the state.
+  const localWork = summarizeLocalWork(editState)
+
   return (
     <div className="space-y-4">
+      <div className="flex justify-end">
+        <button
+          type="button"
+          onClick={() => setRegenerateOpen(true)}
+          className="rounded-md border px-3 py-1.5 text-sm font-medium transition hover:bg-muted"
+        >
+          Régénérer
+        </button>
+      </div>
+
       <PlanningToolbar
         toolbar={board.toolbar}
         onChangeView={(view) => update({ view })}
@@ -205,9 +235,15 @@ export function PlanningBoard({
             setModifiedAt(new Date())
           }}
           deltasByEmployee={deltasByEmployee}
+          lockedShiftIds={editState.lockedShiftIds}
+          selectedShiftLocked={selectedShiftId ? isShiftLocked(editState, selectedShiftId) : false}
+          onToggleLock={(shiftId) =>
+            setEditState((current) => toggleShiftLock(current, shiftId))
+          }
           verdict={verdict}
           canUndo={canUndo(editState)}
           hasEdits={edited}
+          canReset={hasLocalChanges(editState)}
           onUndo={undo}
           onReset={() => {
             setEditState(resetShiftEdits())
@@ -228,6 +264,16 @@ export function PlanningBoard({
       {/* The verdict reads AFTER the schedule: a manager looks at the week
           first, then at what to check before publishing it. */}
       <PlanningSummary summary={board.summary} />
+
+      {/* Regeneration is intent-only this sprint: the dialog collects the
+          preferences and states plainly that honouring them needs V3. */}
+      <PlanningRegenerateDialog
+        open={regenerateOpen}
+        summary={localWork}
+        options={regenerateOptions}
+        onChangeOptions={setRegenerateOptions}
+        onCancel={() => setRegenerateOpen(false)}
+      />
     </div>
   )
 }
