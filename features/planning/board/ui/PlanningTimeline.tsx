@@ -1,18 +1,37 @@
+import type { EmployeeId } from "@/features/core/models"
 import type { BoardDayViewVM } from "@/features/planning/board/model/board-view-model"
+import type { ShiftDeltaVM } from "@/features/planning/board/model/shift-edit-diff"
+import type { DragBounds, EditableShift } from "@/features/planning/board/model/shift-edit"
 import { PlanningCoverageRow } from "@/features/planning/board/ui/PlanningCoverageRow"
 import { PlanningEmployeeRow } from "@/features/planning/board/ui/PlanningEmployeeRow"
 import { PlanningTimelineHeader } from "@/features/planning/board/ui/PlanningTimelineHeader"
 
 interface PlanningTimelineProps {
   readonly dayView: BoardDayViewVM
-  readonly onSelectEmployee: (employeeId: BoardDayViewVM["rows"][number]["employeeId"]) => void
+  readonly onSelectEmployee: (employeeId: EmployeeId) => void
+  /** Editing wiring, present only when the day is open and editable. */
+  readonly editableById?: ReadonlyMap<string, EditableShift>
+  readonly bounds?: DragBounds
+  readonly selectedShiftId?: string | null
+  readonly onSelectShift?: (shiftId: string, employeeId: EmployeeId) => void
+  readonly onEditShift?: (shiftId: string, next: EditableShift) => void
+  readonly deltasByEmployee?: ReadonlyMap<EmployeeId, ShiftDeltaVM>
 }
 
 /**
  * The timeline: hour ruler, the two coverage lines, then one lane per employee.
  * Every part receives the same `hours`, which is why the columns line up.
  */
-export function PlanningTimeline({ dayView, onSelectEmployee }: PlanningTimelineProps) {
+export function PlanningTimeline({
+  dayView,
+  onSelectEmployee,
+  editableById,
+  bounds,
+  selectedShiftId,
+  onSelectShift,
+  onEditShift,
+  deltasByEmployee,
+}: PlanningTimelineProps) {
   return (
     <div className="overflow-x-auto rounded-lg border">
       <div className="min-w-[52rem]">
@@ -44,6 +63,12 @@ export function PlanningTimeline({ dayView, onSelectEmployee }: PlanningTimeline
             row={row}
             hours={dayView.hours}
             onSelect={() => onSelectEmployee(row.employeeId)}
+            editableById={editableById}
+            bounds={bounds}
+            selectedShiftId={selectedShiftId}
+            onSelectShift={onSelectShift}
+            onEditShift={onEditShift}
+            delta={deltasByEmployee?.get(row.employeeId)}
           />
         ))}
       </div>

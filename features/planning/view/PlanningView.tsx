@@ -112,6 +112,9 @@ export function PlanningView({ initialStore }: { initialStore: StoreConfig | nul
   )
   const [publishDialogOpen, setPublishDialogOpen] = useState(false)
   const [publishBlocked, setPublishBlocked] = useState(false)
+  // Raised by the board when local shift edits break a contract or produce an
+  // impossible schedule: saving and publishing stay barred until they are fixed.
+  const [editsBlockPersistence, setEditsBlockPersistence] = useState(false)
   // What the "Publier" button is allowed to do. Decided by a pure function over
   // the run's diagnostics and the recomputed shortfalls — never over the display
   // status, which cannot tell a hard violation from a coverage reserve.
@@ -232,6 +235,13 @@ export function PlanningView({ initialStore }: { initialStore: StoreConfig | nul
    * One breaking a hard rule publishes nowhere and says why.
    */
   function handlePublish() {
+    // Local edits that break a contract or the day itself bar publication just
+    // as a generated hard violation does — no acceptance overrides either.
+    if (editsBlockPersistence) {
+      setPublishDialogOpen(false)
+      setPublishBlocked(true)
+      return
+    }
     switch (publishDecision) {
       case "block-publication":
         setPublishDialogOpen(false)
@@ -400,8 +410,9 @@ export function PlanningView({ initialStore }: { initialStore: StoreConfig | nul
 
           {publishBlocked ? (
             <p role="alert" className="rounded-md border border-destructive/40 bg-destructive/10 p-3 text-sm text-destructive">
-              Publication impossible : des règles obligatoires ne sont pas respectées. Corrigez le
-              planning avant de le publier — aucune acceptation ne permet de passer outre.
+              Publication impossible : des règles obligatoires — couverture dure ou contrats — ne
+              sont pas respectées. Corrigez le planning avant de le publier ; aucune acceptation ne
+              permet de passer outre.
             </p>
           ) : null}
 
@@ -413,6 +424,7 @@ export function PlanningView({ initialStore }: { initialStore: StoreConfig | nul
             weekOptions={weekOptions}
             selectedWeek={targetWeek}
             onSelectWeek={setTargetWeek}
+            onPersistenceBlockChange={setEditsBlockPersistence}
             actions={
               <>
                 <StatusBadge status={currentStatus} />
@@ -428,7 +440,12 @@ export function PlanningView({ initialStore }: { initialStore: StoreConfig | nul
                 </Button>
                 {currentStatus === "draft" ? (
                   <>
-                    <Button size="sm" variant="outline" onClick={handleSave} disabled={isPersisting || !isDirty}>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={handleSave}
+                      disabled={isPersisting || !isDirty || editsBlockPersistence}
+                    >
                       Enregistrer
                     </Button>
                     {/* Left clickable even when publication is barred: a dead
