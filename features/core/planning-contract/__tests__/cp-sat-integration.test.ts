@@ -448,3 +448,63 @@ describe.skipIf(!ENABLED)("CP-SAT réel — arrêts et pannes", () => {
     LONG
   )
 })
+
+describe.skipIf(!ENABLED)("CP-SAT réel — une solution trouvée n'est jamais jetée", () => {
+  it(
+    "rend feasible avec un planning au budget applicatif, jamais timeout-without-solution",
+    async () => {
+      // The regression this whole diagnosis is about. The passes share one
+      // budget; at the application's timeout the Drive week finishes its first
+      // two lexicographic passes but not the third. The old service returned
+      // `timeout-without-solution` and threw the proven schedule away; the fix
+      // keeps it and answers `feasible`. A budget large enough for pass 1 to
+      // complete is all this test needs — whether pass 3 also finishes only
+      // decides between `feasible` and, on the incomplete Drive space, `feasible`
+      // again, never a null solution.
+      const problem = buildDriveProblem()
+      const adapter = createCpSatAdapter({ timeoutSeconds: 120 })
+      const response = await adapter(buildSolvePlanningRequest(problem))
+
+      expect(response.outcome).not.toBe("timeout-without-solution")
+      expect(response.outcome).toBe("feasible")
+      expect(response.solution).not.toBeNull()
+      expect(response.solution!.assignments.length).toBeGreaterThan(0)
+      // Whatever it kept must survive the INDEPENDENT validator — the schedule
+      // came from an earlier pass, not the final one, and nothing may reach the
+      // manager unaudited.
+      expect(response.diagnostics.blocking).toBe(false)
+      expect(response.metadata.stopCause).toBe("timeout")
+      expect(checkSolvePlanningResponse(response)).toEqual([])
+    },
+    LONG
+  )
+})
+
+describe.skipIf(!ENABLED)("CP-SAT réel — infaisabilité structurelle avant la recherche", () => {
+  it(
+    "refuse un budget journalier inatteignable sans lancer la recherche",
+    async () => {
+      // A day asking for more minutes than every available employee can supply
+      // is provably impossible. The service must say so at once, not spend the
+      // whole budget failing to disprove it. `not-started` is the tell: no pass
+      // ran.
+      const problem = structuredClone(buildDriveProblem()) as ReturnType<typeof buildDriveProblem>
+      const open = problem.days.find((day) => !day.closed)!
+      ;(open as { budgetMinutes: number }).budgetMinutes = 100_000
+
+      const started = Date.now()
+      const adapter = createCpSatAdapter({ timeoutSeconds: 600 })
+      const response = await adapter(buildSolvePlanningRequest(problem))
+      const elapsedSeconds = (Date.now() - started) / 1000
+
+      expect(response.outcome).toBe("invalid-problem")
+      expect(response.solution).toBeNull()
+      expect(response.metadata.stopCause).toBe("not-started")
+      expect(response.diagnostics.entries[0].code).toBe("structurally-infeasible")
+      // The point of the check: it returns in seconds, nowhere near the budget.
+      expect(elapsedSeconds).toBeLessThan(60)
+      expect(checkSolvePlanningResponse(response)).toEqual([])
+    },
+    LONG
+  )
+})

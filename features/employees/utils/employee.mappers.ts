@@ -37,6 +37,11 @@ export function createEmptyEmployeeFormValues(): EmployeeFormValues {
 
 /** Map a persisted employee into editable form values (numbers → strings). */
 export function employeeToFormValues(employee: EmployeeRecord): EmployeeFormValues {
+  // The contract is stored in minutes; the form splits it into whole hours plus
+  // a 0/15/30/45 remainder.
+  const contractMinutes =
+    employee.weeklyMinutes ?? Math.round(employee.weeklyHours * 60)
+
   return {
     firstName: employee.firstName,
     lastName: employee.lastName,
@@ -44,8 +49,8 @@ export function employeeToFormValues(employee: EmployeeRecord): EmployeeFormValu
     email: employee.email,
     status: employee.status,
 
-    weeklyHours: String(Math.floor(employee.weeklyMinutes ?? employee.weeklyHours)),
-    weeklyMinuteRemainder: String((employee.weeklyMinutes ?? Math.round(employee.weeklyHours * 60)) % 60),
+    weeklyHours: String(Math.floor(contractMinutes / 60)),
+    weeklyMinuteRemainder: String(contractMinutes % 60),
     contractConfirmationRequired: employee.contractMinuteConfirmationRequired === true,
     legacyContractMinutes: "",
     contractType: employee.contractType,

@@ -137,7 +137,211 @@ def candidate_space(problem) -> str:
     return "incomplete" if problem["rules"]["splitShiftAllowed"] else "complete"
 
 
-def build_model(problem, preservation=None):
+def employee_day_domains(problem):
+    """For every (ei, di): the exact set of worked-minute durations the model
+    would allow, plus whether the day is mandatory and whether an opening or a
+    closing shift is possible.
+
+    Computed with `build_candidates` — the SAME enumeration `build_model` uses —
+    so a necessary-condition check built on top of this can never pass a problem
+    the model then finds infeasible. A looser approximation here would reopen
+    exactly the silent-timeout hole these diagnostics exist to close.
+    """
+    entry_of = {(e["employeeId"], e["date"]): e for e in problem["employeeDays"]}
+    domains = {}
+    for ei, employee in enumerate(problem["employees"]):
+        for di, day in enumerate(problem["days"]):
+            entry = entry_of[(employee["id"], day["date"])]
+            cands = build_candidates(problem, employee, day, entry)
+            domains[(ei, di)] = {
+                "mandatory": bool(entry.get("mandatory")),
+                "durations": sorted({c["minutes"] for c in cands}),
+                "canOpen": any(c["opens"] for c in cands),
+                "canClose": any(c["closes"] for c in cands),
+            }
+    return domains
+
+
+def necessary_feasibility_diagnostics(problem, preservation=None):
+    """NECESSARY conditions for a legal schedule to exist. Never sufficient.
+
+    Every rule below is a lower bound the exact contract/budget equalities must
+    respect. A violation is a PROOF the week cannot be staffed as posed, so it is
+    safe to report before any search — and reporting it turns a 120-second wait
+    that ends in "no solution" into an immediate, precise sentence naming the day
+    or the employee at fault.
+
+    The reverse does NOT hold: passing every check here says only that no cheap
+    contradiction was found, and the CP-SAT search still runs. So this can raise
+    no false alarm (each item is a real impossibility) while still leaving the
+    hard feasibility question to the solver.
+    """
+    rules = problem["rules"]
+    employees = problem["employees"]
+    days = problem["days"]
+    domains = employee_day_domains(problem)
+    out = []
+
+    # ── Global balance: the two exact equality families must agree on the total.
+    total_contract = sum(e["contractMinutes"] for e in employees)
+    total_budget = sum(d["budgetMinutes"] for d in days)
+    if total_contract != total_budget:
+        out.append({
+            "code": "contract-budget-total-mismatch",
+            "message": f"La somme des contrats ({total_contract} min) diffère de la "
+                       f"somme des budgets journaliers ({total_budget} min) : les "
+                       f"égalités exactes ne peuvent pas toutes tenir.",
+        })
+
+    # ── A mandatory day with no legal shift: w==1 and w==0 at once.
+    for ei, employee in enumerate(employees):
+        for di, day in enumerate(days):
+            dom = domains[(ei, di)]
+            if dom["mandatory"] and not dom["durations"]:
+                out.append({
+                    "code": "mandatory-day-no-candidate",
+                    "employeeId": employee["id"], "date": day["date"],
+                    "message": f"{employee['id']} est obligatoire le {day['date']} mais "
+                               f"aucun shift légal n'y existe (fenêtre, durée ou capacité).",
+                })
+
+    # ── Per open day: capacity, mandatory floor, reachability, open/close.
+    for di, day in enumerate(days):
+        if day["closed"]:
+            continue
+        budget = day["budgetMinutes"]
+        floor = cap = openers = closers = 0
+        positives = []
+        for ei in range(len(employees)):
+            dom = domains[(ei, di)]
+            if dom["durations"]:
+                cap += dom["durations"][-1]
+                positives.append(dom["durations"][0])
+                if dom["mandatory"]:
+                    floor += dom["durations"][0]
+                if dom["canOpen"]:
+                    openers += 1
+                if dom["canClose"]:
+                    closers += 1
+        min_positive = min(positives) if positives else None
+        if budget > cap:
+            out.append({
+                "code": "day-budget-exceeds-capacity", "date": day["date"],
+                "message": f"Le {day['date']} demande {budget} min mais la capacité "
+                           f"maximale des salariés disponibles est {cap} min.",
+            })
+        if budget < floor:
+            out.append({
+                "code": "day-budget-below-mandatory-floor", "date": day["date"],
+                "message": f"Le {day['date']} n'a qu'un budget de {budget} min alors que "
+                           f"les salariés obligatoires imposent au moins {floor} min.",
+            })
+        if budget > 0 and (min_positive is None or budget < min_positive):
+            out.append({
+                "code": "day-budget-below-shortest-shift", "date": day["date"],
+                "message": f"Le {day['date']} demande {budget} min, une valeur strictement "
+                           f"positive mais inférieure au plus court shift possible "
+                           f"({min_positive if min_positive is not None else '—'} min) : "
+                           f"aucune combinaison de salariés ne peut l'atteindre.",
+            })
+        if openers < rules["minimumOpeningsPerDay"]:
+            out.append({
+                "code": "day-cannot-open", "date": day["date"],
+                "message": f"Le {day['date']} exige {rules['minimumOpeningsPerDay']} "
+                           f"ouverture(s) mais seuls {openers} salarié(s) peuvent ouvrir.",
+            })
+        if closers < rules["exactClosingsPerDay"]:
+            out.append({
+                "code": "day-cannot-close", "date": day["date"],
+                "message": f"Le {day['date']} exige exactement {rules['exactClosingsPerDay']} "
+                           f"fermeture(s) mais seuls {closers} salarié(s) peuvent fermer.",
+            })
+
+    # ── Per employee: the contract must fit between its mandatory floor and the
+    #    most its available days can absorb.
+    for ei, employee in enumerate(employees):
+        contract = employee["contractMinutes"]
+        floor = cap = 0
+        for di in range(len(days)):
+            dom = domains[(ei, di)]
+            if dom["durations"]:
+                cap += dom["durations"][-1]
+                if dom["mandatory"]:
+                    floor += dom["durations"][0]
+        if contract > cap:
+            out.append({
+                "code": "employee-contract-exceeds-capacity", "employeeId": employee["id"],
+                "message": f"Le contrat de {employee['id']} ({contract} min) dépasse le total "
+                           f"maximal atteignable sur ses jours disponibles ({cap} min).",
+            })
+        if contract < floor:
+            out.append({
+                "code": "employee-contract-below-mandatory-floor", "employeeId": employee["id"],
+                "message": f"Le contrat de {employee['id']} ({contract} min) est inférieur au "
+                           f"minimum imposé par ses jours obligatoires ({floor} min).",
+            })
+
+    return out
+
+
+def individual_daily_targets(problem):
+    """Each employee's contract, spread over the days they can actually work.
+
+    The sector's percentage profile decides the SHAPE of a week; `budgetMinutes`
+    is that profile already expressed in minutes, so it is what weights the
+    split. Reading the percentages back out would only re-derive it, and would
+    re-derive it differently on a day the largest-remainder rounding touched.
+
+    Days the employee cannot work at all — fixed rest, absence, holiday, a
+    closed day — are removed from the split and their share is redistributed
+    across the days that remain. A target on a day nobody can work would be an
+    unreachable ideal that the objective then pays for forever.
+
+    Rounding is largest-remainder in whole time steps, ties broken by calendar
+    order, so the result is deterministic AND the targets of one employee sum to
+    EXACTLY their contract. That last property is load-bearing: targets summing
+    to anything else would put this objective in permanent conflict with the
+    exact weekly-contract equality, and the deviation could never reach zero
+    however good the schedule.
+    """
+    step = problem["timeStepMinutes"]
+    entry_of = {(e["employeeId"], e["date"]): e for e in problem["employeeDays"]}
+    targets = {}
+
+    for ei, employee in enumerate(problem["employees"]):
+        workable = []
+        for di, day in enumerate(problem["days"]):
+            targets[(ei, di)] = 0
+            entry = entry_of[(employee["id"], day["date"])]
+            if entry["available"] and not day["closed"]:
+                workable.append(di)
+        if not workable:
+            continue
+
+        weights = [max(0, problem["days"][di]["budgetMinutes"]) for di in workable]
+        if sum(weights) <= 0:
+            # No shape to follow — an even split is the only neutral answer.
+            weights = [1] * len(workable)
+        total_weight = sum(weights)
+
+        total_units = employee["contractMinutes"] // step
+        rows = []
+        for position, di in enumerate(workable):
+            exact = total_units * weights[position] / total_weight
+            whole = int(exact)
+            rows.append([di, whole, exact - whole])
+
+        leftover = total_units - sum(row[1] for row in rows)
+        for row in sorted(rows, key=lambda item: (-item[2], item[0]))[:max(0, leftover)]:
+            row[1] += 1
+
+        for di, units, _ in rows:
+            targets[(ei, di)] = units * step
+
+    return targets
+
+
+def build_model(problem, preservation=None, with_distribution=False):
     """Return (model, handles) for one PlanningProblemV3.
 
     `preservation` is optional and, when present, carries already-resolved
@@ -310,7 +514,27 @@ def build_model(problem, preservation=None):
             # weighted by the budget of the day they fall on. Integers only.
             business.append((miss, day["budgetMinutes"]))
 
+    # ── Deviation from each employee's individual daily target ─────────────
+    #
+    # Built ONLY when a pass will optimise it. Left out otherwise the model is
+    # byte-for-byte the one measured before, so a comparison between "with" and
+    # "without" measures the objective rather than the extra variables.
+    #
+    # A SOFT term, never a constraint: the target is what a balanced week would
+    # look like, not a rule. Some targets are unreachable by construction — a
+    # 105-minute target cannot be met when the shortest legal shift is 240 — and
+    # a hard version would turn a perfectly good week into an infeasibility.
+    targets = individual_daily_targets(problem)
+    deviation = []
+    if with_distribution:
+        for ei in range(len(employees)):
+            for di in range(len(days)):
+                gap = model.NewIntVar(0, 1440, f"dev_{ei}_{di}")
+                model.AddAbsEquality(gap, minutes_v[(ei, di)] - targets[(ei, di)])
+                deviation.append(gap)
+
     handles = {"x": x, "pool": pool, "under": under, "shortfall": shortfall,
+               "distributionDeviation": deviation, "distributionTargets": targets,
                "business": business, "candidates": total_candidates,
                "works": works, "start": start_v, "end": end_v, "minutes": minutes_v,
                "employeeIndex": employee_index, "dayIndex": day_index,
@@ -376,9 +600,16 @@ def _build_drift(model, problem, handles, baseline_assignments):
     return terms
 
 
-def run_pass(solver, model, label):
+def run_pass(solver, model, label, callback=None):
+    """Solve one pass and describe what it achieved.
+
+    `callback` is an optional CP-SAT solution callback. It observes the search —
+    it cannot steer it — so passing one changes no objective, no constraint and
+    no result; it only lets the caller timestamp events such as the first
+    feasible solution.
+    """
     started = time.time()
-    status = solver.Solve(model)
+    status = solver.Solve(model, callback) if callback is not None else solver.Solve(model)
     elapsed = time.time() - started
     ok = status in (cp_model.OPTIMAL, cp_model.FEASIBLE)
     return {

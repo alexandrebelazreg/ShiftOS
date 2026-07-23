@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest"
 
 import { employeeService, normalizeContract } from "@/features/employees/services/employee.service"
+import { employeeToFormValues } from "@/features/employees/utils/employee.mappers"
 
 describe("profil employé", () => {
   it("crée puis met à jour le profil utilisé par la page dédiée", async () => {
@@ -22,6 +23,12 @@ describe("profil employé", () => {
     const created = await employeeService.create({ firstName: "Trente", lastName: "Minutes", phone: "", email: "", status: "active", weeklyHours: 36.5, contractType: "full_time", sectors: [], competencies: {}, canOpen: false, canClose: false, splitShiftAllowed: false, fixedDaysOff: [], forbiddenDays: [], maxOpenings: null, maxClosings: null, preferOpening: false, preferClosing: false, notes: "" })
     expect(created.weeklyMinutes).toBe(2_190)
     expect(created.schemaVersion).toBe(2)
+  })
+  it("réaffiche les heures du contrat en heures, pas en minutes", async () => {
+    const created = await employeeService.create({ firstName: "Retour", lastName: "Formulaire", phone: "", email: "", status: "active", weeklyHours: 36.75, contractType: "full_time", sectors: [], competencies: {}, canOpen: false, canClose: false, splitShiftAllowed: false, fixedDaysOff: [], forbiddenDays: [], maxOpenings: null, maxClosings: null, preferOpening: false, preferClosing: false, notes: "" })
+    const values = employeeToFormValues(created)
+    expect(values.weeklyHours).toBe("36")
+    expect(values.weeklyMinuteRemainder).toBe("45")
   })
   it("exige une confirmation pour un ancien 36.5 sans weeklyMinutes", async () => {
     const current = await employeeService.create({ firstName: "Legacy", lastName: "Pilote", phone: "", email: "", status: "active", weeklyHours: 36, contractType: "full_time", sectors: [], competencies: {}, canOpen: false, canClose: false, splitShiftAllowed: false, fixedDaysOff: [], forbiddenDays: [], maxOpenings: null, maxClosings: null, preferOpening: false, preferClosing: false, notes: "" })

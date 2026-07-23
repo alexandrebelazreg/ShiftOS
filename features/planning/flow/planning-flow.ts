@@ -2,7 +2,11 @@ import type { DateRange, OrganizationId, PlanningId } from "@/features/core/mode
 
 import type { BridgeInput, PlanningInput } from "@/features/core/data-bridge"
 import { dataBridge } from "@/features/core/data-bridge"
-import type { PlanningGenerationResult } from "@/features/core/planning-generator"
+import type {
+  GenerationSettings,
+  PlanningGenerationInput,
+  PlanningGenerationResult,
+} from "@/features/core/planning-generator"
 import { planningGenerator } from "@/features/core/planning-generator"
 import type { StatisticsReport } from "@/features/core/statistics-engine"
 import { statisticsService } from "@/features/core/statistics-engine"
@@ -64,6 +68,71 @@ export type PlanningFlowResult =
  * failure becomes a structured error.
  */
 export function runPlanningFlow(request: PlanningFlowRequest): PlanningFlowResult {
+  const prepared = preparePlanningGeneration(request)
+  if (prepared.status === "error") return prepared
+
+  try {
+    const { configuration, coreInput, generationInput } = prepared
+
+    // Planning Generator → Constraint / Coverage / Fairness / Scoring engines.
+    const started = Date.now()
+    const generation = planningGenerator.generate(generationInput)
+    const durationMs = Date.now() - started
+
+    // Statistics Engine — per-employee facts for display (single source of truth).
+    const statistics = statisticsService.compute({
+      planning: generation.planning,
+      employees: coreInput.employees,
+      assignments: generation.assignments,
+      shifts: generation.shifts,
+      store: coreInput.store,
+      calendar: { holidays: coreInput.holidays, absences: coreInput.absences },
+      coverage: generation.coverage,
+    })
+
+    return { status: "success", configuration, coreInput, generation, statistics, durationMs }
+  } catch (error) {
+    return {
+      status: "error",
+      errors: [
+        {
+          code: "unexpected_error",
+          path: "",
+          message: error instanceof Error ? error.message : "Unexpected error during generation",
+        },
+      ],
+    }
+  }
+}
+
+/** Everything assembled for a run, before any engine has been chosen. */
+export type PreparedPlanningGeneration =
+  | {
+      readonly status: "ready"
+      readonly configuration: StoreConfiguration
+      readonly coreInput: PlanningInput
+      readonly settings: GenerationSettings
+      /** The exact input V2 consumes, and the input the V3 problem is built from. */
+      readonly generationInput: PlanningGenerationInput
+    }
+  | { readonly status: "error"; readonly errors: readonly FlowError[] }
+
+/**
+ * Everything up to the moment an engine is picked — and nothing after it.
+ *
+ * Extracted from `runPlanningFlow`, which now calls it, so V2 keeps consuming
+ * byte-identical input. It exists because V3 needs the SAME assembled input: a
+ * `PlanningProblemV3` is built from a `PlanningGenerationInput`, and building it
+ * from a second, parallel assembly would mean the two engines could silently
+ * end up solving different weeks from the same screen.
+ *
+ * Running V2 just to obtain the input would also work and would be wrong: it
+ * would spend a full generation the manager did not ask for, and then throw it
+ * away.
+ */
+export function preparePlanningGeneration(
+  request: PlanningFlowRequest
+): PreparedPlanningGeneration {
   try {
     // Build StoreConfiguration and validate it.
     const configuration = storeConfigurationFromOnboarding(request.store)
@@ -115,9 +184,7 @@ export function runPlanningFlow(request: PlanningFlowRequest): PlanningFlowResul
       now: request.scope.now,
     })
 
-    // Planning Generator → Constraint / Coverage / Fairness / Scoring engines.
-    const started = Date.now()
-    const generation = planningGenerator.generate({
+    const generationInput: PlanningGenerationInput = {
       store: coreInput.store,
       employees: coreInput.employees,
       demand: coreInput.demand,
@@ -147,21 +214,9 @@ export function runPlanningFlow(request: PlanningFlowRequest): PlanningFlowResul
           hours: sector.hours,
         })),
       },
-    })
-    const durationMs = Date.now() - started
+    }
 
-    // Statistics Engine — per-employee facts for display (single source of truth).
-    const statistics = statisticsService.compute({
-      planning: generation.planning,
-      employees: coreInput.employees,
-      assignments: generation.assignments,
-      shifts: generation.shifts,
-      store: coreInput.store,
-      calendar: { holidays: coreInput.holidays, absences: coreInput.absences },
-      coverage: generation.coverage,
-    })
-
-    return { status: "success", configuration, coreInput, generation, statistics, durationMs }
+    return { status: "ready", configuration, coreInput, settings, generationInput }
   } catch (error) {
     return {
       status: "error",

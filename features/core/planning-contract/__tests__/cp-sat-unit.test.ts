@@ -7,6 +7,8 @@ import { PLANNING_SOLUTION_V3_VERSION } from "@/features/core/planning-v3/types/
 import {
   assertNoOmittedPreservation,
   buildPreservationPlan,
+  CP_SAT_MAX_TIMEOUT_SECONDS,
+  CP_SAT_PROFILES,
   CP_SAT_PROTOCOL_VERSION,
   createCpSatAdapter,
   omittedPreservations,
@@ -816,7 +818,60 @@ describe("adaptateur CP-SAT — enveloppe émise", () => {
     expect(envelope.preservation.lockedAssignments).toHaveLength(1)
     expect(envelope.preservation.minimizeOtherChanges).toBe(true)
     expect(envelope.preservation.baselineAssignments).toHaveLength(2)
-    expect(envelope.options).toEqual({ timeoutSeconds: 12, seed: 7, workers: 1 })
+    // Hints on by default, one worker, and the profile named explicitly: the
+    // service resolves its own defaults from the profile, so what travels must
+    // say which bundle was asked for, not just the numbers it produced.
+    expect(envelope.options).toEqual({
+      profile: "fast",
+      timeoutSeconds: 12,
+      seed: 7,
+      workers: 1,
+      useHints: true,
+    })
+  })
+
+  it("applique le budget du profil demandé et plafonne toute demande excessive", () => {
+    // 120 s is the measured budget at which the first TWO objectives prove
+    // reproducibly (3/3). 60 s proved neither and varied per run; 90 s proved
+    // the first but left 180 minutes of deficit. Pinned so a future tightening
+    // has to face that measurement rather than a preference.
+    expect(CP_SAT_PROFILES.fast.timeoutSeconds).toBe(120)
+    expect(CP_SAT_PROFILES.thorough.timeoutSeconds).toBe(300)
+    // Both keep a single worker: eight bought 4% of wall time for twice the CPU
+    // and a schedule that changed on every run.
+    expect(CP_SAT_PROFILES.fast.workers).toBe(1)
+    expect(CP_SAT_PROFILES.thorough.workers).toBe(1)
+    expect(CP_SAT_PROFILES.fast.useHints).toBe(true)
+    expect(CP_SAT_PROFILES.thorough.useHints).toBe(true)
+  })
+
+  it.each([
+    ["fast", 120],
+    ["thorough", 300],
+  ] as const)("envoie le budget par défaut du profil %s", async (profile, expected) => {
+    let sent = ""
+    const adapter = createCpSatAdapter({
+      profile,
+      runner: async (payload) => {
+        sent = payload
+        return { kind: "stdout", stdout: JSON.stringify(solvedEnvelope()) }
+      },
+    })
+    await adapter(buildSolvePlanningRequest(problem))
+    expect(JSON.parse(sent).options).toMatchObject({ profile, timeoutSeconds: expected })
+  })
+
+  it("ne laisse aucun appelant dépasser le plafond de budget", async () => {
+    let sent = ""
+    const adapter = createCpSatAdapter({
+      timeoutSeconds: 100_000,
+      runner: async (payload) => {
+        sent = payload
+        return { kind: "stdout", stdout: JSON.stringify(solvedEnvelope()) }
+      },
+    })
+    await adapter(buildSolvePlanningRequest(problem))
+    expect(JSON.parse(sent).options.timeoutSeconds).toBe(CP_SAT_MAX_TIMEOUT_SECONDS)
   })
 
   it("n'envoie aucune référence de stabilité quand elle n'est pas demandée", async () => {

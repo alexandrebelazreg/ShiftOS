@@ -14,29 +14,29 @@ import {
  */
 export interface PlanningEngineSelector {
   readonly version: PlanningEngineVersion
-  /** True when V3 must run at all, in shadow or in production. */
-  readonly runsV3: boolean
-  /** True when V3 output is what the user actually sees. */
-  readonly publishesV3: boolean
+  /**
+   * True when V3 is what the manager sees.
+   *
+   * One boolean, not two. While a shadow mode existed, "does V3 run" and "is V3
+   * published" were different questions; without it they are the same question
+   * and keeping both would only invite a caller to check the wrong one.
+   */
+  readonly usesV3: boolean
 }
 
 export function createPlanningEngineSelector(
   version: PlanningEngineVersion = CURRENT_PLANNING_ENGINE_VERSION
 ): PlanningEngineSelector {
-  return {
-    version,
-    runsV3: version !== "v2",
-    publishesV3: version === "v3",
-  }
+  return { version, usesV3: version === "v3" }
 }
 
 /**
- * The selector in force for Sprint V3A.
+ * The selector in force when nobody has chosen.
  *
- * It resolves to `v2`, so the planning the application publishes is still the
- * one Sprint 3D.1 produces. `v3-shadow` and `v3` are declared but deliberately
- * not wired to anything yet, and there is NO automatic fallback between
- * versions: switching engines will be an explicit decision, never a silent
- * recovery from a V3 failure.
+ * It resolves to `v2`, so the planning the application publishes by default is
+ * still the one Sprint 3D.1 produces. Choosing `v3` is an explicit, per-session
+ * act in the UI, and there is NO automatic movement between versions: a failed
+ * V3 run never falls back, it reports and waits for the manager to decide.
  */
-export const planningEngineSelectorV3A: PlanningEngineSelector = createPlanningEngineSelector("v2")
+export const defaultPlanningEngineSelector: PlanningEngineSelector =
+  createPlanningEngineSelector("v2")

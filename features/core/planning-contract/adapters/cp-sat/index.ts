@@ -18,7 +18,10 @@ import {
   CP_SAT_PROTOCOL_VERSION,
   parseCpSatResponse,
 } from "@/features/core/planning-contract/adapters/cp-sat/protocol"
-import type { CpSatRequestEnvelope } from "@/features/core/planning-contract/adapters/cp-sat/protocol"
+import type {
+  CpSatProfile,
+  CpSatRequestEnvelope,
+} from "@/features/core/planning-contract/adapters/cp-sat/protocol"
 import { createPythonRunner } from "@/features/core/planning-contract/adapters/cp-sat/run-python"
 import type { CpSatRunner } from "@/features/core/planning-contract/adapters/cp-sat/run-python"
 
@@ -51,13 +54,50 @@ import type { CpSatRunner } from "@/features/core/planning-contract/adapters/cp-
  * believing something false about it.
  */
 
+/**
+ * The budget and search options behind each profile.
+ *
+ * Mirrors `CPSAT_PROFILES` in `cpsat_service.py`, which applies the same values
+ * when a caller sends a profile and no explicit override. Declared here too so
+ * the application can show a manager what it is about to ask for without
+ * spawning a process to find out.
+ *
+ * `workers: 1` in BOTH. Eight workers were measured on the Drive week: 4% of
+ * wall time for twice the CPU, and a schedule that differed on every run. The
+ * objectives stayed identical, but a planning that changes shape on each click
+ * is not worth 4%.
+ */
+export const CP_SAT_PROFILES: Record<CpSatProfile, { timeoutSeconds: number; workers: number; useHints: boolean }> = {
+  // What a manager clicking "Générer" gets. 120 seconds is measured, not picked.
+  // On the Drive week, three runs at each budget:
+  //   60 s  — pass 1 never proven; 13, 1 and 1 under-covered slots. Legal every
+  //           time, reproducible never.
+  //   90 s  — pass 1 proves 1 (3/3), but pass 2 does not finish: 180 minutes of
+  //           deficit left unoptimised.
+  //   120 s — pass 1 proves 1 AND pass 2 proves 60 (3/3). The extra ~30 seconds
+  //           buy 120 employee-minutes of coverage.
+  fast: { timeoutSeconds: 120, workers: 1, useHints: true },
+  // A deliberate deepening, asked for explicitly.
+  thorough: { timeoutSeconds: 300, workers: 1, useHints: true },
+}
+
+/** No budget may exceed the deep profile's ceiling. */
+export const CP_SAT_MAX_TIMEOUT_SECONDS = 300
+
 export interface CpSatAdapterConfig {
   /** Injected for tests: every failure mode has a fake, none needs Python. */
   readonly runner?: CpSatRunner
   readonly pythonExecutable?: string
   readonly scriptPath?: string
+  /** Which bundle of budget and search options to run under. */
+  readonly profile?: CpSatProfile
   /** Budget handed to CP-SAT for ALL its passes combined. */
   readonly timeoutSeconds?: number
+  /**
+   * Carry each pass's solution into the next as a hint. Defaults to the
+   * profile's value; both profiles enable it.
+   */
+  readonly useHints?: boolean
   /**
    * Hard kill for the process, beyond the solver's own budget.
    *
@@ -80,7 +120,16 @@ export const CP_SAT_PRESERVATION_SUPPORT: EnginePreservationSupport = {
 }
 
 export function createCpSatAdapter(config: CpSatAdapterConfig = {}): PlanningSolveAdapter {
-  const timeoutSeconds = config.timeoutSeconds ?? 600
+  const profile: CpSatProfile = config.profile ?? "fast"
+  const defaults = CP_SAT_PROFILES[profile]
+  // An explicit budget still wins over the profile's, but nothing may exceed
+  // the ceiling: a request for an hour is a request to hold a manager's screen
+  // hostage, whatever it claims to be optimising.
+  const timeoutSeconds = Math.min(
+    config.timeoutSeconds ?? defaults.timeoutSeconds,
+    CP_SAT_MAX_TIMEOUT_SECONDS
+  )
+  const useHints = config.useHints ?? defaults.useHints
   const processTimeoutMs = config.processTimeoutMs ?? Math.round(timeoutSeconds * 1000) + 30_000
   const runner =
     config.runner ??
@@ -112,9 +161,11 @@ export function createCpSatAdapter(config: CpSatAdapterConfig = {}): PlanningSol
         minimizeOtherChanges: plan.minimizeOtherChanges,
       },
       options: {
+        profile,
         timeoutSeconds,
         seed: config.seed ?? 1,
-        workers: config.workers ?? 1,
+        workers: config.workers ?? defaults.workers,
+        useHints,
       },
     }
 

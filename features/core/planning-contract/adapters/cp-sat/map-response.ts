@@ -508,6 +508,12 @@ function technicalFacts(envelope: CpSatResponseEnvelope): readonly SolveTechnica
     { label: "Arrêt annoncé par le moteur", value: envelope.stopCause },
     { label: "Espace de candidats", value: envelope.candidateSpace },
   ]
+  // Why the ladder stopped, when it did not run to the end. Shown next to the
+  // per-pass facts so "only two passes ran" comes with its reason attached
+  // rather than leaving a reader to infer one from the timings.
+  if (typeof envelope.stopDetail === "string" && envelope.stopDetail.length > 0) {
+    facts.push({ label: "Cause d'arrêt", value: envelope.stopDetail })
+  }
   for (const pass of envelope.passes) {
     facts.push({
       label: `Passe ${pass.pass}`,

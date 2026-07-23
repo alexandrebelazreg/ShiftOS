@@ -111,3 +111,33 @@ elle ne sera pas développée.
 Ce document sera enrichi à chaque sprint.
 
 Il devient la référence principale du projet.
+
+# Principe d'architecture
+
+Le Core de ShiftOS ne doit contenir aucune règle spécifique à un métier.
+
+Le Core manipule uniquement des concepts universels :
+
+- Employee
+- Shift
+- Contract
+- Constraint
+- Capability
+- Assignment
+- Coverage
+- Preference
+- Score
+
+Toutes les règles propres à un secteur d'activité appartiennent à un Pack.
+
+Exemples :
+
+Retail Pack
+
+Restaurant Pack
+
+Warehouse Pack
+
+Healthcare Pack
+
+Le Core ne doit jamais connaître Carrefour, Drive, Boulangerie ou Hôpital.

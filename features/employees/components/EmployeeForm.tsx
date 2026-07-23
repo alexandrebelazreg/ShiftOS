@@ -1,6 +1,7 @@
 "use client"
 
 import { Ban } from "lucide-react"
+import { useState } from "react"
 import { FormProvider } from "react-hook-form"
 
 import { ContraintesTab } from "@/features/employees/components/tabs/ContraintesTab"
@@ -25,6 +26,33 @@ const TABS = [
   { value: "contraintes", label: "Contraintes" },
 ] as const
 
+type TabValue = (typeof TABS)[number]["value"]
+
+/** Which tab holds each field, so a rejected submit can reveal the culprit. */
+const FIELD_TABS: Record<string, TabValue> = {
+  firstName: "informations",
+  lastName: "informations",
+  phone: "informations",
+  email: "informations",
+  status: "informations",
+
+  weeklyHours: "contrat",
+  weeklyMinuteRemainder: "contrat",
+  legacyContractMinutes: "contrat",
+  contractType: "contrat",
+
+  sectors: "affectations",
+  competencies: "affectations",
+
+  canOpen: "contraintes",
+  canClose: "contraintes",
+  splitShiftAllowed: "contraintes",
+  fixedDaysOff: "contraintes",
+  forbiddenDays: "contraintes",
+  maxOpenings: "contraintes",
+  maxClosings: "contraintes",
+}
+
 /**
  * Tabbed employee form shared by the create and edit flows. Emits a validated,
  * coerced draft on submit; persistence is handled by the caller.
@@ -42,22 +70,41 @@ export function EmployeeForm({
 }) {
   const form = useEmployeeForm(employee)
   const { isSubmitting } = form.formState
+  const [tab, setTab] = useState<TabValue>("informations")
+  const [blockedTab, setBlockedTab] = useState<TabValue | null>(null)
 
   const canDisable = Boolean(employee && employee.status === "active" && onDisable)
 
   return (
     <FormProvider {...form}>
       <form
-        onSubmit={form.handleSubmit((values) =>
-          onSubmit(values as unknown as EmployeeDraft)
+        onSubmit={form.handleSubmit(
+          (values) => {
+            setBlockedTab(null)
+            return onSubmit(values as unknown as EmployeeDraft)
+          },
+          (errors) => {
+            // Errors can live on a tab the user isn't looking at, which makes
+            // "Enregistrer" seem inert — jump to the first offending tab.
+            const target = Object.keys(errors)
+              .map((field) => FIELD_TABS[field])
+              .find(Boolean)
+            if (!target) return
+            setBlockedTab(target)
+            setTab(target)
+          }
         )}
         className="flex h-full flex-col"
       >
-        <Tabs defaultValue="informations" className="flex-1 gap-4 overflow-hidden">
+        <Tabs
+          value={tab}
+          onValueChange={(value) => setTab(value as TabValue)}
+          className="flex-1 gap-4 overflow-hidden"
+        >
           <TabsList className="w-full">
-            {TABS.map((tab) => (
-              <TabsTrigger key={tab.value} value={tab.value}>
-                {tab.label}
+            {TABS.map((item) => (
+              <TabsTrigger key={item.value} value={item.value}>
+                {item.label}
               </TabsTrigger>
             ))}
           </TabsList>
@@ -75,6 +122,13 @@ export function EmployeeForm({
             </TabsContent>
           </div>
         </Tabs>
+
+        {blockedTab ? (
+          <p role="alert" className="pb-3 text-sm text-destructive">
+            Enregistrement impossible : corrigez les champs signalés dans l’onglet «{" "}
+            {TABS.find((item) => item.value === blockedTab)?.label} ».
+          </p>
+        ) : null}
 
         <div className="flex items-center justify-between gap-3 border-t border-border pt-4">
           <div>

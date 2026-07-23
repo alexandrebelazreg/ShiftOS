@@ -312,6 +312,50 @@ function shiftForRequirement(state: PipelineState, requirement: CoverageRequirem
 function shiftFor(state: PipelineState, id: ShiftId) { return state.shifts.find((item) => item.id === id) }
 function assignedFor(state: PipelineState, requirement: CoverageRequirement) { return state.assignments.filter((assignment) => { const shift = shiftFor(state, assignment.shiftId); return !!shift && coversRequirement(shift, requirement) && supports(state.context.employees.find((employee) => employee.id === assignment.employeeId)!, requirement) }) }
 function storeDay(context: GenerationContext, date: string) { return context.store.openingHours.find((item) => item.day === weekDayOf(date)) }
+
+/**
+ * The window an employee may actually be placed in on a date.
+ *
+ * The store's opening hours INTERSECTED with the hours of the sectors that
+ * employee belongs to — not the store's alone. `insideSectorHours` judges every
+ * candidate against the sector, so a window taken from the store alone proposes
+ * positions the validator is guaranteed to reject.
+ *
+ * That mismatch was not merely wasteful, it was fatal for one employee a day.
+ * A store closing at 20:45 over a sector closing at 20:00 made "closes the day"
+ * mean 20:45; the employee designated to close was then allowed only the single
+ * start that ends at 20:45, and that one start was rejected as outside sector
+ * hours. Zero legal positions, every day, for the closer — which cascaded into
+ * "0 minutes assignables" for everyone once the contract completion failed.
+ *
+ * Several sectors are covered by taking the outer bounds of their windows,
+ * mirroring `insideSectorHours`, which accepts a shift fitting in ANY of them.
+ * That can be wider than the union when sectors are disjoint; every candidate is
+ * still validated individually, so the effect is a slightly larger search, never
+ * an illegal placement.
+ */
+function placementWindow(context: GenerationContext, employeeId: EmployeeId, date: string) {
+  const day = storeDay(context, date)
+  if (!day || day.closed || !day.opensAt || !day.closesAt) return null
+  const storeOpen = timeToMinutes(day.opensAt)!, storeClose = timeToMinutes(day.closesAt)!
+
+  const weekDay = weekDayOf(date)
+  const windows = (context.business.sectors ?? [])
+    .filter((sector) => sector.active && sector.assignedEmployeeIds.includes(employeeId) && sector.hours)
+    .map((sector) => sector.hours!.find((hours) => hours.day === weekDay))
+    .filter((hours): hours is NonNullable<typeof hours> => !!hours && !hours.closed)
+    .map((hours) => [timeToMinutes(hours.opensAt)!, timeToMinutes(hours.closesAt)!] as const)
+    .filter(([open, close]) => open != null && close != null)
+
+  // No sector states hours for this employee: `insideSectorHours` imposes
+  // nothing either, so the store's window is the whole truth.
+  if (windows.length === 0) return { open: storeOpen, close: storeClose, opensAt: day.opensAt, closesAt: day.closesAt }
+
+  const open = Math.max(storeOpen, Math.min(...windows.map(([value]) => value)))
+  const close = Math.min(storeClose, Math.max(...windows.map(([, value]) => value)))
+  if (close <= open) return null
+  return { open, close, opensAt: toTime(open), closesAt: toTime(close) }
+}
 function isClosing(context: GenerationContext, requirement: CoverageRequirement) { const sector = context.business.sectors?.find((item) => item.requirementIds.includes(String(requirement.id))); const sameDay = context.demand.requirements.filter((item) => item.window.date === requirement.window.date && (!sector || sector.requirementIds.includes(String(item.id)))); const finalEnd = sameDay.map((item) => item.window.end).sort().at(-1); return requirement.window.end === finalEnd }
 function isOpening(context: GenerationContext, requirement: CoverageRequirement) { const day = storeDay(context, requirement.window.date); return !!day && !day.closed && requirement.window.start === day.opensAt }
 function issue(state: PipelineState, code: string, severity: PlanningIssueSeverity, phase: PipelinePhaseName, message: string, requirement?: CoverageRequirement, employeeId?: EmployeeId, details?: Readonly<Record<string, string | number>>) { state.issues.push({ code, severity, phase, message, requirementId: requirement?.id, employeeId, details }) }
@@ -409,22 +453,41 @@ function placeAllocatedWeek(state: PipelineState) {
     if (!scheduled.length) continue
     const optionsByEmployee = new Map<EmployeeId, PlacementOption[]>()
     for (const item of scheduled) {
-      const employee = state.context.employees.find((candidate) => candidate.id === item.row.employeeId)!, day = storeDay(state.context, date)
-      if (!day || day.closed || !day.opensAt || !day.closesAt) { issue(state, "allocated_day_closed", "blocking", "daily-placement", `${employee.firstName} possède ${item.minutes} minutes allouées sur un jour fermé (${date}).`, undefined, employee.id); continue }
-      const open = timeToMinutes(day.opensAt)!, close = timeToMinutes(day.closesAt)!, increment = state.context.settings.timeIncrementMinutes ?? 15, equivalent = new Map<string, PlacementOption>()
+      const employee = state.context.employees.find((candidate) => candidate.id === item.row.employeeId)!
+      const day = placementWindow(state.context, employee.id, date)
+      if (!day) { issue(state, "allocated_day_closed", "blocking", "daily-placement", `${employee.firstName} possède ${item.minutes} minutes allouées sur un jour fermé (${date}).`, undefined, employee.id); continue }
+      const open = day.open, close = day.close, increment = state.context.settings.timeIncrementMinutes ?? 15, equivalent = new Map<string, PlacementOption>()
+      // Why each start was rejected, counted per rule. "Aucune position légale"
+      // on its own names a symptom and leaves whoever reads it to guess which of
+      // a dozen rules emptied the list; these counters name the culprit.
+      const rejected = new Map<string, number>()
+      const reject = (reason: string) => rejected.set(reason, (rejected.get(reason) ?? 0) + 1)
+      let startsTested = 0
       for (let start = open; start + item.minutes <= close; start += increment) {
+        startsTested++
         const shift = syntheticShift(state, employee.id, date, toTime(start), item.minutes), assignment = buildAssignment(state.context.planning, shift, employee, state.context.settings)
         const closingOwner = closingOwners.get(date), closesDay = start + item.minutes === close
-        if ((closingOwner === employee.id && !closesDay) || (closingOwner !== employee.id && closesDay)) continue
-        if (start === open && mustReserveOpening(state, employee.id, date)) continue
-        if (start + item.minutes === close && mustReserveClosing(state, employee.id, date)) continue
-        if (validateCandidatePlan(state.context, state.requirements, [...state.shifts, shift], [...state.assignments, assignment]).length === 0) { const coverage = new Set(state.requirements.filter((requirement) => requirement.window.date === date && coversRequirement(shift, requirement) && supports(employee, requirement)).map((requirement) => String(requirement.id))), signature = [...coverage].join("|"); if (!equivalent.has(signature)) equivalent.set(signature, { employeeId: employee.id, shift, assignment, coverage }) }
+        if ((closingOwner === employee.id && !closesDay) || (closingOwner !== employee.id && closesDay)) { reject(closingOwner === employee.id ? "doit fermer ce jour" : "la fermeture est réservée à un autre salarié"); continue }
+        if (start === open && mustReserveOpening(state, employee.id, date)) { reject("l’ouverture est réservée"); continue }
+        if (start + item.minutes === close && mustReserveClosing(state, employee.id, date)) { reject("la fermeture est réservée"); continue }
+        const violations = validateCandidatePlan(state.context, state.requirements, [...state.shifts, shift], [...state.assignments, assignment])
+        if (violations.length === 0) { const coverage = new Set(state.requirements.filter((requirement) => requirement.window.date === date && coversRequirement(shift, requirement) && supports(employee, requirement)).map((requirement) => String(requirement.id))), signature = [...coverage].join("|"); if (!equivalent.has(signature)) equivalent.set(signature, { employeeId: employee.id, shift, assignment, coverage }) }
+        else reject(violations[0].code)
       }
       const allOptions = [...equivalent.values()], dailyRequirements = state.requirements.filter((requirement) => requirement.window.date === date)
       allOptions.sort((left, right) => { const weight = (option: PlacementOption) => dailyRequirements.reduce((sum, requirement) => sum + (option.coverage.has(String(requirement.id)) ? requirement.minEmployees : 0), 0); return weight(right) - weight(left) || left.shift.segments[0].startTime.localeCompare(right.shift.segments[0].startTime) })
       const boundary = [allOptions.find((option) => option.shift.segments[0].startTime === day.opensAt), allOptions.find((option) => option.shift.segments.at(-1)!.endTime === day.closesAt)].filter((option): option is PlacementOption => !!option), representatives = dailyRequirements.map((requirement) => allOptions.find((option) => option.coverage.has(String(requirement.id)))).filter((option): option is PlacementOption => !!option)
       const options = [...new Map([...boundary, ...representatives, ...allOptions].map((option) => [option.shift.segments[0].startTime, option])).values()]
-      if (!options.length) issue(state, "daily_placement_impossible", "blocking", "daily-placement", `${employee.firstName} : aucune position légale pour ${item.minutes} minutes le ${date}.`, undefined, employee.id, { allocatedMinutes: item.minutes })
+      if (!options.length) {
+        // Ordered by how many starts each rule killed: the first entry is the
+        // one to act on, and a rule that eliminated every single start is the
+        // answer rather than one line of a list.
+        const ranked = [...rejected.entries()].sort((left, right) => right[1] - left[1])
+        const because = ranked.length === 0
+          ? `la fenêtre d’ouverture ${day.opensAt}–${day.closesAt} est plus courte que la durée allouée`
+          : ranked.map(([reason, count]) => `${count} × ${reason}`).join(", ")
+        issue(state, "daily_placement_impossible", "blocking", "daily-placement", `${employee.firstName} : aucune position légale pour ${item.minutes} minutes le ${date}. Fenêtre ${day.opensAt}–${day.closesAt}, ${startsTested} début(s) testé(s) — ${because}.`, undefined, employee.id, { allocatedMinutes: item.minutes, opensAt: day.opensAt, closesAt: day.closesAt, startsTested, rejectedByRule: ranked.map(([reason, count]) => `${count}×${reason}`).join(" | ") })
+      }
       optionsByEmployee.set(employee.id, options)
     }
     if (scheduled.some((item) => !(optionsByEmployee.get(item.row.employeeId)?.length))) continue

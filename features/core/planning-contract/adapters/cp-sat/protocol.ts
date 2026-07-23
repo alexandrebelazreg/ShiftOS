@@ -39,11 +39,30 @@ export interface CpSatPreservationPayload {
   readonly minimizeOtherChanges: boolean
 }
 
+/**
+ * The two profiles the application may ask for.
+ *
+ * A profile is a BUDGET and a set of search options — never a change of
+ * objective, rule or candidate space. The same week solved under either one is
+ * legal under the other; only how far the lexicographic proofs got may differ.
+ */
+export type CpSatProfile = "fast" | "thorough"
+
 export interface CpSatSolverOptions {
+  readonly profile: CpSatProfile
   readonly timeoutSeconds: number
   readonly seed: number
   /** One worker keeps the run reproducible; the portfolio is not. */
   readonly workers: number
+  /**
+   * Carry each pass's solution into the next as a CP-SAT hint.
+   *
+   * A hint is a suggestion, never a constraint: it changes how fast a pass
+   * converges, never which optimum is admissible. Hints come only from earlier
+   * V3 passes — no V2 schedule seeds them — and a lock or a manual edit is
+   * never demoted from hard constraint to hint.
+   */
+  readonly useHints: boolean
 }
 
 export interface CpSatRequestEnvelope {
@@ -96,6 +115,15 @@ export interface CpSatResponseEnvelope {
   readonly passes: readonly CpSatPass[]
   readonly candidateSpace: "complete" | "incomplete"
   readonly stopCause: "exhausted" | "timeout" | "not-started"
+  /**
+   * What ended the ladder, in words, when it did not run to completion.
+   *
+   * `stopCause` answers "was the run complete"; this answers "what stopped it"
+   * — an unproven pass the next level was forbidden to freeze, or a budget too
+   * small to start another pass. Surfaced as a technical fact so the reason is
+   * visible rather than inferred from timings.
+   */
+  readonly stopDetail?: string | null
   readonly unmatchedPreservations: readonly CpSatUnmatchedPreservation[]
   readonly stability: CpSatStability | null
   readonly environment: Record<string, unknown>

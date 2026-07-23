@@ -55,7 +55,13 @@ export function ContratTab() {
             control={control}
             name="contractType"
             render={({ field }) => (
-              <Select value={field.value} onValueChange={field.onChange}>
+              // `items` lets <SelectValue /> render the option label instead of
+              // the raw enum value ("full_time").
+              <Select
+                items={CONTRACT_TYPE_OPTIONS}
+                value={field.value}
+                onValueChange={field.onChange}
+              >
                 <SelectTrigger id="contractType" className="w-full">
                   <SelectValue />
                 </SelectTrigger>
@@ -72,7 +78,22 @@ export function ContratTab() {
         </FormRow>
       </div>
 
-      {watch("contractConfirmationRequired") ? <div className="rounded-lg border border-amber-500/50 bg-amber-50 p-4 text-sm"><p className="font-medium">Ancien contrat ambigu : confirmez la durée historique.</p><div className="mt-3 flex gap-4"><label><input type="radio" value="2190" {...register("legacyContractMinutes")} /> 36 h 30 — 2 190 minutes</label><label><input type="radio" value="2205" {...register("legacyContractMinutes")} /> 36 h 45 — 2 205 minutes</label></div>{errors.legacyContractMinutes?.message ? <p className="mt-2 text-destructive">{errors.legacyContractMinutes.message}</p> : null}</div> : null}
+      {watch("contractConfirmationRequired") ? (
+        <div className="rounded-lg border border-amber-500/50 bg-amber-50 p-4 text-sm">
+          <p className="font-medium">Ancien contrat ambigu : confirmez la durée historique.</p>
+          <div className="mt-3 flex gap-4">
+            <label className="flex items-center gap-2">
+              <input type="radio" value="2190" {...register("legacyContractMinutes")} /> 36 h 30
+            </label>
+            <label className="flex items-center gap-2">
+              <input type="radio" value="2205" {...register("legacyContractMinutes")} /> 36 h 45
+            </label>
+          </div>
+          {errors.legacyContractMinutes?.message ? (
+            <p className="mt-2 text-destructive">{errors.legacyContractMinutes.message}</p>
+          ) : null}
+        </div>
+      ) : null}
 
       <p className="rounded-lg border border-dashed p-4 text-sm text-muted-foreground">Les jours travaillés sont automatiquement déduits des repos fixes.</p>
     </div>

@@ -38,8 +38,10 @@ import {
   editsBlockPersistence,
 } from "@/features/planning/board/model/shift-edit-diff"
 import {
+  buildRegenerationRequest,
   DEFAULT_REGENERATION_OPTIONS,
   summarizeLocalWork,
+  type PlanningRegenerationRequest,
   type RegenerationOptions,
 } from "@/features/planning/board/model/regeneration-request"
 import { PlanningDayView } from "@/features/planning/board/ui/PlanningDayView"
@@ -59,8 +61,25 @@ interface PlanningBoardProps {
   readonly onChangeWeek?: (monday: string) => void
   /** Persist the current planning; resolves true on success. For "save then change". */
   readonly onSaveRequest?: () => Promise<boolean>
-  /** Run the active engine (V2) for the selected week — generate or regenerate. */
-  readonly onGenerate?: () => void
+  /**
+   * Run the active engine for the selected week — generate or regenerate.
+   *
+   * A regeneration passes the manager's local work along; a fresh generation
+   * passes nothing. V2 ignores the argument, which is why it can be added
+   * without changing anything V2 does; V3 turns it into hard constraints.
+   */
+  readonly onGenerate?: (regeneration?: PlanningRegenerationRequest) => void
+  /**
+   * The sectors currently selected, owned by the page.
+   *
+   * Controlled rather than internal: the same ids decide what the grid shows
+   * AND what the engines are asked to plan. Two states would have let the
+   * screen display Drive while the generator received Drive plus everything
+   * else, which is exactly the defect this replaces.
+   */
+  readonly sectorIds: readonly string[]
+  readonly onToggleSector: (sectorId: string) => void
+  readonly onToggleAllSectors: (selectAll: boolean) => void
   /** Whether a generation is currently running, to disable the trigger. */
   readonly generating?: boolean
   /** Unsaved editor state, ORed with the board's own local edits/locks. */
@@ -95,19 +114,33 @@ export function PlanningBoard({
   onChangeWeek,
   onSaveRequest,
   onGenerate,
+  sectorIds,
+  onToggleSector,
+  onToggleAllSectors,
   generating = false,
   dirty = false,
   actions,
   onPersistenceBlockChange,
 }: PlanningBoardProps) {
-  const [selection, setSelection] = useState<PlanningBoardSelection>(() => ({
+  // The sector part of the selection lives one level up; the rest — which view,
+  // which day, which employee — is genuinely local to the grid.
+  const [localSelection, setLocalSelection] = useState<Omit<PlanningBoardSelection, "sectorIds">>(() => ({
     view: "sector",
-    // All sectors visible by default: the multiselect starts inclusive, and the
-    // manager narrows down rather than having to opt every sector back in.
-    sectorIds: input.sectors.map((sector) => sector.id),
     date: input.days.find((day) => !day.closed)?.date ?? null,
     employeeId: null,
   }))
+  const selection = useMemo<PlanningBoardSelection>(
+    () => ({ ...localSelection, sectorIds }),
+    [localSelection, sectorIds]
+  )
+  const setSelection = (
+    update: (current: PlanningBoardSelection) => PlanningBoardSelection
+  ): void => {
+    setLocalSelection((current) => {
+      const { sectorIds: _ignored, ...rest } = update({ ...current, sectorIds })
+      return rest
+    })
+  }
   const [editState, setEditState] = useState<ShiftEditState>(EMPTY_EDIT_STATE)
   const [selectedShiftId, setSelectedShiftId] = useState<string | null>(null)
   // Just enough to describe "the last edit" in the footer, without persisting
@@ -135,8 +168,9 @@ export function PlanningBoard({
     setRegenerateOpen(false)
     setRegenerateOptions(DEFAULT_REGENERATION_OPTIONS)
     setPendingWeek(null)
-    // Show every sector of the freshly generated planning.
-    setSelection((current) => ({ ...current, sectorIds: input.sectors.map((sector) => sector.id) }))
+    // The sector selection deliberately SURVIVES a new generation: it is what
+    // the manager asked to plan, and resetting it here would silently widen the
+    // next generation back to every sector.
   }, [input])
 
   const editedInput = useMemo(() => applyShiftEdits(input, editState), [input, editState])
@@ -235,16 +269,8 @@ export function PlanningBoard({
     else onChangeWeek?.(target)
   }
 
-  const toggleSector = (sectorId: string) =>
-    setSelection((current) => {
-      const next = new Set(current.sectorIds)
-      if (next.has(sectorId)) next.delete(sectorId)
-      else next.add(sectorId)
-      return { ...current, sectorIds: [...next] }
-    })
-
-  const toggleAllSectors = (selectAll: boolean) =>
-    update({ sectorIds: selectAll ? input.sectors.map((sector) => sector.id) : [] })
+  const toggleSector = (sectorId: string) => onToggleSector(sectorId)
+  const toggleAllSectors = (selectAll: boolean) => onToggleAllSectors(selectAll)
 
   const applyWeekChange = (outcome: ReturnType<typeof resolveWeekChangeChoice>, target: string) => {
     if (outcome.discardLocalEdits) clearLocalEdits()
@@ -378,7 +404,10 @@ export function PlanningBoard({
         onCancel={() => setRegenerateOpen(false)}
         onRegenerateNow={() => {
           setRegenerateOpen(false)
-          onGenerate?.()
+          // The locks and retouches on screen travel with the request. Dropping
+          // them here would make "préserver mes verrous" a checkbox that does
+          // nothing, which is worse than not offering it.
+          onGenerate?.(buildRegenerationRequest(editState, regenerateOptions))
         }}
         busy={generating}
       />

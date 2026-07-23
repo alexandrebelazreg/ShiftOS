@@ -1,78 +1,12 @@
 import { describe, expect, it } from "vitest"
 
-import { WEEK_DAYS } from "@/features/core/models"
-import type { StoreConfig } from "@/features/store/schemas/store.schema"
-import type { EmployeeRecord } from "@/features/employees/types/employee.types"
-
 import { runPlanningFlow } from "@/features/planning/flow"
 import { toEmployeePlanningRows } from "@/features/planning/view/employee-planning-view-model"
-
-const NOW = "2026-07-01T00:00:00.000Z"
-const WEEKEND = new Set(["saturday", "sunday"])
-
-/** A valid onboarding store config: weekdays 09:00–17:00, weekend closed. */
-function storeConfig(overrides: Partial<StoreConfig> = {}): StoreConfig {
-  return {
-    name: "Test Store",
-    address: "1 rue de Test",
-    city: "Paris",
-    postalCode: "75001",
-    country: "France",
-    timezone: "Europe/Paris",
-    openingHours: WEEK_DAYS.map((day) =>
-      WEEKEND.has(day)
-        ? { day, closed: true, opensAt: "", closesAt: "" }
-        : { day, closed: false, opensAt: "09:00", closesAt: "17:00" }
-    ),
-    planningMode: "dynamic",
-    minShiftDuration: 120,
-    maxShiftDuration: 600,
-    timeGranularity: 60,
-    splitShiftPolicy: "forbidden",
-    minSplitDuration: undefined,
-    maxSplitDuration: undefined,
-    maxSplitShiftsPerWeek: undefined,
-    minDailyHours: 2,
-    maxDailyHours: 10,
-    minRestBetweenShifts: 11,
-    maxWeeklyHoursOverride: undefined,
-    ...overrides,
-  } as StoreConfig
-}
-
-function employee(id: string, overrides: Partial<EmployeeRecord> = {}): EmployeeRecord {
-  return {
-    id,
-    firstName: id,
-    lastName: "Test",
-    phone: "",
-    email: `${id}@example.test`,
-    status: "active",
-    weeklyHours: 35,
-    workingDays: ["monday", "tuesday", "wednesday", "thursday", "friday"],
-    contractType: "full_time",
-    canOpen: true,
-    canClose: true,
-    splitShiftAllowed: false,
-    fixedDaysOff: [],
-    forbiddenDays: [],
-    maxOpenings: null,
-    maxClosings: null,
-    preferOpening: false,
-    preferClosing: false,
-    notes: "",
-    createdAt: NOW,
-    updatedAt: NOW,
-    ...overrides,
-  }
-}
-
-// Mon 2026-07-06 … Sun 2026-07-12 → 5 open weekdays.
-const SCOPE = {
-  planningId: "planning_1",
-  period: { start: "2026-07-06", end: "2026-07-12" },
-  now: NOW,
-}
+import {
+  employee,
+  FIXTURE_SCOPE as SCOPE,
+  storeConfig,
+} from "@/features/planning/__tests__/planning-fixtures"
 
 describe("runPlanningFlow", () => {
   it("generates a planning successfully end-to-end", () => {

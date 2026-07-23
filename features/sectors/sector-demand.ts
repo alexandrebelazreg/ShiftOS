@@ -33,6 +33,14 @@ export function buildHourlyProfile(opensAt: string, closesAt: string, employees 
   return slots
 }
 
+/** Open all seven days on identical hours, rebuilding every coverage profile. */
+export function applyHoursToEveryDay(sector: SectorDemandConfiguration, opensAt: string, closesAt: string): SectorDemandConfiguration {
+  const profile = buildHourlyProfile(opensAt, closesAt)
+  return { ...sector,
+    hours: WEEK_DAYS.map((day) => ({ day, closed: false, opensAt, closesAt })),
+    coverage: { ...sector.coverage, profiles: Object.fromEntries(WEEK_DAYS.map((day) => [day, profile.map((slot) => ({ ...slot }))])) } }
+}
+
 export function copyCoverageProfile(sector: SectorDemandConfiguration, source: WeekDay, target: WeekDay): SectorDemandConfiguration {
   return { ...sector, coverage: { ...sector.coverage, profiles: { ...sector.coverage.profiles, [target]: (sector.coverage.profiles[source] ?? []).map((slot) => ({ ...slot })) } } }
 }

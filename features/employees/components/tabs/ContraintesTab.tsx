@@ -28,20 +28,6 @@ export function ContraintesTab() {
         />
       </FormRow>
 
-      <FormRow label="Jours interdits" description="Jours explicitement indisponibles.">
-        <Controller
-          control={control}
-          name="forbiddenDays"
-          render={({ field }) => (
-            <DayToggleGroup
-              value={field.value}
-              onChange={field.onChange}
-              ariaLabel="Jours interdits"
-            />
-          )}
-        />
-      </FormRow>
-
       <div className="grid gap-4 sm:grid-cols-2">
         <FormRow
           label="Nombre maximal d’ouvertures"
