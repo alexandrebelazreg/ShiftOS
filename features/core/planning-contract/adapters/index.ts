@@ -24,3 +24,11 @@ export {
   PROTOTYPE_PRESERVATION_SUPPORT,
   solveWithDfsPrototype,
 } from "@/features/core/planning-contract/adapters/solve-with-dfs-prototype"
+// Exportable from this barrel, unlike CP-SAT: the decomposed engine is pure
+// TypeScript running in process, so it reaches no `node:` module and bundles
+// for a browser without dragging a subprocess in.
+export {
+  createDecomposedV3Adapter,
+  DECOMPOSED_PRESERVATION_SUPPORT,
+  solveWithDecomposedV3,
+} from "@/features/core/planning-contract/adapters/solve-with-decomposed-v3"

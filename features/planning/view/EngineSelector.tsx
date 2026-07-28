@@ -3,6 +3,7 @@
 import { Button } from "@/components/ui/button"
 import {
   PLANNING_ENGINE_LABELS,
+  PLANNING_ENGINE_VERSIONS,
   type PlanningEngineVersion,
 } from "@/features/core/planning-v3/types/engine-version"
 
@@ -31,7 +32,9 @@ export function EngineSelector({
   return (
     <div className="flex items-center gap-1.5" role="group" aria-label="Moteur de planification">
       <span className="text-xs text-muted-foreground">Moteur :</span>
-      {(["v2", "v3"] as const).map((version) => (
+      {/* Driven by the declared list, not a literal: an engine added to the
+          model must appear here without anyone remembering to edit this file. */}
+      {PLANNING_ENGINE_VERSIONS.map((version) => (
         <Button
           key={version}
           type="button"

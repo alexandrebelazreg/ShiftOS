@@ -3,6 +3,7 @@ import { WEEK_DAYS } from "@/features/core/models"
 import { enumerateDates, intervalMinutes, isoWeekKey, weekDayOf } from "@/features/core/shared"
 
 import type { PlanningGenerationInput } from "@/features/core/planning-generator/types/generation-input"
+import type { SectorPresenceFloor } from "@/features/core/planning-generator/types/business-pipeline"
 
 import { computeDailyBudgets } from "@/features/core/planning-v3/problem-builder/daily-budget"
 import {
@@ -295,6 +296,16 @@ export function buildPlanningProblemV3(
   }
 
   // ── Availability, per employee and per date ───────────────────────────────
+  //
+  // Individual working-hour bounds, keyed `"employeeId|date"`. Empty for now:
+  // no constraint type in the application carries an hour bound, and inventing
+  // one here would ship an interface no screen can fill. See the intersection
+  // below for what happens the day it is populated.
+  const individualWindows: ReadonlyMap<
+    string,
+    { readonly earliest?: number; readonly latest?: number }
+  > = new Map()
+
   const absences = input.absences ?? []
   const holidays = new Set((input.holidays ?? []).map((holiday) => holiday.date))
   const mandatoryEverywhere = sector.workEveryNonFixedRestDay === true
@@ -332,8 +343,28 @@ export function buildPlanningProblemV3(
         available,
         mandatory: available && mandatoryEverywhere,
         fixedRest,
-        earliestStartMinutes: day.opensAtMinutes ?? 0,
-        latestEndMinutes: day.closesAtMinutes ?? 0,
+        // ── Extension point: individual working-hour windows ────────────────
+        //
+        // The MODEL already supports narrowing these per employee and per date:
+        // the candidate generators honour them and the validator enforces them
+        // as blocking. What does not exist yet is an application constraint
+        // that PRODUCES a narrower value, so `individualWindows` is empty and
+        // everyone inherits the sector's hours.
+        //
+        // When "ne commence pas avant 08:00" and "ne finit pas après 18:00"
+        // become real constraints, they populate that map and nothing else
+        // changes. The intersection below is written out rather than assumed,
+        // so the day an individual bound arrives it can only ever NARROW the
+        // sector's window, never widen it.
+        earliestStartMinutes: Math.max(
+          day.opensAtMinutes ?? 0,
+          individualWindows.get(`${String(employee.id)}|${day.date}`)?.earliest ?? 0
+        ),
+        latestEndMinutes: Math.min(
+          day.closesAtMinutes ?? 0,
+          individualWindows.get(`${String(employee.id)}|${day.date}`)?.latest ??
+            Number.POSITIVE_INFINITY
+        ),
         maximumMinutes,
         unavailableReason: available
           ? undefined
@@ -352,6 +383,7 @@ export function buildPlanningProblemV3(
 
   // ── Demand ────────────────────────────────────────────────────────────────
   const dateSet = new Set<IsoDate>(dates)
+  const dayByDate = new Map<string, PlanningDayV3>(days.map((day) => [day.date, day]))
   const sectorRequirements = new Set(sector.requirementIds.map(String))
   const demandSlots: PlanningDemandSlotV3[] = []
   for (const requirement of input.demand.requirements) {
@@ -382,12 +414,26 @@ export function buildPlanningProblemV3(
       })
       continue
     }
+    // `span` rather than the parsed end: it is the one that honours
+    // `endDayOffset`, so a window crossing midnight lands on the right minute.
+    const slotEndMinutes = startMinutes + span
+    const floor = presenceFloorFor(
+      sector.minimumPresence,
+      dayByDate.get(requirement.window.date),
+      startMinutes,
+      slotEndMinutes
+    )
     demandSlots.push({
       id: String(requirement.id),
       date: requirement.window.date,
       startMinutes,
-      endMinutes: startMinutes + span,
+      endMinutes: slotEndMinutes,
       requiredEmployees: requirement.minEmployees,
+      // Absent when the sector declares no floor covering this slot. Absent is
+      // not zero: a slot with no floor is one no schedule can be REFUSED over,
+      // while a declared zero would be a deliberate statement that nobody needs
+      // to be there.
+      ...(floor === null ? {} : { hardMinimumEmployees: floor }),
       maximumEmployees: requirement.maxEmployees ?? null,
     })
   }
@@ -425,6 +471,16 @@ export function buildPlanningProblemV3(
     maximumConsecutiveWorkedDaysSource: "derived-fallback",
     splitShiftAllowed: sector.splitShiftAllowed,
     maximumSplitMinutes: sector.maximumSplitDuration,
+    // The store's split policy is the only place a MINIMUM gap is configured.
+    // Carried through rather than re-derived, and left undefined when the
+    // policy declares none — "not stated" and "zero" are different facts, and
+    // an engine that needs a floor must announce its own assumption.
+    minimumSplitMinutes: input.store.splitShiftPolicy?.minSplitDuration ?? null,
+    // No configuration field caps an UNINTERRUPTED stretch yet. Left undefined
+    // rather than defaulted to the daily maximum: silently equating the two
+    // would make "10 hours in one block" legal by omission.
+    maximumContinuousMinutes: null,
+    maximumSplitsPerDay: null,
     minimumOpeningsPerDay: 1,
     exactClosingsPerDay: 1,
   }
@@ -486,6 +542,42 @@ export function defaultMaximumConsecutiveWorkedDays(
     longest = Math.max(longest, current)
   }
   return Math.max(1, longest)
+}
+
+/**
+ * The unbreakable floor covering one demand slot, or null when none does.
+ *
+ * A floor applies to a slot only when the slot lies ENTIRELY inside the floor's
+ * window. Partial overlap is deliberately not enough: a floor covering half a
+ * slot says nothing about the other half, and applying it to the whole slot
+ * would demand presence at moments the sector never asked for. The demand model
+ * takes the maximum across every slot covering a given minute, so a narrower
+ * peak floor still wins where it belongs — see `demand.py` in the HiGHS
+ * experiment for the atomic reading.
+ *
+ * Several floors may match; the largest wins, because a floor is a minimum and
+ * two minimums over the same window are satisfied only by the higher one.
+ */
+function presenceFloorFor(
+  floors: readonly SectorPresenceFloor[] | undefined,
+  day: PlanningDayV3 | undefined,
+  startMinutes: number,
+  endMinutes: number
+): number | null {
+  if (!floors || floors.length === 0 || !day || day.closed) return null
+
+  let best: number | null = null
+  for (const floor of floors) {
+    if (floor.day !== undefined && floor.day !== day.weekDay) continue
+
+    const from = floor.from === undefined ? day.opensAtMinutes : minutesOfDay(floor.from)
+    const to = floor.to === undefined ? day.closesAtMinutes : minutesOfDay(floor.to)
+    if (from === null || to === null) continue
+    if (startMinutes < from || endMinutes > to) continue
+
+    best = best === null ? floor.employees : Math.max(best, floor.employees)
+  }
+  return best
 }
 
 /** "HH:mm" → minutes since midnight, or null when malformed. */

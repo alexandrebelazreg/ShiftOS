@@ -6,6 +6,8 @@ import type { EmployeeId } from "@/features/core/models"
 import type { PlanningProblemV3 } from "@/features/core/planning-v3/types/problem"
 import type { PlanningSolutionV3 } from "@/features/core/planning-v3/types/solution"
 
+import { coverageDeficitMinutes, minimumConcurrentPresence } from "@/features/core/shared"
+
 import { createCpSatAdapter } from "@/features/core/planning-contract/adapters/cp-sat"
 import { buildSolvePlanningRequest } from "@/features/core/planning-contract/build-request"
 import { checkSolvePlanningResponse } from "@/features/core/planning-contract/invariants"
@@ -45,7 +47,17 @@ function regeneration(
   }
 }
 
-/** The three business figures, recomputed from the schedule itself. */
+/**
+ * The three business figures, recomputed from the schedule itself.
+ *
+ * FIXED 2026-07-24 alongside the coverage-concurrency bug: this used to ask
+ * "does one segment span the whole slot," the same full-span containment
+ * check that under-counted concurrent presence everywhere else. Now shares
+ * the same atomic-interval reasoning as the engine it is checking, via
+ * `features/core/shared/coverage.ts` — a test helper computing coverage its
+ * own buggy way would have kept passing after the engine was fixed, silently
+ * asserting numbers the production code no longer produces.
+ */
 function businessFigures(problem: PlanningProblemV3, solution: PlanningSolutionV3) {
   const budgetByDate = new Map(problem.days.map((day) => [day.date, day.budgetMinutes]))
   let underCoveredSlots = 0
@@ -53,17 +65,13 @@ function businessFigures(problem: PlanningProblemV3, solution: PlanningSolutionV
   let businessDeficitCost = 0
 
   for (const slot of problem.demandSlots) {
-    const covered = solution.assignments.filter(
-      (assignment) =>
-        assignment.date === slot.date &&
-        assignment.segments.some(
-          (segment) =>
-            segment.startMinutes <= slot.startMinutes && segment.endMinutes >= slot.endMinutes
-        )
-    ).length
-    const missing = slot.requiredEmployees - covered
-    if (missing <= 0) continue
-    const minutes = missing * (slot.endMinutes - slot.startMinutes)
+    const window = { startMinutes: slot.startMinutes, endMinutes: slot.endMinutes }
+    const intervals = solution.assignments
+      .filter((assignment) => assignment.date === slot.date)
+      .flatMap((assignment) => assignment.segments)
+    const covered = minimumConcurrentPresence(window, intervals)
+    if (covered >= slot.requiredEmployees) continue
+    const minutes = coverageDeficitMinutes(window, intervals, slot.requiredEmployees)
     underCoveredSlots += 1
     deficitMinutes += minutes
     businessDeficitCost += minutes * (budgetByDate.get(slot.date) ?? 0)
@@ -325,8 +333,18 @@ describe.skipIf(!ENABLED)("CP-SAT réel — préservations", () => {
 
 describe.skipIf(!ENABLED)("CP-SAT réel — la semaine Drive", () => {
   it(
-    "retrouve (1, 60, 99 000) sans aucune préservation",
+    "retrouve (1, 15, 24 750) sans aucune préservation",
     async () => {
+      // Historically published as (1, 60, 99 000) — see cpsat-report.json.
+      // Corrected 2026-07-24: the coverage check counted only a shift that
+      // spans an ENTIRE demand slot, so Thursday's opening (06:00–07:00,
+      // needs 2) charged the whole hour for a gap that really lasts 15
+      // minutes (one employee starts 06:15 instead of 06:00). Level 1 is
+      // unchanged — the SAME slot is still short — but levels 2 and 3 drop
+      // by exactly 4x: 15 min instead of 60 (the atomic truth instead of the
+      // whole window), and 15 × 1 650 = 24 750 instead of 60 × 1 650 = 99 000.
+      // Proof-checked on this machine at timeoutSeconds: 500 per pass, all
+      // three passes OPTIMAL — see the session's Drive replay.
       const problem = buildDriveProblem()
       const adapter = createCpSatAdapter({ timeoutSeconds: 600 })
       const response = await adapter(buildSolvePlanningRequest(problem))
@@ -334,8 +352,8 @@ describe.skipIf(!ENABLED)("CP-SAT réel — la semaine Drive", () => {
       expect(response.solution).not.toBeNull()
       expect(businessFigures(problem, response.solution!)).toEqual({
         underCoveredSlots: 1,
-        deficitMinutes: 60,
-        businessDeficitCost: 99_000,
+        deficitMinutes: 15,
+        businessDeficitCost: 24_750,
       })
       // Drive ALLOWS split shifts and this model does not enumerate them, so the
       // space is incomplete and no optimum may be announced — however thoroughly
@@ -366,11 +384,13 @@ describe.skipIf(!ENABLED)("CP-SAT réel — la semaine Drive", () => {
       )
 
       // A lock taken FROM the reference solution cannot make it worse: the
-      // reference itself is still available to the solver.
+      // reference itself is still available to the solver. See the note on
+      // the previous test for why these are (1, 15, 24 750), not the
+      // historical (1, 60, 99 000).
       expect(businessFigures(problem, response.solution!)).toEqual({
         underCoveredSlots: 1,
-        deficitMinutes: 60,
-        businessDeficitCost: 99_000,
+        deficitMinutes: 15,
+        businessDeficitCost: 24_750,
       })
       expect(response.metadata.respectedLocks).toBe(true)
       expect(response.metadata.minimizedOtherChanges).toBe(true)

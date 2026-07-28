@@ -206,6 +206,41 @@ describe("board — géométrie exacte de la timeline", () => {
     expect(dylan.restLabel).toBe("Repos")
     expect(dylan.shifts).toHaveLength(0)
   })
+
+  describe("RÉGRESSION — présence concurrente sur l'heure, pas de couverture intégrale par un seul shift", () => {
+    // Le cas rapporté : trois salariés se relaient sur 12:00–13:00 (06:00–12:30,
+    // 10:00–14:00, 12:15–17:45). Aucun ne couvre l'heure à lui seul, mais la
+    // présence simultanée réelle ne descend jamais sous 2. L'ancien calcul
+    // ("un shift doit couvrir l'heure entière") ne comptait que le salarié du
+    // milieu — present=1.
+    const staggered: PlanningBoardInput = {
+      ...input(),
+      employees: [
+        ...input().employees,
+        { id: "empA" as unknown as EmployeeId, name: "A", sectorIds: ["drive"], contractMinutes: 390, rules: [] },
+        { id: "empB" as unknown as EmployeeId, name: "B", sectorIds: ["drive"], contractMinutes: 240, rules: [] },
+        { id: "empC" as unknown as EmployeeId, name: "C", sectorIds: ["drive"], contractMinutes: 330, rules: [] },
+      ],
+      shifts: [
+        shift("sA", "empA", "2026-07-20", 360, 750), // 06:00–12:30
+        shift("sB", "empB", "2026-07-20", 600, 840), // 10:00–14:00
+        shift("sC", "empC", "2026-07-20", 735, 1065), // 12:15–17:45
+      ],
+      demand: [{ sectorId: "drive", date: "2026-07-20", startMinutes: 720, endMinutes: 780, requiredEmployees: 2 }],
+    }
+
+    it("l'heure 12:00–13:00 affiche 2 présents, jamais 1", () => {
+      const board = buildPlanningBoard(staggered, selection({ view: "day" }))
+      const noon = board.dayView.presentRow.find((c) => c.startMinutes === 720)!
+      expect(noon).toMatchObject({ required: 2, present: 2, level: "ok" })
+    })
+
+    it("aucun déficit affiché quand le besoin (2) est couvert par la présence minimale réelle", () => {
+      const board = buildPlanningBoard(staggered, selection({ view: "day" }))
+      const noon = board.dayView.requiredRow.find((c) => c.startMinutes === 720)!
+      expect(noon.level).toBe("ok")
+    })
+  })
 })
 
 describe("board — vue employé", () => {

@@ -99,7 +99,28 @@ export interface PlanningDemandSlotV3 {
   readonly date: IsoDate
   readonly startMinutes: number
   readonly endMinutes: number
+  /**
+   * The business TARGET head-count. Soft: contracted minutes are finite, so a
+   * demand that exceeds what the contracts can cover leaves every possible
+   * schedule short somewhere. Falling below it is a degradation requiring an
+   * explicit acceptance, never a refusal to publish.
+   */
   readonly requiredEmployees: number
+  /**
+   * The OPERATIONAL FLOOR: how many people must be present at every instant of
+   * the window, no matter what. Absent on every slot the application builds
+   * today, and absent means "no floor declared" — never zero, and never a
+   * silent copy of `requiredEmployees`.
+   *
+   * Distinct from `requiredEmployees` because the two answer different
+   * questions. "Someone must be on the floor from open to close" is a fact
+   * about the business being able to operate at all; "three people at the
+   * lunch peak" is a target that bends to the team actually available. A
+   * schedule may miss the second. A schedule that misses the first is not a
+   * worse schedule, it is an illegal one — so the validator reports it as
+   * `blocking` and it is NOT counted in the coverage deficit.
+   */
+  readonly hardMinimumEmployees?: number
   /** Null when the slot has no explicit head-count ceiling. */
   readonly maximumEmployees: number | null
 }
@@ -134,6 +155,24 @@ export interface PlanningRulesV3 {
   readonly splitShiftAllowed: boolean
   /** Longest gap allowed inside a split shift; null when splits are forbidden. */
   readonly maximumSplitMinutes: number | null
+  /**
+   * Shortest gap that COUNTS as a split rather than a pause, in minutes.
+   *
+   * Optional because no application field produced it before this sprint.
+   * Absent means "not declared", so an engine that needs a floor must say it
+   * is assuming one rather than pretend the problem stated it.
+   */
+  readonly minimumSplitMinutes?: number | null
+  /**
+   * Longest UNINTERRUPTED stretch one employee may work, in minutes.
+   *
+   * Distinct from `maximumShiftMinutes`, which caps the whole day: a 10-hour
+   * day is legal when it is split, and illegal when it is one block. Absent
+   * means the rule is not enforced.
+   */
+  readonly maximumContinuousMinutes?: number | null
+  /** How many splits one employee may have in one day. Absent means unlimited. */
+  readonly maximumSplitsPerDay?: number | null
   /**
    * How many employees must start exactly at opening, AT LEAST, on every open
    * day. A minimum rather than an exact count: a peak that demands four people

@@ -38,6 +38,20 @@ const FORBIDDEN_IN_VALIDATOR = [
   { fragment: "planning-v3/problem-builder", reason: "le constructeur de problème V3" },
 ]
 
+/**
+ * A solver may not consult its own auditor.
+ *
+ * The one exception is `validator/fingerprint`, which is a pure hash of a
+ * problem or a solution: it decides nothing, reports nothing and cannot be
+ * asked whether a schedule is legal. Everything else in `validator/` answers
+ * exactly the question a solver must not be allowed to ask itself, because an
+ * engine that can consult the validator can be written to satisfy it rather
+ * than to satisfy the rules — and the two stop being the same thing the moment
+ * either contains a bug.
+ */
+const VALIDATOR_MODULE = "planning-v3/validator"
+const VALIDATOR_FINGERPRINT = "planning-v3/validator/fingerprint"
+
 function sourceFiles(directory: string): string[] {
   return readdirSync(directory).flatMap((entry) => {
     const path = join(directory, entry)
@@ -86,6 +100,25 @@ describe("frontière d'import de Planning V3", () => {
       }
     }
     expect(offences).toEqual([])
+  })
+
+  it("interdit aux solveurs d'importer le validateur, sauf l'empreinte", () => {
+    const offences: string[] = []
+    for (const file of files.filter(
+      (path) => path.includes("solver") || path.includes("solver-decomposed")
+    )) {
+      for (const specifier of importsOf(file)) {
+        if (!specifier.includes(VALIDATOR_MODULE)) continue
+        if (specifier.includes(VALIDATOR_FINGERPRINT)) continue
+        offences.push(`${file} importe le validateur V3 (${specifier})`)
+      }
+    }
+    expect(offences).toEqual([])
+  })
+
+  it("couvre bien le moteur décomposé", () => {
+    const decomposed = files.filter((path) => path.includes("solver-decomposed"))
+    expect(decomposed.length).toBeGreaterThanOrEqual(8)
   })
 
   it("n'autorise le générateur V2 que comme types d'entrée du constructeur", () => {

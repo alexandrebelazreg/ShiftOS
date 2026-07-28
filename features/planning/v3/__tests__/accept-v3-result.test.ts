@@ -4,6 +4,7 @@ import { tinyProblem } from "@/features/core/planning-v3/__tests__/tiny-problems
 import {
   CURRENT_PLANNING_ENGINE_VERSION,
   PLANNING_ENGINE_LABELS,
+  usesV3Pipeline,
   PLANNING_ENGINE_VERSIONS,
   isPlanningEngineVersion,
 } from "@/features/core/planning-v3/types/engine-version"
@@ -59,18 +60,33 @@ function response(overrides: Partial<SolvePlanningResponse> = {}): SolvePlanning
 }
 
 describe("sélecteur de moteur", () => {
-  it("n'offre que V2 et V3 : le mode shadow n'existe plus", () => {
-    expect([...PLANNING_ENGINE_VERSIONS]).toEqual(["v2", "v3"])
+  it("offre V2 et les deux moteurs V3 : le mode shadow n'existe toujours pas", () => {
+    expect([...PLANNING_ENGINE_VERSIONS]).toEqual(["v2", "v3", "v3-decomposed"])
+    // Le shadow reste supprimé : un second planning que personne ne regarde
+    // n'est pas devenu une bonne idée parce qu'un troisième moteur existe.
     expect(isPlanningEngineVersion("v3-shadow")).toBe(false)
   })
 
-  it("garde V2 comme valeur par défaut", () => {
-    // What runs for someone who never opened the control.
+  it("garde V2 comme valeur par défaut malgré l'ajout d'un moteur", () => {
+    // What runs for someone who never opened the control. Adding an
+    // experimental engine must never change this.
     expect(CURRENT_PLANNING_ENGINE_VERSION).toBe("v2")
   })
 
-  it("nomme les deux moteurs une seule fois, pour tous les écrans", () => {
-    expect(PLANNING_ENGINE_LABELS).toEqual({ v2: "V2 stable", v3: "V3 expérimental" })
+  it("nomme chaque moteur une seule fois, pour tous les écrans", () => {
+    expect(PLANNING_ENGINE_LABELS).toEqual({
+      v2: "V2 stable",
+      v3: "V3 expérimental",
+      "v3-decomposed": "V3 décomposé",
+    })
+  })
+
+  it("range les deux moteurs V3 dans le même pipeline, et V2 en dehors", () => {
+    // Le prédicat existe pour que l'ajout d'un moteur V3 ne laisse pas six
+    // comparaisons littérales `=== "v3"` retomber silencieusement en V2.
+    expect(usesV3Pipeline("v2")).toBe(false)
+    expect(usesV3Pipeline("v3")).toBe(true)
+    expect(usesV3Pipeline("v3-decomposed")).toBe(true)
   })
 })
 

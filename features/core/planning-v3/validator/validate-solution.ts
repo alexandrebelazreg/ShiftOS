@@ -1,4 +1,5 @@
 import type { IsoDate } from "@/features/core/models"
+import { coverageDeficitMinutes, minimumConcurrentPresence } from "@/features/core/shared"
 
 import type {
   PlanningDayV3,
@@ -296,6 +297,14 @@ export function validatePlanningSolutionV3(
   }
 
   // ── Coverage ──────────────────────────────────────────────────────────────
+  //
+  // Coverage is a CONCURRENCY question, not a per-shift containment one: what
+  // matters is how many people are on the floor at the thinnest moment of the
+  // window, not whether any single shift spans the window alone. Two or three
+  // staggered shifts routinely keep the floor staffed throughout an hour
+  // without any of them individually covering it — see `atomicCoverage` for
+  // the worked example this fixed. `missing` is summed per ATOMIC piece too,
+  // so a window short for 15 of its 60 minutes costs 15 minutes, not 60.
   let totalDeficitMinutes = 0
   let requiredMinutes = 0
   let underCoveredSlots = 0
@@ -303,15 +312,35 @@ export function validatePlanningSolutionV3(
   for (const slot of problem.demandSlots) {
     const span = slot.endMinutes - slot.startMinutes
     requiredMinutes += slot.requiredEmployees * span
-    let covered = 0
-    for (const employee of problem.employees) {
-      const segments = worked.get(`${String(employee.id)}|${slot.date}`) ?? []
-      if (segments.some((segment) => segment.startMinutes <= slot.startMinutes && segment.endMinutes >= slot.endMinutes)) {
-        covered++
-      }
+    const window = { startMinutes: slot.startMinutes, endMinutes: slot.endMinutes }
+    const intervals = problem.employees.flatMap((employee) =>
+      worked.get(`${String(employee.id)}|${slot.date}`) ?? []
+    )
+    const covered = minimumConcurrentPresence(window, intervals)
+    const missing = coverageDeficitMinutes(window, intervals, slot.requiredEmployees)
+
+    // ── The operational floor, when the problem declares one ────────────────
+    //
+    // Checked BEFORE the soft target and reported separately. `covered` is the
+    // worst concurrent presence anywhere in the window — the atomic minimum,
+    // not an average and not a per-shift containment test — so a window staffed
+    // throughout except for one 15-minute hole fails here, which is exactly the
+    // intent: "at least one person present continuously" is either true at
+    // every instant or it is false.
+    //
+    // Absent means NO floor was declared. It never means zero and never
+    // borrows `requiredEmployees`: a problem built before this field existed
+    // must validate exactly as it did before.
+    if (slot.hardMinimumEmployees !== undefined && covered < slot.hardMinimumEmployees) {
+      add(
+        "hard-coverage-floor",
+        "blocking",
+        `Le ${slot.date} de ${clock(slot.startMinutes)} à ${clock(slot.endMinutes)} : ${covered} salarié(s) présent(s) pour un plancher incassable de ${slot.hardMinimumEmployees}.`,
+        { date: slot.date, expected: slot.hardMinimumEmployees, actual: covered }
+      )
     }
+
     if (covered < slot.requiredEmployees) {
-      const missing = (slot.requiredEmployees - covered) * span
       totalDeficitMinutes += missing
       underCoveredSlots++
       // A coverage shortfall is a DEGRADATION, never a blocking violation.

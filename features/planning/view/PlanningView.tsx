@@ -23,6 +23,7 @@ import { createEditorState, type EditorState } from "@/features/planning/editor"
 import {
   CURRENT_PLANNING_ENGINE_VERSION,
   PLANNING_ENGINE_LABELS,
+  usesV3Pipeline,
   type PlanningEngineVersion,
 } from "@/features/core/planning-v3/types/engine-version"
 import type { PlanningRegenerationRequest } from "@/features/planning/board"
@@ -219,7 +220,7 @@ export function PlanningView({ initialStore }: { initialStore: StoreConfig | nul
             // Whichever engine produced the schedule on screen describes it.
             // Reading V2's report under a V3 planning would put the wrong
             // reserves and the wrong technical facts under the right week.
-            activeEngine === "v3" ? buildV3BoardDiagnostics(v3) : buildBoardDiagnostics(state)
+            usesV3Pipeline(activeEngine) ? buildV3BoardDiagnostics(v3) : buildBoardDiagnostics(state)
           )
         : null,
     [editorState, setup.sectors, state, activeEngine, v3]
@@ -303,8 +304,8 @@ export function PlanningView({ initialStore }: { initialStore: StoreConfig | nul
     }
     setScopeRefusal(null)
 
-    if (engine === "v3") {
-      void handleGenerateV3(verdict.scope, regeneration)
+    if (usesV3Pipeline(engine)) {
+      void handleGenerateV3(verdict.scope, engine, regeneration)
       return
     }
     handleGenerateV2(verdict.scope)
@@ -312,6 +313,7 @@ export function PlanningView({ initialStore }: { initialStore: StoreConfig | nul
 
   async function handleGenerateV3(
     generationScope: GenerationScope,
+    version: PlanningEngineVersion,
     regeneration?: PlanningRegenerationRequest
   ) {
     if (!initialStore) return
@@ -347,7 +349,15 @@ export function PlanningView({ initialStore }: { initialStore: StoreConfig | nul
         ? baselineFromEditorState(editorState)
         : undefined
 
-    const outcome = await runV3Generation({ prepared, regeneration, baseline })
+    // The chosen engine is the ONLY thing that differs between the two V3 runs.
+    // Everything else — the problem, the request, the audit, the acceptance
+    // gate — is shared, which is what makes comparing them mean anything.
+    const outcome = await runV3Generation({
+      prepared,
+      regeneration,
+      baseline,
+      solve: { engine: version === "v3-decomposed" ? "decomposed" : "cp-sat" },
+    })
 
     if (outcome.status === "rejected") {
       // NOTHING is touched. Not the editor state, not the record, not the
@@ -398,7 +408,7 @@ export function PlanningView({ initialStore }: { initialStore: StoreConfig | nul
       return
     }
 
-    if (activeEngine === "v3") {
+    if (usesV3Pipeline(activeEngine)) {
       setEditorState(null)
       setRecord(null)
       setState({ status: "idle" })
@@ -610,12 +620,12 @@ export function PlanningView({ initialStore }: { initialStore: StoreConfig | nul
   const busyGenerating = state.status === "loading" || v3.status === "running"
   /** What the screen says it is showing. Read from the run, never assumed. */
   const activeEngineLabel =
-    activeEngine === "v3" && v3.status === "accepted"
+    usesV3Pipeline(activeEngine) && v3.status === "accepted"
       ? describeV3Engine(v3.outcome.response)
       : PLANNING_ENGINE_LABELS[activeEngine]
   // Offered whenever V3 is involved at all — a live V3 planning, or a failed
   // attempt sitting on top of an untouched V2 one.
-  const canReturnToV2 = activeEngine === "v3" || v3.status === "rejected"
+  const canReturnToV2 = usesV3Pipeline(activeEngine) || v3.status === "rejected"
   const currentStatus: PlanningStatus = record?.status ?? "draft"
   const readOnly = currentStatus !== "draft"
   // The loaded planning belongs to one week; when the manager is looking at any
@@ -851,10 +861,10 @@ export function PlanningView({ initialStore }: { initialStore: StoreConfig | nul
               five minutes ago to know what they are about to publish. */}
           <div className="flex flex-wrap items-center justify-between gap-2 rounded-md border px-3 py-2">
             <div className="flex items-center gap-2 text-sm">
-              <Badge variant={activeEngine === "v3" ? "secondary" : "outline"}>
+              <Badge variant={usesV3Pipeline(activeEngine) ? "secondary" : "outline"}>
                 {activeEngineLabel}
               </Badge>
-              {activeEngine === "v3" ? (
+              {usesV3Pipeline(activeEngine) ? (
                 <span className="text-xs text-muted-foreground">
                   Mode expérimental — détails dans le panneau technique.
                 </span>

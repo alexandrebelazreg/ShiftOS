@@ -53,7 +53,25 @@ describe("spike CP-SAT — la fixture reste fidèle au builder V3", () => {
     expect(fingerprintProblem(buildDriveProblem())).toBe(fingerprintProblem(problem))
     // Pinned so a silent change to the builder, a rule or the fixture is caught
     // even if the JSON were regenerated at the same time.
-    expect(fingerprintProblem(problem)).toBe("p3_29f16d47dacffd2b")
+    //
+    // Moved three times, all deliberately:
+    //
+    // 1. from `p3_29f16d47dacffd2b` when `PlanningRulesV3` gained
+    //    `minimumSplitMinutes`, `maximumContinuousMinutes` and
+    //    `maximumSplitsPerDay`, which the builder now emits;
+    // 2. from `p3_ad1f4d1ed24c06a2` when the fingerprint stopped ignoring a
+    //    slot's `hardMinimumEmployees` and `maximumEmployees`. It had been
+    //    giving one identity to problems whose unbreakable floors differ — the
+    //    exact collision this pin exists to catch, found by the pin failing to
+    //    move when a floor was added;
+    // 3. from `p3_75ef2246a8b1f5aa` when it stopped ignoring the per-person
+    //    daily bounds, the right to split, and the `employeeDays` entries
+    //    entirely. A week where someone was AWAY carried the same identity as
+    //    the week where they were present.
+    //
+    // None of them alters what the validator checks: the committed CP-SAT
+    // answer still passes its audit below.
+    expect(fingerprintProblem(problem)).toBe("p3_a37813575087daa3")
   })
 })
 

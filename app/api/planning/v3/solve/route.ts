@@ -1,10 +1,13 @@
 import { createCpSatAdapter } from "@/features/core/planning-contract/adapters/cp-sat"
+import { createDecomposedV3Adapter } from "@/features/core/planning-contract/adapters/solve-with-decomposed-v3"
 import { buildSolvePlanningRequest } from "@/features/core/planning-contract/build-request"
 import { checkSolvePlanningResponse } from "@/features/core/planning-contract/invariants"
+import type { PlanningSolveAdapter } from "@/features/core/planning-contract/types/solve-response"
 import type { SolvePlanningResponse } from "@/features/core/planning-contract/types/solve-response"
 
 import {
   parsePlanningV3Request,
+  PLANNING_V3_DEFAULT_ENGINE,
   PLANNING_V3_DEFAULT_PROFILE,
   PLANNING_V3_MAX_PAYLOAD_BYTES,
 } from "@/features/planning/v3/solve-endpoint-contract"
@@ -85,16 +88,32 @@ export async function POST(request: Request): Promise<Response> {
   // `timeoutSeconds` still overrides it, and the adapter clamps both to the
   // ceiling. Nothing here chooses objectives or rules — a profile cannot.
   const profile = parsed.body.profile ?? PLANNING_V3_DEFAULT_PROFILE
+  const engine = parsed.body.engine ?? PLANNING_V3_DEFAULT_ENGINE
+
+  // The ONE place an engine is chosen. Both adapters satisfy the same contract,
+  // so nothing below this line — including the invariant check and the
+  // serialisation — can tell which one answered. There is no fallback between
+  // them: a decomposed run that fails is reported as a decomposed run that
+  // failed, never quietly re-run on CP-SAT.
+  const adapter: PlanningSolveAdapter =
+    engine === "decomposed"
+      ? createDecomposedV3Adapter({
+          ...(parsed.body.timeoutSeconds !== undefined
+            ? { timeoutMs: parsed.body.timeoutSeconds * 1_000 }
+            : {}),
+          signal: cancellation,
+        })
+      : createCpSatAdapter({
+          profile,
+          ...(parsed.body.timeoutSeconds !== undefined
+            ? { timeoutSeconds: parsed.body.timeoutSeconds }
+            : {}),
+          signal: cancellation,
+        })
 
   let response: SolvePlanningResponse
   try {
-    response = await createCpSatAdapter({
-      profile,
-      ...(parsed.body.timeoutSeconds !== undefined
-        ? { timeoutSeconds: parsed.body.timeoutSeconds }
-        : {}),
-      signal: cancellation,
-    })(solveRequest)
+    response = await adapter(solveRequest)
   } catch (error) {
     // The adapter throws only on a defect of its own — a response that breaks
     // the contract. Reported as a backend failure, never as a verdict.

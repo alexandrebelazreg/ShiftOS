@@ -15,11 +15,16 @@ import {
 export interface PlanningEngineSelector {
   readonly version: PlanningEngineVersion
   /**
-   * True when V3 is what the manager sees.
+   * True when a V3-generation engine is what the manager sees — CP-SAT or the
+   * decomposed engine alike.
    *
    * One boolean, not two. While a shadow mode existed, "does V3 run" and "is V3
    * published" were different questions; without it they are the same question
    * and keeping both would only invite a caller to check the wrong one.
+   *
+   * It answers "does this go through the V3 problem/solve/validate pipeline",
+   * NOT "which solver runs". Callers that need the latter read `version`, and
+   * only the composition layer is allowed to act on it.
    */
   readonly usesV3: boolean
 }
@@ -27,7 +32,7 @@ export interface PlanningEngineSelector {
 export function createPlanningEngineSelector(
   version: PlanningEngineVersion = CURRENT_PLANNING_ENGINE_VERSION
 ): PlanningEngineSelector {
-  return { version, usesV3: version === "v3" }
+  return { version, usesV3: version === "v3" || version === "v3-decomposed" }
 }
 
 /**

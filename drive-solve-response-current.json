@@ -1,0 +1,434 @@
+{
+    "outcome": "feasible",
+    "solution": {
+        "version": "v3.0.0",
+        "problemFingerprint": "p3_755077e61cfb7162",
+        "assignments": [
+            {
+                "employeeId": "emp_83g9anz2",
+                "date": "2026-07-20",
+                "segments": [
+                    {
+                        "startMinutes": 600,
+                        "endMinutes": 1200
+                    }
+                ]
+            },
+            {
+                "employeeId": "emp_ly3hbnrp",
+                "date": "2026-07-20",
+                "segments": [
+                    {
+                        "startMinutes": 360,
+                        "endMinutes": 600
+                    }
+                ]
+            },
+            {
+                "employeeId": "emp_oidn8kwp",
+                "date": "2026-07-20",
+                "segments": [
+                    {
+                        "startMinutes": 645,
+                        "endMinutes": 945
+                    }
+                ]
+            },
+            {
+                "employeeId": "emp_qjg69vv9",
+                "date": "2026-07-20",
+                "segments": [
+                    {
+                        "startMinutes": 360,
+                        "endMinutes": 630
+                    }
+                ]
+            },
+            {
+                "employeeId": "emp_tq40nib8",
+                "date": "2026-07-20",
+                "segments": [
+                    {
+                        "startMinutes": 945,
+                        "endMinutes": 1185
+                    }
+                ]
+            },
+            {
+                "employeeId": "emp_83g9anz2",
+                "date": "2026-07-21",
+                "segments": [
+                    {
+                        "startMinutes": 570,
+                        "endMinutes": 855
+                    }
+                ]
+            },
+            {
+                "employeeId": "emp_ly3hbnrp",
+                "date": "2026-07-21",
+                "segments": [
+                    {
+                        "startMinutes": 420,
+                        "endMinutes": 720
+                    }
+                ]
+            },
+            {
+                "employeeId": "emp_oidn8kwp",
+                "date": "2026-07-21",
+                "segments": [
+                    {
+                        "startMinutes": 360,
+                        "endMinutes": 855
+                    }
+                ]
+            },
+            {
+                "employeeId": "emp_qjg69vv9",
+                "date": "2026-07-21",
+                "segments": [
+                    {
+                        "startMinutes": 870,
+                        "endMinutes": 1200
+                    }
+                ]
+            },
+            {
+                "employeeId": "emp_tq40nib8",
+                "date": "2026-07-21",
+                "segments": [
+                    {
+                        "startMinutes": 795,
+                        "endMinutes": 1035
+                    }
+                ]
+            },
+            {
+                "employeeId": "emp_83g9anz2",
+                "date": "2026-07-22",
+                "segments": [
+                    {
+                        "startMinutes": 900,
+                        "endMinutes": 1140
+                    }
+                ]
+            },
+            {
+                "employeeId": "emp_ly3hbnrp",
+                "date": "2026-07-22",
+                "segments": [
+                    {
+                        "startMinutes": 420,
+                        "endMinutes": 735
+                    }
+                ]
+            },
+            {
+                "employeeId": "emp_oidn8kwp",
+                "date": "2026-07-22",
+                "segments": [
+                    {
+                        "startMinutes": 600,
+                        "endMinutes": 1200
+                    }
+                ]
+            },
+            {
+                "employeeId": "emp_tq40nib8",
+                "date": "2026-07-22",
+                "segments": [
+                    {
+                        "startMinutes": 360,
+                        "endMinutes": 855
+                    }
+                ]
+            },
+            {
+                "employeeId": "emp_83g9anz2",
+                "date": "2026-07-23",
+                "segments": [
+                    {
+                        "startMinutes": 570,
+                        "endMinutes": 810
+                    }
+                ]
+            },
+            {
+                "employeeId": "emp_ly3hbnrp",
+                "date": "2026-07-23",
+                "segments": [
+                    {
+                        "startMinutes": 780,
+                        "endMinutes": 1200
+                    }
+                ]
+            },
+            {
+                "employeeId": "emp_qjg69vv9",
+                "date": "2026-07-23",
+                "segments": [
+                    {
+                        "startMinutes": 360,
+                        "endMinutes": 960
+                    }
+                ]
+            },
+            {
+                "employeeId": "emp_tq40nib8",
+                "date": "2026-07-23",
+                "segments": [
+                    {
+                        "startMinutes": 360,
+                        "endMinutes": 750
+                    }
+                ]
+            },
+            {
+                "employeeId": "emp_83g9anz2",
+                "date": "2026-07-24",
+                "segments": [
+                    {
+                        "startMinutes": 600,
+                        "endMinutes": 1200
+                    }
+                ]
+            },
+            {
+                "employeeId": "emp_ly3hbnrp",
+                "date": "2026-07-24",
+                "segments": [
+                    {
+                        "startMinutes": 480,
+                        "endMinutes": 1080
+                    }
+                ]
+            },
+            {
+                "employeeId": "emp_oidn8kwp",
+                "date": "2026-07-24",
+                "segments": [
+                    {
+                        "startMinutes": 360,
+                        "endMinutes": 615
+                    }
+                ]
+            },
+            {
+                "employeeId": "emp_qjg69vv9",
+                "date": "2026-07-24",
+                "segments": [
+                    {
+                        "startMinutes": 390,
+                        "endMinutes": 990
+                    }
+                ]
+            },
+            {
+                "employeeId": "emp_tq40nib8",
+                "date": "2026-07-24",
+                "segments": [
+                    {
+                        "startMinutes": 360,
+                        "endMinutes": 735
+                    }
+                ]
+            },
+            {
+                "employeeId": "emp_83g9anz2",
+                "date": "2026-07-25",
+                "segments": [
+                    {
+                        "startMinutes": 480,
+                        "endMinutes": 720
+                    }
+                ]
+            },
+            {
+                "employeeId": "emp_ly3hbnrp",
+                "date": "2026-07-25",
+                "segments": [
+                    {
+                        "startMinutes": 390,
+                        "endMinutes": 720
+                    }
+                ]
+            },
+            {
+                "employeeId": "emp_oidn8kwp",
+                "date": "2026-07-25",
+                "segments": [
+                    {
+                        "startMinutes": 360,
+                        "endMinutes": 915
+                    }
+                ]
+            },
+            {
+                "employeeId": "emp_qjg69vv9",
+                "date": "2026-07-25",
+                "segments": [
+                    {
+                        "startMinutes": 375,
+                        "endMinutes": 780
+                    }
+                ]
+            },
+            {
+                "employeeId": "emp_tq40nib8",
+                "date": "2026-07-25",
+                "segments": [
+                    {
+                        "startMinutes": 735,
+                        "endMinutes": 1200
+                    }
+                ]
+            }
+        ]
+    },
+    "diagnostics": {
+        "blocking": false,
+        "requiresExplicitAcceptance": true,
+        "entries": [
+            {
+                "code": "coverage-deficit",
+                "severity": "degradation",
+                "message": "Le 2026-07-20 de 10:00 à 11:00 : 1 salarié(s) présent(s) pour 3 requis (déficit 75 minutes).",
+                "requiresExplicitAcceptance": true,
+                "date": "2026-07-20",
+                "expected": 3,
+                "actual": 1
+            },
+            {
+                "code": "coverage-deficit",
+                "severity": "degradation",
+                "message": "Le 2026-07-20 de 11:00 à 12:00 : 2 salarié(s) présent(s) pour 3 requis (déficit 60 minutes).",
+                "requiresExplicitAcceptance": true,
+                "date": "2026-07-20",
+                "expected": 3,
+                "actual": 2
+            },
+            {
+                "code": "coverage-deficit",
+                "severity": "degradation",
+                "message": "Le 2026-07-21 de 06:00 à 07:00 : 1 salarié(s) présent(s) pour 2 requis (déficit 60 minutes).",
+                "requiresExplicitAcceptance": true,
+                "date": "2026-07-21",
+                "expected": 2,
+                "actual": 1
+            },
+            {
+                "code": "coverage-deficit",
+                "severity": "degradation",
+                "message": "Le 2026-07-22 de 06:00 à 07:00 : 1 salarié(s) présent(s) pour 2 requis (déficit 60 minutes).",
+                "requiresExplicitAcceptance": true,
+                "date": "2026-07-22",
+                "expected": 2,
+                "actual": 1
+            },
+            {
+                "code": "coverage-deficit",
+                "severity": "degradation",
+                "message": "Le 2026-07-23 de 16:00 à 17:00 : 1 salarié(s) présent(s) pour 2 requis (déficit 60 minutes).",
+                "requiresExplicitAcceptance": true,
+                "date": "2026-07-23",
+                "expected": 2,
+                "actual": 1
+            },
+            {
+                "code": "coverage-deficit",
+                "severity": "degradation",
+                "message": "Le 2026-07-24 de 16:00 à 17:00 : 2 salarié(s) présent(s) pour 3 requis (déficit 30 minutes).",
+                "requiresExplicitAcceptance": true,
+                "date": "2026-07-24",
+                "expected": 3,
+                "actual": 2
+            },
+            {
+                "code": "coverage-deficit",
+                "severity": "degradation",
+                "message": "Le 2026-07-25 de 06:00 à 07:00 : 1 salarié(s) présent(s) pour 4 requis (déficit 105 minutes).",
+                "requiresExplicitAcceptance": true,
+                "date": "2026-07-25",
+                "expected": 4,
+                "actual": 1
+            },
+            {
+                "code": "coverage-deficit",
+                "severity": "degradation",
+                "message": "Le 2026-07-25 de 07:00 à 08:00 : 3 salarié(s) présent(s) pour 4 requis (déficit 60 minutes).",
+                "requiresExplicitAcceptance": true,
+                "date": "2026-07-25",
+                "expected": 4,
+                "actual": 3
+            },
+            {
+                "code": "avoidable-surplus",
+                "severity": "degradation",
+                "message": "510 minutes de surplus évitable : des heures sont posées hors besoin sans y être contraintes par le contrat.",
+                "requiresExplicitAcceptance": true,
+                "expected": 0,
+                "actual": 510
+            },
+            {
+                "code": "declared-metrics",
+                "severity": "information",
+                "message": "Surplus structurel 1425 minutes : écart incompressible entre 11025 minutes contractuelles et 9600 minutes de besoin.",
+                "requiresExplicitAcceptance": false,
+                "actual": 1425
+            }
+        ],
+        "technical": [
+            {
+                "label": "Moteur",
+                "value": "cp-sat"
+            },
+            {
+                "label": "Statut du moteur",
+                "value": "solved"
+            },
+            {
+                "label": "Arrêt annoncé par le moteur",
+                "value": "timeout"
+            },
+            {
+                "label": "Espace de candidats",
+                "value": "incomplete"
+            },
+            {
+                "label": "Cause d'arrêt",
+                "value": "Passe « 1-under-covered-slots » non prouvée (FEASIBLE) : le niveau suivant aurait figé une valeur peut-être non optimale, la recherche s'arrête sur le meilleur planning connu."
+            },
+            {
+                "label": "Passe 1-under-covered-slots",
+                "value": "FEASIBLE · objectif 8 · borne 0 · NON prouvé · 120.2s"
+            },
+            {
+                "label": "Candidats générés",
+                "value": "20150"
+            },
+            {
+                "label": "Environnement python",
+                "value": "3.12.10"
+            },
+            {
+                "label": "Environnement ortools",
+                "value": "9.15.6755"
+            },
+            {
+                "label": "Environnement platform",
+                "value": "Windows-11-10.0.26200-SP0"
+            }
+        ]
+    },
+    "metadata": {
+        "engine": "cp-sat",
+        "respectedLocks": true,
+        "respectedManualEdits": true,
+        "minimizedOtherChanges": false,
+        "unmetPreservations": [],
+        "optimality": "feasible",
+        "candidateSpace": "incomplete",
+        "stopCause": "timeout"
+    }
+}

@@ -1,5 +1,28 @@
 import type { EmployeeId, WeekDay } from "@/features/core/models"
 
+/**
+ * One operational floor: how many people must be present, and when.
+ *
+ * The head-count profile a sector configures is a TARGET — it describes a
+ * normal day and bends when the team shrinks. This is the other thing, the part
+ * that does not bend: "someone must be on the floor from open to close" is what
+ * lets the shop operate at all, and it is the reason a schedule can be refused
+ * rather than merely reported as short-staffed.
+ *
+ * Windows are `"HH:mm"` local times. Omitting `day` applies the floor to every
+ * open day; omitting `from` or `to` extends it to the sector's own opening or
+ * closing, so "one person throughout" is a single entry with a head-count.
+ */
+export interface SectorPresenceFloor {
+  /** Absent means every open day. */
+  readonly day?: WeekDay
+  /** Absent means the sector's opening time. */
+  readonly from?: string
+  /** Absent means the sector's closing time. */
+  readonly to?: string
+  readonly employees: number
+}
+
 export interface SectorPlanningRules {
   readonly id: string
   readonly name: string
@@ -12,6 +35,12 @@ export interface SectorPlanningRules {
   readonly requirementIds: readonly string[]
   readonly workEveryNonFixedRestDay?: boolean
   readonly hours?: readonly { readonly day: WeekDay; readonly closed: boolean; readonly opensAt: string; readonly closesAt: string }[]
+  /**
+   * Unbreakable presence floors. Absent means the sector declares none, which
+   * is NOT the same as declaring zero — a sector without floors simply has no
+   * coverage its schedules may be refused over.
+   */
+  readonly minimumPresence?: readonly SectorPresenceFloor[]
 }
 
 export interface EmployeePlanningPreference {

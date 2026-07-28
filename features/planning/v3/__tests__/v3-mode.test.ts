@@ -249,9 +249,25 @@ describe("écran Planning — garanties structurelles", () => {
     expect(VIEW).toContain("PLANNING_ENGINE_LABELS[activeEngine]")
   })
 
-  it("transmet la régénération au moteur choisi", () => {
+  it("transmet la régénération ET le moteur choisi", () => {
     expect(VIEW).toContain("function handleGenerate(regeneration?: PlanningRegenerationRequest)")
-    expect(VIEW).toContain("void handleGenerateV3(verdict.scope, regeneration)")
+    expect(VIEW).toContain("void handleGenerateV3(verdict.scope, engine, regeneration)")
+  })
+
+  it("route chaque moteur V3 vers son propre solveur, sans repli entre eux", () => {
+    // Le choix du moteur voyage avec la requête. Il ne peut pas être deviné
+    // côté serveur : c'est une décision par exécution, prise par la personne
+    // qui clique.
+    expect(VIEW).toContain('engine: version === "v3-decomposed" ? "decomposed" : "cp-sat"')
+  })
+
+  it("teste l'appartenance au pipeline V3 par un prédicat, jamais par une égalité littérale", () => {
+    // Un `=== "v3"` littéral oublié dans un seul des sept endroits ferait
+    // silencieusement retomber un écran V3 en V2.
+    expect(VIEW).toContain("usesV3Pipeline(activeEngine)")
+    expect(VIEW).toContain("usesV3Pipeline(engine)")
+    expect(VIEW).not.toContain('activeEngine === "v3"')
+    expect(VIEW).not.toContain('engine === "v3"')
   })
 })
 

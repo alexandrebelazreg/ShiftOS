@@ -28,7 +28,7 @@ import type { SolvePlanningRequest } from "@/features/core/planning-contract/typ
  * Reporting only. It exists so a support log can say what ran; it is NOT a
  * switch any caller is allowed to branch on for behaviour. `outcome` is.
  */
-export const SOLVE_PLANNING_ENGINES = ["v2", "dfs-v3", "cp-sat"] as const
+export const SOLVE_PLANNING_ENGINES = ["v2", "dfs-v3", "cp-sat", "decomposed-v3"] as const
 export type SolvePlanningEngine = (typeof SOLVE_PLANNING_ENGINES)[number]
 
 /**

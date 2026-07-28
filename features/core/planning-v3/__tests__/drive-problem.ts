@@ -23,18 +23,27 @@ import {
 } from "@/features/core/planning-v3/validator"
 
 /**
- * The real Drive case, end to end.
+ * The LEGACY Drive fixture — a MIGRATION guard, not a statement of the rules.
  *
- * This test deliberately does NOT start from an already-normalised Core
- * fixture. It starts from the application data a real install holds — a
- * `shiftos_first_run_setup` payload whose Drive sector predates the Sprint 3D
- * `workEveryNonFixedRestDay` flag — and drives it through the repository
- * migration and then the V3 problem builder.
+ * ⚠️ NOT A PERFORMANCE REFERENCE. Use `drive-canonical.ts` for anything that
+ * compares engines, quotes a coverage figure, or claims a benchmark. This
+ * fixture's employee data does not match the decided Drive rules: it caps one
+ * employee at a single opening and two others at a single closing, and it
+ * contracts everyone on every open day. None of those is a business rule — they
+ * are fixture values that predate the rules being written down, and a parity
+ * experiment showed they make the reference schedule illegal. See the note at
+ * the top of `drive-canonical.ts`.
  *
- * That path is the point. The previous Drive fixture set the historical flag
- * itself, so it could never reproduce the failure it was supposed to guard
- * against: a legacy sector reaching the engine without the flag and silently
- * reactivating the old behaviour.
+ * What this fixture IS good for, and why it stays: it deliberately does NOT
+ * start from an already-normalised Core fixture. It starts from the application
+ * data a real install holds — a `shiftos_first_run_setup` payload whose Drive
+ * sector predates the Sprint 3D `workEveryNonFixedRestDay` flag — and drives it
+ * through the repository migration and then the V3 problem builder.
+ *
+ * That path is the point. A Drive fixture that set the historical flag itself
+ * could never reproduce the failure it is supposed to guard against: a legacy
+ * sector reaching the engine without the flag and silently reactivating the old
+ * behaviour.
  */
 
 /**
@@ -266,3 +275,12 @@ export function buildDriveProblem() {
   if (!built.ok) throw new Error(built.errors.map((error) => error.message).join(" | "))
   return built.problem
 }
+
+/**
+ * The same builder under the name that says what it is for.
+ *
+ * Prefer this alias at new call sites: `buildDriveProblem` reads like "the"
+ * Drive problem, which is exactly the confusion that let a migration fixture be
+ * used as a performance reference for three sprints.
+ */
+export const buildLegacyMigrationDriveProblem = buildDriveProblem

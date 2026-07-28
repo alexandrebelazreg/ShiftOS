@@ -1,4 +1,5 @@
 import type { EmployeeId, IsoDate, WeekDay } from "@/features/core/models"
+import { minimumConcurrentPresence } from "@/features/core/shared"
 
 import type {
   BoardDay,
@@ -560,11 +561,15 @@ function buildDayView(
           slot.date === day.date && slot.startMinutes < hourEnd && slot.endMinutes > hour.startMinutes
       )
       .reduce((max, slot) => Math.max(max, slot.requiredEmployees), 0)
-    const present = onDay.filter((shift) =>
-      shift.segments.some(
-        (segment) => segment.startMinutes <= hour.startMinutes && segment.endMinutes >= hourEnd
-      )
-    ).length
+    // The worst concurrent headcount inside the hour, not the count of shifts
+    // that each individually span it. Two or three staggered shifts routinely
+    // keep the floor staffed throughout an hour without any of them
+    // individually covering it — the old "full-hour-span" check reported the
+    // hour thin exactly when it wasn't.
+    const present = minimumConcurrentPresence(
+      { startMinutes: hour.startMinutes, endMinutes: hourEnd },
+      onDay.flatMap((shift) => shift.segments)
+    )
 
     requiredRow.push({
       startMinutes: hour.startMinutes,

@@ -62,6 +62,30 @@ export const PLANNING_V3_PROFILES = ["fast", "thorough"] as const
 export type PlanningV3Profile = (typeof PLANNING_V3_PROFILES)[number]
 export const PLANNING_V3_DEFAULT_PROFILE: PlanningV3Profile = "fast"
 
+/**
+ * Which engine the caller is asking for.
+ *
+ * A REQUEST field rather than a server setting, because the choice belongs to
+ * the person clicking: the engine selector on the planning screen is a per-run
+ * decision, and a server that decided for them would make "which engine made
+ * this schedule" unanswerable from the client that asked for it.
+ *
+ * Deliberately narrower than `PlanningEngineVersion`: `v2` never crosses this
+ * endpoint — it runs client-side and has done since long before V3 existed —
+ * so accepting the value here would advertise a route that cannot serve it.
+ */
+export const PLANNING_V3_ENGINES = ["cp-sat", "decomposed"] as const
+export type PlanningV3Engine = (typeof PLANNING_V3_ENGINES)[number]
+
+/**
+ * The engine a request without an explicit choice gets.
+ *
+ * CP-SAT, which is what this endpoint has always run. Adding the decomposed
+ * engine must not change the answer any existing caller receives, and an
+ * omitted field is exactly such a caller.
+ */
+export const PLANNING_V3_DEFAULT_ENGINE: PlanningV3Engine = "cp-sat"
+
 export interface PlanningV3SolveRequestBody {
   readonly endpointVersion: typeof PLANNING_V3_ENDPOINT_VERSION
   readonly problem: PlanningProblemV3
@@ -69,6 +93,7 @@ export interface PlanningV3SolveRequestBody {
   readonly baseline?: PlanningBaselineV3
   readonly profile?: PlanningV3Profile
   readonly timeoutSeconds?: number
+  readonly engine?: PlanningV3Engine
 }
 
 /** Why a request was refused, before any solving was attempted. */
@@ -84,6 +109,7 @@ export const PLANNING_V3_REQUEST_ERRORS = [
   "baseline-malformed",
   "timeout-out-of-range",
   "unknown-profile",
+  "unknown-engine",
 ] as const
 export type PlanningV3RequestErrorCode = (typeof PLANNING_V3_REQUEST_ERRORS)[number]
 
@@ -216,6 +242,19 @@ export function parsePlanningV3Request(raw: string): PlanningV3RequestParse {
       ok: false,
       code: "unknown-profile",
       message: `Profil ${JSON.stringify(profile)} inconnu, attendu ${PLANNING_V3_PROFILES.join(" ou ")}.`,
+    }
+  }
+
+  // Refused rather than silently defaulted, for the same reason as the profile:
+  // a caller naming an engine this version does not have is asking for a search
+  // it cannot run, and quietly handing them CP-SAT would answer a different
+  // question than the one asked.
+  const engine = parsed.engine
+  if (engine !== undefined && !PLANNING_V3_ENGINES.includes(engine as PlanningV3Engine)) {
+    return {
+      ok: false,
+      code: "unknown-engine",
+      message: `Moteur ${JSON.stringify(engine)} inconnu, attendu ${PLANNING_V3_ENGINES.join(" ou ")}.`,
     }
   }
 

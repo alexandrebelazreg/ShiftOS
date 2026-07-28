@@ -18,10 +18,14 @@ arrière** et une **validation indépendante**.
 
 ```
 features/core/planning-v3/
-├── types/            modèle immuable et versionné (v3.0.0)
-├── problem-builder/  PlanningGenerationInput → PlanningProblemV3
-├── validator/        (problème, solution) → rapport structuré
-└── adapter/          sélecteur de moteur, injecté
+├── types/              modèle immuable et versionné (v3.0.0)
+├── problem-builder/    PlanningGenerationInput → PlanningProblemV3
+├── validator/          (problème, solution) → rapport structuré
+├── adapter/            sélecteur de moteur, injecté
+├── orchestrator/       résout puis fait auditer — le seul point de rencontre
+├── solver/             recherche hebdomadaire en profondeur (prototype V3B)
+├── solver-decomposed/  moteur décomposé — voir PLANNING_V3_DECOMPOSED.md
+└── role-assignment/    post-traitement Coffre/Accueil/Caisse, non branché
 ```
 
 ## Invariants
@@ -73,13 +77,38 @@ prouvé » sur une autre base.**
 
 ## Sélecteur de moteur
 
-`PlanningEngineVersion` vaut `"v2" | "v3-shadow" | "v3"`. En V3A la valeur
-effective est `"v2"`. Le sélecteur est **injecté** : aucun module Core ne lit sa
-propre configuration. Aucun repli automatique entre versions n'existe — changer
-de moteur sera une décision explicite, jamais une récupération d'erreur.
+`PlanningEngineVersion` vaut `"v2" | "v3" | "v3-decomposed"`. La valeur par
+défaut est `"v2"`.
+
+**Il n'y a pas de mode shadow** — et il n'y en a jamais eu en service. Faire
+tourner un moteur en silence à côté d'un autre produirait un second planning que
+personne ne regarde, à chaque génération, pour une comparaison que personne n'a
+demandée ; et le jour où les deux divergeraient, un écran n'en montrant qu'un
+seul ne permettrait pas de dire lequel a tort.
+
+Le sélecteur est **injecté** : aucun module Core ne lit sa propre configuration.
+Aucun repli automatique entre versions n'existe — changer de moteur est une
+décision explicite, jamais une récupération d'erreur.
+
+Le prédicat `usesV3Pipeline(version)` répond à « ce moteur passe-t-il par le
+pipeline V3 », et non à « quel solveur tourne ». Seule la couche de composition
+a le droit d'agir sur la seconde question.
+
+## Le plancher de couverture incassable
+
+`PlanningDemandSlotV3.hardMinimumEmployees?` sépare deux besoins que
+`requiredEmployees` confondait : la **cible métier**, qui plie devant les
+minutes contractuelles disponibles, et le **plancher opérationnel**, qui ne plie
+pas. Manquer la première est une dégradation à accepter ; enfoncer le second est
+une violation **bloquante**, vérifiée atomiquement contre la présence
+concurrente minimale de la fenêtre.
+
+Le champ est optionnel et son absence laisse la validation strictement
+inchangée : aucun problème construit aujourd'hui ne le renseigne.
 
 ## Ce qui reste à faire
 
-Le solveur global, le mode `v3-shadow` comparant V2 et V3 sur la même entrée,
-puis le basculement. Le validateur est déjà la barrière : une solution portant
-une violation bloquante ne pourra pas être publiée.
+Fermer l'écart de couverture entre les moteurs V3 et V2, enseigner les
+préservations (verrous, retouches, stabilité) aux solveurs, puis le
+basculement. Le validateur est déjà la barrière : une solution portant une
+violation bloquante ne peut pas être publiée.

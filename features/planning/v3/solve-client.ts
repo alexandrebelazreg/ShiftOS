@@ -6,7 +6,10 @@ import {
   PLANNING_V3_ENDPOINT_PATH,
   PLANNING_V3_ENDPOINT_VERSION,
 } from "@/features/planning/v3/solve-endpoint-contract"
-import type { PlanningV3Profile } from "@/features/planning/v3/solve-endpoint-contract"
+import type {
+  PlanningV3Engine,
+  PlanningV3Profile,
+} from "@/features/planning/v3/solve-endpoint-contract"
 
 /**
  * The browser's side of the V3 boundary.
@@ -29,6 +32,11 @@ export type PlanningV3Fetch = (
 export interface SolveV3Options {
   /** Which budget/search bundle to run under. Defaults to `fast`. */
   readonly profile?: PlanningV3Profile
+  /**
+   * Which engine to ask for. Omitted means CP-SAT — the engine this endpoint
+   * has always run, so an existing caller's behaviour is untouched.
+   */
+  readonly engine?: PlanningV3Engine
   readonly timeoutSeconds?: number
   readonly signal?: AbortSignal
   /** Injected in tests; the real one is the platform `fetch`. */
@@ -52,6 +60,7 @@ export async function solvePlanningV3OverHttp(
     ...(request.regeneration !== undefined ? { regeneration: request.regeneration } : {}),
     ...(request.baseline !== undefined ? { baseline: request.baseline } : {}),
     profile: options.profile ?? PLANNING_V3_DEFAULT_PROFILE,
+    ...(options.engine !== undefined ? { engine: options.engine } : {}),
     ...(options.timeoutSeconds !== undefined ? { timeoutSeconds: options.timeoutSeconds } : {}),
   })
 

@@ -164,4 +164,70 @@ describe("coverageCalculator", () => {
     const coverage = coverageCalculator.calculate({ demand: demand([requirement("r1", coverageWindow(DATE, "16:00", "17:00"), { min: 1 })]), assignments: [assignment(s.id, EMP)], shifts: [s], employees: [employee(EMP)] })
     expect(coverage.results[0]).toEqual(expect.objectContaining({ assignedCount: 0, status: "under_covered", coveringEmployees: [], partiallyCoveringEmployees: [EMP], coveredEmployeeMinutes: 30, partialCoverageMinutes: 30 }))
   })
+
+  describe("RÉGRESSION — présence concurrente, pas de couverture individuelle intégrale", () => {
+    // Le cas rapporté : trois salariés se relaient sur 12:00–13:00 et
+    // maintiennent 2 à 3 présences simultanées, mais AUCUN ne couvre à lui
+    // seul l'heure entière. L'ancienne logique ("un shift doit couvrir
+    // intégralement la fenêtre") ne comptait que le salarié B, assignedCount=1.
+    const EMP_A = "empA" as typeof EMP
+    const EMP_B = "empB" as typeof EMP
+    const EMP_C = "empC" as typeof EMP
+
+    function threeStaggeredEmployees() {
+      const a = shift("sA", DATE, [segment("06:00", "12:30")])
+      const b = shift("sB", DATE, [segment("10:00", "14:00")])
+      const c = shift("sC", DATE, [segment("12:15", "17:45")])
+      return {
+        shifts: [a, b, c],
+        assignments: [assignment(a.id, EMP_A), assignment(b.id, EMP_B), assignment(c.id, EMP_C)],
+        employees: [employee(EMP_A), employee(EMP_B), employee(EMP_C)],
+      }
+    }
+
+    it("assignedCount reflète la présence minimale réelle (2), jamais 1", () => {
+      const { shifts, assignments, employees } = threeStaggeredEmployees()
+      const coverage = coverageCalculator.calculate({
+        demand: demand([requirement("r1", coverageWindow(DATE, "12:00", "13:00"), { min: 2 })]),
+        assignments,
+        shifts,
+        employees,
+      })
+      expect(coverage.results[0].assignedCount).toBe(2)
+      expect(coverage.results[0].status).toBe("covered")
+      expect(coverage.gaps).toEqual([])
+    })
+
+    it("un besoin de 2 sur l'heure ne produit aucun déficit", () => {
+      const { shifts, assignments, employees } = threeStaggeredEmployees()
+      const coverage = coverageCalculator.calculate({
+        demand: demand([requirement("r1", coverageWindow(DATE, "12:00", "13:00"), { min: 2 })]),
+        assignments,
+        shifts,
+        employees,
+      })
+      expect(coverage.statistics.underCovered).toBe(0)
+      expect(coverage.statistics.covered).toBe(1)
+    })
+
+    it("un besoin de 3 reste sous-couvert : le minimum réel est 2, pas 3", () => {
+      const { shifts, assignments, employees } = threeStaggeredEmployees()
+      const coverage = coverageCalculator.calculate({
+        demand: demand([requirement("r1", coverageWindow(DATE, "12:00", "13:00"), { min: 3 })]),
+        assignments,
+        shifts,
+        employees,
+      })
+      expect(coverage.results[0].assignedCount).toBe(2)
+      expect(coverage.results[0].status).toBe("under_covered")
+      expect(coverage.gaps).toEqual([
+        {
+          requirementId: coverage.results[0].requirementId,
+          window: coverageWindow(DATE, "12:00", "13:00"),
+          missingEmployees: 1,
+          missingCapabilities: [],
+        },
+      ])
+    })
+  })
 })

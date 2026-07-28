@@ -31,6 +31,7 @@ export const PLANNING_RULES_V3 = [
   "opening-count",
   "closing-count",
   "coverage-deficit",
+  "hard-coverage-floor",
   "avoidable-surplus",
   "declared-metrics",
   "time-step",

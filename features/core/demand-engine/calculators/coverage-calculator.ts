@@ -15,7 +15,7 @@ import type {
   Demand,
 } from "@/features/core/demand-engine/models"
 import type { CoverageStatus } from "@/features/core/demand-engine/types"
-import { timeToMinutes } from "@/features/core/shared"
+import { minimumConcurrentPresence, timeToMinutes } from "@/features/core/shared"
 
 /** Everything the coverage calculation compares. */
 export interface CoverageInput {
@@ -64,7 +64,10 @@ export const coverageCalculator: CoverageCalculator = {
         shiftById
       )
       const coveringEmployees = operationalCoverage.coveringEmployees
-      const assignedCount = coveringEmployees.length
+      // The headcount compared against the requirement is the WORST moment of
+      // the window, not the count of employees who each individually span all
+      // of it — see `collectOperationalCoverage`.
+      const assignedCount = operationalCoverage.minimumConcurrentPresent
       const min = requirement.minEmployees
       const max = requirement.maxEmployees ?? null
 
@@ -107,16 +110,43 @@ export const coverageCalculator: CoverageCalculator = {
   },
 }
 
-/** Complete head-count and separately exposed partial employee-minutes. */
+/**
+ * Complete head-count, separately exposed partial employee-minutes, and the
+ * TRUE minimum concurrent presence across the window.
+ *
+ * `coveringEmployees` / `partiallyCoveringEmployees` still classify each
+ * employee by whether THEIR OWN merged presence spans the whole window —
+ * unchanged, because capability adequacy is a different question this fix
+ * does not touch. `minimumConcurrentPresent` is the number that answers the
+ * one this file exists for: how many people, at the thinnest moment, are
+ * actually on the floor. Two or three staggered employees can keep that
+ * number at or above the requirement throughout the window without any one of
+ * them individually spanning it — which is exactly the case the per-employee
+ * "complete" flag was blind to.
+ */
 function collectOperationalCoverage(
   requirement: CoverageRequirement,
   assignments: readonly Assignment[],
   shiftById: ReadonlyMap<Shift["id"], Shift>
-): { coveringEmployees: EmployeeId[]; partiallyCoveringEmployees: EmployeeId[]; coveredEmployeeMinutes: number; partialCoverageMinutes: number } {
+): {
+  coveringEmployees: EmployeeId[]
+  partiallyCoveringEmployees: EmployeeId[]
+  coveredEmployeeMinutes: number
+  partialCoverageMinutes: number
+  minimumConcurrentPresent: number
+} {
   const { window } = requirement
   const byEmployee = new Map<EmployeeId, Array<readonly [number, number]>>()
   const windowStart = timeToMinutes(window.start), rawWindowEnd = timeToMinutes(window.end)
-  if (windowStart === null || rawWindowEnd === null) return { coveringEmployees: [], partiallyCoveringEmployees: [], coveredEmployeeMinutes: 0, partialCoverageMinutes: 0 }
+  if (windowStart === null || rawWindowEnd === null) {
+    return {
+      coveringEmployees: [],
+      partiallyCoveringEmployees: [],
+      coveredEmployeeMinutes: 0,
+      partialCoverageMinutes: 0,
+      minimumConcurrentPresent: 0,
+    }
+  }
   const windowEnd = rawWindowEnd + (window.endDayOffset ?? 0) * 24 * 60
 
   for (const assignment of assignments) {
@@ -131,6 +161,7 @@ function collectOperationalCoverage(
     }
   }
   const coveringEmployees: EmployeeId[] = [], partiallyCoveringEmployees: EmployeeId[] = []
+  const allMergedIntervals: Array<{ startMinutes: number; endMinutes: number }> = []
   let coveredEmployeeMinutes = 0, partialCoverageMinutes = 0
   for (const [employeeId, intervals] of [...byEmployee].sort(([left], [right]) => String(left).localeCompare(String(right)))) {
     const merged: Array<[number, number]> = []
@@ -139,13 +170,27 @@ function collectOperationalCoverage(
       if (last && start <= last[1]) last[1] = Math.max(last[1], end)
       else merged.push([start, end])
     }
+    // Each of this employee's own merged intervals is disjoint from the
+    // others by construction, so pushing them all as separate entries never
+    // double-counts one employee inside a single atomic piece.
+    for (const [start, end] of merged) allMergedIntervals.push({ startMinutes: start, endMinutes: end })
     const minutes = merged.reduce((sum, [start, end]) => sum + end - start, 0)
     coveredEmployeeMinutes += minutes
     const complete = merged.length === 1 && merged[0][0] <= windowStart && merged[0][1] >= windowEnd
     if (complete) coveringEmployees.push(employeeId)
     else { partiallyCoveringEmployees.push(employeeId); partialCoverageMinutes += minutes }
   }
-  return { coveringEmployees, partiallyCoveringEmployees, coveredEmployeeMinutes, partialCoverageMinutes }
+  const minimumConcurrentPresent = minimumConcurrentPresence(
+    { startMinutes: windowStart, endMinutes: windowEnd },
+    allMergedIntervals
+  )
+  return {
+    coveringEmployees,
+    partiallyCoveringEmployees,
+    coveredEmployeeMinutes,
+    partialCoverageMinutes,
+    minimumConcurrentPresent,
+  }
 }
 
 /** Required capabilities held by no covering employee. */

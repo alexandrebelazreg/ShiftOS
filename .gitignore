@@ -43,7 +43,32 @@ next-env.d.ts
 # source archives (livraisons, conservées localement mais hors historique)
 /docs.zip
 /sprint3d-code.zip
+/shiftos-current-python-port.zip
 
 # python (spike experimental)
 __pycache__/
 *.py[cod]
+
+# environnement Python isolé du solveur HiGHS : recréable depuis
+# experiments/planning-v3-highs/requirements.txt, jamais versionné
+/.venv-planning-highs/
+
+# sorties du solveur HiGHS : régénérées par `solve.py` et par les tests Python,
+# machine-dépendantes en temps. Les tests TypeScript qui les auditent se
+# désactivent proprement quand elles sont absentes.
+/experiments/planning-v3-highs/results/drive-regression-*.json
+/experiments/planning-v3-highs/results/local-run-*.json
+/experiments/planning-v3-highs/results/semantics-*.json
+/experiments/planning-v3-highs/results/scenario-*.json
+/experiments/planning-v3-highs/results/fast-*.json
+
+# campagne de perturbations : les problèmes comme les résultats sont regénérés
+# par `perturbations.py` depuis la seule fixture Drive canonique, qui EST
+# versionnée. Les tests TypeScript qui les auditent se désactivent proprement
+# quand les artefacts sont absents.
+/experiments/planning-v3-highs/fixtures/perturbations/
+/experiments/planning-v3-highs/results/perturbations/
+
+# mesures du benchmark Planning V3 décomposé : régénérées à chaque exécution,
+# machine-dépendantes, et déjà résumées dans docs/architecture/PLANNING_V3_DECOMPOSED.md
+/planning-v3-decomposed-benchmark.json

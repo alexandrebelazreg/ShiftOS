@@ -35,8 +35,8 @@ describe("adaptateurs — API unique", () => {
     }
   })
 
-  it("énumère exactement les trois moteurs du contrat", () => {
-    expect(SOLVE_PLANNING_ENGINES).toEqual(["v2", "dfs-v3", "cp-sat"])
+  it("énumère exactement les moteurs du contrat", () => {
+    expect(SOLVE_PLANNING_ENGINES).toEqual(["v2", "dfs-v3", "cp-sat", "decomposed-v3"])
   })
 })
 
