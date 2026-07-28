@@ -1,4 +1,7 @@
-import { createPythonRunner } from "@/features/core/planning-contract/adapters/cp-sat/run-python"
+import {
+  createPythonRunner,
+  resolveHighsFastPython,
+} from "@/features/core/planning-contract/adapters/cp-sat/run-python"
 import type { CpSatRunner } from "@/features/core/planning-contract/adapters/cp-sat/run-python"
 import type { EnginePreservationSupport } from "@/features/core/planning-contract/adapters/from-audited-v3"
 import { toSolvePlanningResponse } from "@/features/core/planning-contract/adapters/from-audited-v3"
@@ -92,6 +95,7 @@ export function defaultHighsFastScriptPath(): string {
   return ["experiments", "planning-v3-highs", "highs_service.py"].join("/")
 }
 
+
 export function createHighsFastAdapter(
   config: HighsFastAdapterConfig = {}
 ): PlanningSolveAdapter {
@@ -103,7 +107,7 @@ export function createHighsFastAdapter(
   const runner =
     config.runner ??
     createPythonRunner({
-      pythonExecutable: config.pythonExecutable,
+      pythonExecutable: config.pythonExecutable ?? resolveHighsFastPython(),
       scriptPath: config.scriptPath ?? resolveScriptPath(),
       cwd: resolveWorkingDirectory(),
     })
@@ -347,6 +351,7 @@ function resolveWorkingDirectory(): string {
   return `${process.cwd()}/experiments/planning-v3-highs`
 }
 
+export { resolveHighsFastPython } from "@/features/core/planning-contract/adapters/cp-sat/run-python"
 export {
   HIGHS_FAST_PROTOCOL_VERSION,
   parseHighsFastResponse,

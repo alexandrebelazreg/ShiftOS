@@ -1,4 +1,5 @@
 import { spawn } from "node:child_process"
+import { existsSync } from "node:fs"
 import { join } from "node:path"
 
 /**
@@ -59,6 +60,48 @@ export interface PythonRunnerConfig {
 /** The experimental script, resolved from the repository root. */
 export function defaultCpSatScriptPath(): string {
   return join(process.cwd(), "experiments", "planning-v3-cpsat", "cpsat_service.py")
+}
+
+/**
+ * Which Python runs the HiGHS engine, and why it is not CP-SAT's.
+ *
+ * The two experiments have INCOMPATIBLE dependency sets — OR-Tools on one side,
+ * scipy and HiGHS on the other — and each lives in its own virtual environment.
+ * One shared interpreter setting means whichever engine the machine was last
+ * prepared for works and the other reports a missing module. That is not a
+ * hypothesis: the first wiring of the HiGHS adapter inherited CP-SAT's default,
+ * spawned the interpreter on `PATH`, and surfaced
+ * `highs-missing — No module named 'scipy'` in the planning screen.
+ *
+ * It lives HERE rather than beside the adapter because it reads the filesystem,
+ * and this file is the one place in the contract allowed to touch the OS — the
+ * boundary an architecture test enforces. Resolving an interpreter is a
+ * question about the machine, so it belongs on the machine's side of that line.
+ *
+ * The order is deliberate. An explicit variable wins: an operator who names an
+ * interpreter has a reason. The repository's own environment comes next,
+ * because on a developer machine it is both present and correct, and requiring
+ * an exported variable to run one's own project is friction for nothing. Bare
+ * `python` is the last resort — and when nothing is installed it produces the
+ * clear failure above, which is the right outcome. An engine that cannot run
+ * must say so, never quietly hand the question to another engine.
+ */
+export function resolveHighsFastPython(): string {
+  const declared = process.env.PLANNING_HIGHS_PYTHON
+  if (declared !== undefined && declared.trim().length > 0) return declared
+
+  const root = process.cwd()
+  const candidates =
+    process.platform === "win32"
+      ? [join(root, ".venv-planning-highs", "Scripts", "python.exe")]
+      : [
+          join(root, ".venv-planning-highs", "bin", "python3"),
+          join(root, ".venv-planning-highs", "bin", "python"),
+        ]
+  for (const candidate of candidates) {
+    if (existsSync(candidate)) return candidate
+  }
+  return "python"
 }
 
 export function createPythonRunner(config: PythonRunnerConfig = {}): CpSatRunner {

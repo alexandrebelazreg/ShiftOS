@@ -41,6 +41,26 @@ Ce modèle est actuellement plus global que le pipeline expérimental « allocat
 
 ## Installation
 
+> **L'application cherche ce venv à la racine du dépôt, sous le nom
+> `.venv-planning-highs`.** Le moteur `v3-highs-fast` de l'écran Planning lance
+> son propre interpréteur : il ne peut pas partager celui de CP-SAT, dont les
+> dépendances (OR-Tools) n'ont rien à voir avec celles-ci (scipy, HiGHS).
+>
+> L'ordre de résolution est : la variable `PLANNING_HIGHS_PYTHON` si elle est
+> définie, sinon `.venv-planning-highs` à la racine, sinon le `python` du
+> `PATH`. Ce dernier cas produit typiquement
+> `highs-missing — No module named 'scipy'` dans l'interface : c'est le moteur
+> qui dit qu'il ne peut pas tourner, jamais un verdict sur la semaine.
+>
+> Depuis la racine du dépôt :
+>
+> ```bash
+> python -m venv .venv-planning-highs
+> .venv-planning-highs/Scripts/python -m pip install -r experiments/planning-v3-highs/requirements.txt
+> ```
+
+Pour travailler l'expérience seule, un venv local suffit :
+
 ```bash
 python -m venv .venv
 ```
