@@ -1,4 +1,5 @@
 import { createCpSatAdapter } from "@/features/core/planning-contract/adapters/cp-sat"
+import { createHighsFastAdapter } from "@/features/core/planning-contract/adapters/highs-fast"
 import { createDecomposedV3Adapter } from "@/features/core/planning-contract/adapters/solve-with-decomposed-v3"
 import { buildSolvePlanningRequest } from "@/features/core/planning-contract/build-request"
 import { checkSolvePlanningResponse } from "@/features/core/planning-contract/invariants"
@@ -90,26 +91,29 @@ export async function POST(request: Request): Promise<Response> {
   const profile = parsed.body.profile ?? PLANNING_V3_DEFAULT_PROFILE
   const engine = parsed.body.engine ?? PLANNING_V3_DEFAULT_ENGINE
 
-  // The ONE place an engine is chosen. Both adapters satisfy the same contract,
-  // so nothing below this line — including the invariant check and the
-  // serialisation — can tell which one answered. There is no fallback between
-  // them: a decomposed run that fails is reported as a decomposed run that
-  // failed, never quietly re-run on CP-SAT.
+  // The ONE place an engine is chosen. All three adapters satisfy the same
+  // contract, so nothing below this line — including the invariant check and
+  // the serialisation — can tell which one answered. There is no fallback
+  // between them: a decomposed run that fails is reported as a decomposed run
+  // that failed, never quietly re-run on CP-SAT. A caller who asked for one
+  // engine and silently received another has no way to interpret the answer.
+  const timeoutSeconds = parsed.body.timeoutSeconds
   const adapter: PlanningSolveAdapter =
     engine === "decomposed"
       ? createDecomposedV3Adapter({
-          ...(parsed.body.timeoutSeconds !== undefined
-            ? { timeoutMs: parsed.body.timeoutSeconds * 1_000 }
-            : {}),
+          ...(timeoutSeconds !== undefined ? { timeoutMs: timeoutSeconds * 1_000 } : {}),
           signal: cancellation,
         })
-      : createCpSatAdapter({
-          profile,
-          ...(parsed.body.timeoutSeconds !== undefined
-            ? { timeoutSeconds: parsed.body.timeoutSeconds }
-            : {}),
-          signal: cancellation,
-        })
+      : engine === "highs-fast"
+        ? createHighsFastAdapter({
+            ...(timeoutSeconds !== undefined ? { timeoutSeconds } : {}),
+            signal: cancellation,
+          })
+        : createCpSatAdapter({
+            profile,
+            ...(timeoutSeconds !== undefined ? { timeoutSeconds } : {}),
+            signal: cancellation,
+          })
 
   let response: SolvePlanningResponse
   try {

@@ -23,6 +23,7 @@ import { createEditorState, type EditorState } from "@/features/planning/editor"
 import {
   CURRENT_PLANNING_ENGINE_VERSION,
   PLANNING_ENGINE_LABELS,
+  endpointEngineFor,
   usesV3Pipeline,
   type PlanningEngineVersion,
 } from "@/features/core/planning-v3/types/engine-version"
@@ -356,7 +357,7 @@ export function PlanningView({ initialStore }: { initialStore: StoreConfig | nul
       prepared,
       regeneration,
       baseline,
-      solve: { engine: version === "v3-decomposed" ? "decomposed" : "cp-sat" },
+      solve: { engine: endpointEngineFor(version) },
     })
 
     if (outcome.status === "rejected") {

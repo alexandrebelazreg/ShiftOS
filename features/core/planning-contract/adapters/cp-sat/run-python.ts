@@ -43,6 +43,15 @@ export type CpSatRunner = (payload: string, options: CpSatRunOptions) => Promise
 export interface PythonRunnerConfig {
   readonly pythonExecutable?: string
   readonly scriptPath?: string
+  /**
+   * Where the process starts, which decides what it can import.
+   *
+   * Each experiment is a Python package rooted in its own folder, so a script
+   * launched from the repository root would fail on its first import for a
+   * reason that looks nothing like the real one. Defaults to the CP-SAT folder
+   * because that was the only caller; a second engine passes its own.
+   */
+  readonly cwd?: string
   /** How often to poll the cancellation flag. */
   readonly pollMs?: number
 }
@@ -55,6 +64,7 @@ export function defaultCpSatScriptPath(): string {
 export function createPythonRunner(config: PythonRunnerConfig = {}): CpSatRunner {
   const executable = config.pythonExecutable ?? process.env.PLANNING_CPSAT_PYTHON ?? "python"
   const script = config.scriptPath ?? defaultCpSatScriptPath()
+  const cwd = config.cwd ?? join(process.cwd(), "experiments", "planning-v3-cpsat")
   const pollMs = config.pollMs ?? 100
 
   return (payload, options) =>
@@ -69,7 +79,7 @@ export function createPythonRunner(config: PythonRunnerConfig = {}): CpSatRunner
       }
 
       const child = spawn(executable, [script], {
-        cwd: join(process.cwd(), "experiments", "planning-v3-cpsat"),
+        cwd,
         stdio: ["pipe", "pipe", "pipe"],
       })
 

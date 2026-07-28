@@ -61,7 +61,12 @@ function response(overrides: Partial<SolvePlanningResponse> = {}): SolvePlanning
 
 describe("sélecteur de moteur", () => {
   it("offre V2 et les deux moteurs V3 : le mode shadow n'existe toujours pas", () => {
-    expect([...PLANNING_ENGINE_VERSIONS]).toEqual(["v2", "v3", "v3-decomposed"])
+    expect([...PLANNING_ENGINE_VERSIONS]).toEqual([
+      "v2",
+      "v3",
+      "v3-decomposed",
+      "v3-highs-fast",
+    ])
     // Le shadow reste supprimé : un second planning que personne ne regarde
     // n'est pas devenu une bonne idée parce qu'un troisième moteur existe.
     expect(isPlanningEngineVersion("v3-shadow")).toBe(false)
@@ -78,6 +83,7 @@ describe("sélecteur de moteur", () => {
       v2: "V2 stable",
       v3: "V3 expérimental",
       "v3-decomposed": "V3 décomposé",
+      "v3-highs-fast": "V3 rapide (HiGHS)",
     })
   })
 
@@ -87,6 +93,7 @@ describe("sélecteur de moteur", () => {
     expect(usesV3Pipeline("v2")).toBe(false)
     expect(usesV3Pipeline("v3")).toBe(true)
     expect(usesV3Pipeline("v3-decomposed")).toBe(true)
+    expect(usesV3Pipeline("v3-highs-fast")).toBe(true)
   })
 })
 

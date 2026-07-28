@@ -258,7 +258,10 @@ describe("écran Planning — garanties structurelles", () => {
     // Le choix du moteur voyage avec la requête. Il ne peut pas être deviné
     // côté serveur : c'est une décision par exécution, prise par la personne
     // qui clique.
-    expect(VIEW).toContain('engine: version === "v3-decomposed" ? "decomposed" : "cp-sat"')
+    // Une table, pas un ternaire : avec trois moteurs, un ternaire route
+    // silencieusement le dernier arrivé vers la branche `else`, et le symptôme
+    // est un manager qui choisit un moteur et en reçoit un autre.
+    expect(VIEW).toContain("engine: endpointEngineFor(version)")
   })
 
   it("teste l'appartenance au pipeline V3 par un prédicat, jamais par une égalité littérale", () => {

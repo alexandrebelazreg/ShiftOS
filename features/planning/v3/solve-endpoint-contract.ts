@@ -74,7 +74,7 @@ export const PLANNING_V3_DEFAULT_PROFILE: PlanningV3Profile = "fast"
  * endpoint — it runs client-side and has done since long before V3 existed —
  * so accepting the value here would advertise a route that cannot serve it.
  */
-export const PLANNING_V3_ENGINES = ["cp-sat", "decomposed"] as const
+export const PLANNING_V3_ENGINES = ["cp-sat", "decomposed", "highs-fast"] as const
 export type PlanningV3Engine = (typeof PLANNING_V3_ENGINES)[number]
 
 /**
