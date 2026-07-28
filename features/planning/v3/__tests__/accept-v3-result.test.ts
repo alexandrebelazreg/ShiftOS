@@ -114,12 +114,12 @@ describe("acceptation d'un résultat V3 — cas nominal", () => {
     const acceptance = acceptV3Result(request, feasible)
     expect(acceptance.accepted).toBe(true)
     expect(describeV3Engine(feasible)).toBe(
-      "V3 expérimental — solution faisable, optimalité non prouvée"
+      "V3 expérimental (CP-SAT) — solution faisable, optimalité non prouvée"
     )
   })
 
   it("annonce un optimum uniquement quand il est prouvé", () => {
-    expect(describeV3Engine(response())).toBe("V3 expérimental — optimum démontré")
+    expect(describeV3Engine(response())).toBe("V3 expérimental (CP-SAT) — optimum démontré")
   })
 })
 

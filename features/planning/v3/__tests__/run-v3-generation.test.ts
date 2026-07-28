@@ -162,7 +162,7 @@ describe("tentative V3 — succès", () => {
     })
     if (feasible.status !== "accepted") throw new Error("attendu accepté")
     expect(describeV3Engine(feasible.response)).toBe(
-      "V3 expérimental — solution faisable, optimalité non prouvée"
+      "V3 expérimental (CP-SAT) — solution faisable, optimalité non prouvée"
     )
 
     const proven = await runV3Generation({
@@ -186,7 +186,7 @@ describe("tentative V3 — succès", () => {
       },
     })
     if (proven.status !== "accepted") throw new Error("attendu accepté")
-    expect(describeV3Engine(proven.response)).toBe("V3 expérimental — optimum démontré")
+    expect(describeV3Engine(proven.response)).toBe("V3 expérimental (CP-SAT) — optimum démontré")
   }, SLOW)
 
   it("construit le problème V3 depuis la MÊME entrée que V2", async () => {

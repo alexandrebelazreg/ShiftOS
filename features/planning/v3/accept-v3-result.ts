@@ -131,12 +131,28 @@ export function acceptV3Result(
   }
 }
 
-/** The one-line label the screen shows for an accepted V3 planning. */
+/**
+ * The one-line label the screen shows for an accepted V3 planning.
+ *
+ * It names the engine that ACTUALLY answered. The label used to be the literal
+ * "V3 expérimental" whatever ran, so a manager who deliberately selected one
+ * engine was told they had another — and any report they wrote about a bad week
+ * named the wrong solver. The engine is reporting-only in the contract, and
+ * this is exactly the reporting it exists for.
+ */
+const ENGINE_LABELS: Readonly<Record<string, string>> = {
+  "cp-sat": "V3 expérimental (CP-SAT)",
+  "decomposed-v3": "V3 décomposé",
+  "highs-fast": "V3 rapide (HiGHS)",
+  "dfs-v3": "V3 prototype (DFS)",
+  v2: "V2 stable",
+}
+
 export function describeV3Engine(response: SolvePlanningResponse): string {
-  if (response.outcome === "optimal") {
-    return "V3 expérimental — optimum démontré"
-  }
-  return "V3 expérimental — solution faisable, optimalité non prouvée"
+  const engine = ENGINE_LABELS[response.metadata.engine] ?? "V3 expérimental"
+  return response.outcome === "optimal"
+    ? `${engine} — optimum démontré`
+    : `${engine} — solution faisable, optimalité non prouvée`
 }
 
 /**
@@ -154,10 +170,36 @@ export function v3TechnicalCaveats(
   if (response.metadata.candidateSpace === "incomplete") {
     caveats.unshift({
       label: "Espace de recherche incomplet",
-      value: problem.rules.splitShiftAllowed
-        ? "Le secteur autorise les coupures, que ce moteur n'énumère pas : les shifts continus rendus restent légaux, mais aucun optimum global ne peut être annoncé."
-        : "L'espace des shifts n'a pas été énuméré entièrement : aucun optimum ne peut être annoncé.",
+      value: incompleteSpaceReason(response, problem),
     })
   }
   return caveats
+}
+
+/**
+ * WHY the space is incomplete, per engine. Not one sentence for all of them.
+ *
+ * The single wording named split shifts as the cause, which was true of the
+ * prototype it was written for and false of every engine added since. Told a
+ * manager the HiGHS engine does not enumerate splits — it does, forced and
+ * opportunistic both — and hid the real reason, which is that it ranks a
+ * bounded set of skeletons and allocations rather than all of them.
+ *
+ * A caveat that states a false cause is worse than no caveat: it is the answer
+ * to "why is this not optimal", and someone acting on it would go looking at
+ * the split rules.
+ */
+function incompleteSpaceReason(
+  response: SolvePlanningResponse,
+  problem: PlanningProblemV3
+): string {
+  if (response.metadata.engine === "highs-fast") {
+    return "Ce moteur classe un nombre borné de squelettes et résout une allocation par squelette : il énumère bien les coupures, mais n'explore qu'une partie de l'espace, donc aucun optimum ne peut être annoncé."
+  }
+  if (response.metadata.engine === "decomposed-v3") {
+    return "Ce moteur explore un espace délibérément réduit — les premières allocations de minutes, les meilleurs motifs de chaque journée : une bonne réponse à une question plus petite n'est pas un optimum."
+  }
+  return problem.rules.splitShiftAllowed
+    ? "Le secteur autorise les coupures, que ce moteur n'énumère pas : les shifts continus rendus restent légaux, mais aucun optimum global ne peut être annoncé."
+    : "L'espace des shifts n'a pas été énuméré entièrement : aucun optimum ne peut être annoncé."
 }
