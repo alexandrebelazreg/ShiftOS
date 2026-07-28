@@ -192,23 +192,61 @@ class UnplacedAnchorTests(unittest.TestCase):
             cls.problem, cls.model, cls.space, time_limit=10.0, origin="sk#0"
         )
 
-    def test_the_best_skeleton_has_an_allocation_that_cannot_be_placed(self) -> None:
-        """The exact situation the engine used to throw away.
+    def test_the_best_skeleton_now_places_straight_away(self) -> None:
+        """What the role-derived bridge bound changed, asserted as such.
 
-        If this ever stops holding the fixture has moved and the next test is no
-        longer testing what it claims, so it is asserted rather than assumed.
+        This test used to assert the OPPOSITE: that the best skeleton's first
+        allocation had no placement at all. That was true, and it was the defect
+        — the allocation was free to hand every opener a short day and the closer
+        a short evening, leaving a stretch of the day with nobody in it. Legal on
+        contracts, legal on budgets, impossible to place.
+
+        Constraining the reach inside the allocation MILP removed the failure at
+        its source, so the couple that used to need rescuing now places directly.
+        The rescue path still exists and is still exercised below, because
+        per-cell feasibility is not joint feasibility in general — but Drive no
+        longer demonstrates it, and pretending otherwise would leave a test whose
+        premise is quietly false.
         """
         self.assertIsNotNone(self.allocation)
         space = generate_shifts(
             self.problem, self.model, self.allocation, self.skeleton, self.demand
         )
-        # Every cell HAS a legal shape — the domain guaranteed that much…
         self.assertEqual(space.impossible, ())
-        # …and no arrangement of them survives the week's constraints together.
         result = place(
             self.problem, self.model, self.allocation, space, self.demand, time_limit=30.0
         )
-        self.assertIsNone(result.assignments)
+        self.assertIsNotNone(result.assignments)
+        report = evaluate(self.problem, list(result.assignments))
+        self.assertTrue(report["validHardConstraints"], report["violations"])
+        self.assertEqual(report["underCoveredSlots"], 0)
+
+    def test_no_day_leaves_a_stretch_with_nobody(self) -> None:
+        """The bound itself: openers and the closer must meet in the middle.
+
+        Checked on the allocation rather than on the schedule, because that is
+        where the decision is taken. On every day whose whole team holds a role,
+        the longest opener's reach plus the closer's must span the amplitude —
+        anything less is an evening no placement can staff.
+        """
+        days = sorted(
+            [d for d in self.problem["days"] if not d["closed"]], key=lambda d: d["date"]
+        )
+        for reach in self.space.reaches:
+            day = days[reach.day_index]
+            longest_opener = max(
+                self.allocation.minutes[index][reach.day_index]
+                for index in reach.opener_indexes
+            )
+            closers = sum(
+                self.allocation.minutes[index][reach.day_index]
+                for index in reach.closer_indexes
+            )
+            self.assertGreaterEqual(
+                longest_opener + closers + reach.free_reach,
+                reach.amplitude,
+                f"{day['date']} : l'ouverture et la fermeture ne se rejoignent pas",
+            )
 
     def test_a_two_by_two_swap_rescues_that_same_skeleton(self) -> None:
         """One rectangle, fifteen minutes, and the week places at zero."""
@@ -245,21 +283,40 @@ class UnplacedAnchorTests(unittest.TestCase):
         ):
             self.assertEqual(sum(neighbour.minutes[index]), employee["contractMinutes"])
 
-    def test_the_unplaced_couple_is_kept_as_an_anchor(self) -> None:
-        """End to end: the pipeline must report the anchor and use it."""
+    def test_the_pipeline_reports_every_couple_it_placed(self) -> None:
+        """End to end, and the anchor bookkeeping still has to be honest.
+
+        A couple whose placement fails must still be recorded — that is the
+        mechanism, and it is what let Drive reach zero before the bridge bound
+        existed. What changed is that Drive no longer produces such a couple, so
+        this asserts the bookkeeping is present and correct rather than that a
+        failure occurred.
+        """
         from shiftos_highs_fast import solve_fast
 
         result = solve_fast(_drive(), time_limit_seconds=60.0)
         couples = result["diagnostics"]["placedCouples"]
-        self.assertTrue(
-            any(entry["placementFailed"] for entry in couples),
-            "aucun couple non placé conservé : l'ancre est de nouveau jetée",
-        )
+        self.assertTrue(couples)
+        for entry in couples:
+            self.assertIn("placementFailed", entry)
+
         self.assertEqual(result["status"], "feasible-zero-deficit")
         self.assertEqual(result["diagnostics"]["referenceShortSlots"], 0)
         self.assertEqual(result["diagnostics"]["referenceDeficitMinutes"], 0)
-        # The winning couple descends from an anchor the old code deleted.
-        self.assertTrue(str(result["diagnostics"]["bestOrigin"]).endswith("+swap"))
+
+    def test_the_bridge_bound_makes_drive_fast(self) -> None:
+        """Zero reached without needing the repair at all.
+
+        Drive used to need twelve seconds and a rescuing 2×2 swap. Pruning the
+        allocations that cannot be placed removes both: the first couple already
+        covers the week. The threshold is deliberately loose — this guards
+        against losing the pruning entirely, not against a machine being slow.
+        """
+        from shiftos_highs_fast import solve_fast
+
+        result = solve_fast(_drive(), time_limit_seconds=60.0)
+        self.assertEqual(result["diagnostics"]["referenceShortSlots"], 0)
+        self.assertLess(result["diagnostics"]["totalSeconds"], 10.0)
 
 
 if __name__ == "__main__":

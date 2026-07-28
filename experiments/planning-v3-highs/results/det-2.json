@@ -1,0 +1,892 @@
+{
+  "engine": "v3-highs-fast",
+  "status": "feasible-best-effort",
+  "problemFingerprint": "p3_74d958009f6590cc",
+  "solutionFingerprint": "s3_d4702be16cf89e75",
+  "solution": {
+    "version": "v3.0.0",
+    "problemFingerprint": "p3_74d958009f6590cc",
+    "assignments": [
+      {
+        "employeeId": "alice",
+        "date": "2026-08-03",
+        "segments": [
+          {
+            "startMinutes": 540,
+            "endMinutes": 915
+          }
+        ]
+      },
+      {
+        "employeeId": "bruno",
+        "date": "2026-08-03",
+        "segments": [
+          {
+            "startMinutes": 360,
+            "endMinutes": 720
+          }
+        ]
+      },
+      {
+        "employeeId": "chloe",
+        "date": "2026-08-03",
+        "segments": [
+          {
+            "startMinutes": 360,
+            "endMinutes": 720
+          }
+        ]
+      },
+      {
+        "employeeId": "david",
+        "date": "2026-08-03",
+        "segments": [
+          {
+            "startMinutes": 915,
+            "endMinutes": 1200
+          }
+        ]
+      },
+      {
+        "employeeId": "elena",
+        "date": "2026-08-03",
+        "segments": [
+          {
+            "startMinutes": 750,
+            "endMinutes": 1020
+          }
+        ]
+      },
+      {
+        "employeeId": "alice",
+        "date": "2026-08-04",
+        "segments": [
+          {
+            "startMinutes": 810,
+            "endMinutes": 1200
+          }
+        ]
+      },
+      {
+        "employeeId": "bruno",
+        "date": "2026-08-04",
+        "segments": [
+          {
+            "startMinutes": 360,
+            "endMinutes": 765
+          }
+        ]
+      },
+      {
+        "employeeId": "chloe",
+        "date": "2026-08-04",
+        "segments": [
+          {
+            "startMinutes": 360,
+            "endMinutes": 720
+          }
+        ]
+      },
+      {
+        "employeeId": "david",
+        "date": "2026-08-04",
+        "segments": [
+          {
+            "startMinutes": 480,
+            "endMinutes": 720
+          }
+        ]
+      },
+      {
+        "employeeId": "elena",
+        "date": "2026-08-04",
+        "segments": [
+          {
+            "startMinutes": 765,
+            "endMinutes": 1020
+          }
+        ]
+      },
+      {
+        "employeeId": "bruno",
+        "date": "2026-08-05",
+        "segments": [
+          {
+            "startMinutes": 780,
+            "endMinutes": 1200
+          }
+        ]
+      },
+      {
+        "employeeId": "chloe",
+        "date": "2026-08-05",
+        "segments": [
+          {
+            "startMinutes": 360,
+            "endMinutes": 795
+          }
+        ]
+      },
+      {
+        "employeeId": "david",
+        "date": "2026-08-05",
+        "segments": [
+          {
+            "startMinutes": 360,
+            "endMinutes": 735
+          }
+        ]
+      },
+      {
+        "employeeId": "elena",
+        "date": "2026-08-05",
+        "segments": [
+          {
+            "startMinutes": 600,
+            "endMinutes": 1020
+          }
+        ]
+      },
+      {
+        "employeeId": "alice",
+        "date": "2026-08-06",
+        "segments": [
+          {
+            "startMinutes": 360,
+            "endMinutes": 840
+          }
+        ]
+      },
+      {
+        "employeeId": "chloe",
+        "date": "2026-08-06",
+        "segments": [
+          {
+            "startMinutes": 870,
+            "endMinutes": 1200
+          }
+        ]
+      },
+      {
+        "employeeId": "david",
+        "date": "2026-08-06",
+        "segments": [
+          {
+            "startMinutes": 360,
+            "endMinutes": 840
+          }
+        ]
+      },
+      {
+        "employeeId": "elena",
+        "date": "2026-08-06",
+        "segments": [
+          {
+            "startMinutes": 660,
+            "endMinutes": 1020
+          }
+        ]
+      },
+      {
+        "employeeId": "alice",
+        "date": "2026-08-07",
+        "segments": [
+          {
+            "startMinutes": 600,
+            "endMinutes": 1080
+          }
+        ]
+      },
+      {
+        "employeeId": "bruno",
+        "date": "2026-08-07",
+        "segments": [
+          {
+            "startMinutes": 360,
+            "endMinutes": 660
+          },
+          {
+            "startMinutes": 750,
+            "endMinutes": 990
+          }
+        ]
+      },
+      {
+        "employeeId": "chloe",
+        "date": "2026-08-07",
+        "segments": [
+          {
+            "startMinutes": 480,
+            "endMinutes": 780
+          }
+        ]
+      },
+      {
+        "employeeId": "david",
+        "date": "2026-08-07",
+        "segments": [
+          {
+            "startMinutes": 360,
+            "endMinutes": 765
+          }
+        ]
+      },
+      {
+        "employeeId": "elena",
+        "date": "2026-08-07",
+        "segments": [
+          {
+            "startMinutes": 780,
+            "endMinutes": 1200
+          }
+        ]
+      },
+      {
+        "employeeId": "alice",
+        "date": "2026-08-08",
+        "segments": [
+          {
+            "startMinutes": 360,
+            "endMinutes": 840
+          }
+        ]
+      },
+      {
+        "employeeId": "bruno",
+        "date": "2026-08-08",
+        "segments": [
+          {
+            "startMinutes": 360,
+            "endMinutes": 840
+          }
+        ]
+      },
+      {
+        "employeeId": "chloe",
+        "date": "2026-08-08",
+        "segments": [
+          {
+            "startMinutes": 360,
+            "endMinutes": 780
+          }
+        ]
+      },
+      {
+        "employeeId": "david",
+        "date": "2026-08-08",
+        "segments": [
+          {
+            "startMinutes": 360,
+            "endMinutes": 780
+          }
+        ]
+      },
+      {
+        "employeeId": "elena",
+        "date": "2026-08-08",
+        "segments": [
+          {
+            "startMinutes": 720,
+            "endMinutes": 1200
+          }
+        ]
+      }
+    ],
+    "declaredMetrics": {
+      "totalDeficitMinutes": 90
+    }
+  },
+  "evaluation": {
+    "validHardConstraints": true,
+    "violations": [],
+    "underCoveredSlots": 2,
+    "totalDeficitMinutes": 90,
+    "dailyMinutesByDate": {
+      "2026-08-03": 1650,
+      "2026-08-04": 1650,
+      "2026-08-05": 1650,
+      "2026-08-06": 1650,
+      "2026-08-07": 2145,
+      "2026-08-08": 2280
+    },
+    "weeklyMinutesByEmployee": {
+      "alice": 2205,
+      "bruno": 2205,
+      "chloe": 2205,
+      "david": 2205,
+      "elena": 2205
+    },
+    "openingsByEmployee": {
+      "alice": 2,
+      "bruno": 4,
+      "chloe": 4,
+      "david": 4
+    },
+    "closingsByEmployee": {
+      "alice": 1,
+      "bruno": 1,
+      "chloe": 1,
+      "david": 1,
+      "elena": 2
+    },
+    "coverageDetails": [
+      {
+        "date": "2026-08-06",
+        "startMinutes": 600,
+        "endMinutes": 660,
+        "requiredEmployees": 3,
+        "minimumPresent": 2,
+        "deficitMinutes": 60,
+        "atomics": [
+          {
+            "startMinutes": 600,
+            "present": 2,
+            "missing": 1
+          },
+          {
+            "startMinutes": 615,
+            "present": 2,
+            "missing": 1
+          },
+          {
+            "startMinutes": 630,
+            "present": 2,
+            "missing": 1
+          },
+          {
+            "startMinutes": 645,
+            "present": 2,
+            "missing": 1
+          }
+        ]
+      },
+      {
+        "date": "2026-08-07",
+        "startMinutes": 960,
+        "endMinutes": 1020,
+        "requiredEmployees": 3,
+        "minimumPresent": 2,
+        "deficitMinutes": 30,
+        "atomics": [
+          {
+            "startMinutes": 960,
+            "present": 3,
+            "missing": 0
+          },
+          {
+            "startMinutes": 975,
+            "present": 3,
+            "missing": 0
+          },
+          {
+            "startMinutes": 990,
+            "present": 2,
+            "missing": 1
+          },
+          {
+            "startMinutes": 1005,
+            "present": 2,
+            "missing": 1
+          }
+        ]
+      }
+    ]
+  },
+  "diagnostics": {
+    "firstLegalSeconds": 0.876725299982354,
+    "bestFoundSeconds": 51.157422499964014,
+    "totalSeconds": 58.01836419996107,
+    "adaptedTargetShortSlots": 2,
+    "adaptedTargetDeficitMinutes": 90,
+    "referenceShortSlots": 2,
+    "referenceDeficitMinutes": 90,
+    "uniqueAllocations": 406,
+    "allocationRootsBuilt": 1,
+    "generations": 1,
+    "largeNeighbourhoods": 0,
+    "skeletonAllocationsSolved": 24,
+    "skeletonAllocationsInfeasible": 0,
+    "skeletonsWithoutDurations": 0,
+    "swapsTested": 382,
+    "swapsRejectedByDomain": 0,
+    "probeDisagreements": 0,
+    "usedAllocationFirstFallback": false,
+    "beforeRepair": {
+      "shortSlots": 4,
+      "deficitMinutes": 240
+    },
+    "afterRepair": {
+      "shortSlots": 2,
+      "deficitMinutes": 90
+    },
+    "placedCouples": [
+      {
+        "label": "sk#6(critical-days-first)+swap",
+        "shortSlots": 2,
+        "deficitMinutes": 90,
+        "placementFailed": false,
+        "allocation": {
+          "alice": [
+            375,
+            390,
+            0,
+            480,
+            480,
+            480
+          ],
+          "bruno": [
+            360,
+            405,
+            420,
+            0,
+            540,
+            480
+          ],
+          "chloe": [
+            360,
+            360,
+            435,
+            330,
+            300,
+            420
+          ],
+          "david": [
+            285,
+            240,
+            375,
+            480,
+            405,
+            420
+          ],
+          "elena": [
+            270,
+            255,
+            420,
+            360,
+            420,
+            480
+          ]
+        }
+      },
+      {
+        "label": "sk#6(critical-days-first)+swap",
+        "shortSlots": 3,
+        "deficitMinutes": 150,
+        "placementFailed": false,
+        "allocation": {
+          "alice": [
+            375,
+            390,
+            0,
+            480,
+            480,
+            480
+          ],
+          "bruno": [
+            300,
+            405,
+            480,
+            0,
+            540,
+            480
+          ],
+          "chloe": [
+            360,
+            360,
+            435,
+            330,
+            300,
+            420
+          ],
+          "david": [
+            345,
+            240,
+            375,
+            480,
+            345,
+            420
+          ],
+          "elena": [
+            270,
+            255,
+            360,
+            360,
+            480,
+            480
+          ]
+        }
+      },
+      {
+        "label": "sk#6(critical-days-first)+swap",
+        "shortSlots": 3,
+        "deficitMinutes": 150,
+        "placementFailed": false,
+        "allocation": {
+          "alice": [
+            375,
+            390,
+            0,
+            480,
+            480,
+            480
+          ],
+          "bruno": [
+            300,
+            405,
+            480,
+            0,
+            540,
+            480
+          ],
+          "chloe": [
+            360,
+            360,
+            435,
+            330,
+            300,
+            420
+          ],
+          "david": [
+            285,
+            240,
+            375,
+            480,
+            405,
+            420
+          ],
+          "elena": [
+            330,
+            255,
+            360,
+            360,
+            420,
+            480
+          ]
+        }
+      },
+      {
+        "label": "sk#6(critical-days-first)+swap",
+        "shortSlots": 3,
+        "deficitMinutes": 150,
+        "placementFailed": false,
+        "allocation": {
+          "alice": [
+            375,
+            390,
+            0,
+            480,
+            480,
+            480
+          ],
+          "bruno": [
+            360,
+            345,
+            480,
+            0,
+            540,
+            480
+          ],
+          "chloe": [
+            360,
+            360,
+            435,
+            330,
+            300,
+            420
+          ],
+          "david": [
+            285,
+            240,
+            375,
+            480,
+            405,
+            420
+          ],
+          "elena": [
+            270,
+            315,
+            360,
+            360,
+            420,
+            480
+          ]
+        }
+      },
+      {
+        "label": "sk#6(critical-days-first)+swap",
+        "shortSlots": 3,
+        "deficitMinutes": 150,
+        "placementFailed": false,
+        "allocation": {
+          "alice": [
+            375,
+            390,
+            0,
+            480,
+            480,
+            480
+          ],
+          "bruno": [
+            360,
+            405,
+            420,
+            0,
+            540,
+            480
+          ],
+          "chloe": [
+            360,
+            360,
+            435,
+            330,
+            300,
+            420
+          ],
+          "david": [
+            285,
+            240,
+            435,
+            480,
+            345,
+            420
+          ],
+          "elena": [
+            270,
+            255,
+            360,
+            360,
+            480,
+            480
+          ]
+        }
+      },
+      {
+        "label": "sk#6(critical-days-first)+swap",
+        "shortSlots": 3,
+        "deficitMinutes": 180,
+        "placementFailed": false,
+        "allocation": {
+          "alice": [
+            375,
+            390,
+            0,
+            480,
+            480,
+            480
+          ],
+          "bruno": [
+            300,
+            405,
+            540,
+            0,
+            480,
+            480
+          ],
+          "chloe": [
+            360,
+            360,
+            435,
+            330,
+            300,
+            420
+          ],
+          "david": [
+            345,
+            240,
+            315,
+            480,
+            405,
+            420
+          ],
+          "elena": [
+            270,
+            255,
+            360,
+            360,
+            480,
+            480
+          ]
+        }
+      },
+      {
+        "label": "sk#6(critical-days-first)+swap",
+        "shortSlots": 3,
+        "deficitMinutes": 180,
+        "placementFailed": false,
+        "allocation": {
+          "alice": [
+            375,
+            390,
+            0,
+            480,
+            480,
+            480
+          ],
+          "bruno": [
+            300,
+            405,
+            540,
+            0,
+            480,
+            480
+          ],
+          "chloe": [
+            360,
+            360,
+            435,
+            330,
+            300,
+            420
+          ],
+          "david": [
+            285,
+            240,
+            375,
+            480,
+            405,
+            420
+          ],
+          "elena": [
+            330,
+            255,
+            300,
+            360,
+            480,
+            480
+          ]
+        }
+      },
+      {
+        "label": "sk#6(critical-days-first)+swap",
+        "shortSlots": 3,
+        "deficitMinutes": 180,
+        "placementFailed": false,
+        "allocation": {
+          "alice": [
+            375,
+            390,
+            0,
+            480,
+            480,
+            480
+          ],
+          "bruno": [
+            360,
+            345,
+            540,
+            0,
+            480,
+            480
+          ],
+          "chloe": [
+            360,
+            360,
+            435,
+            330,
+            300,
+            420
+          ],
+          "david": [
+            285,
+            240,
+            375,
+            480,
+            405,
+            420
+          ],
+          "elena": [
+            270,
+            315,
+            300,
+            360,
+            480,
+            480
+          ]
+        }
+      }
+    ],
+    "familiesThatImproved": [
+      "sk#0(critical-days-first)",
+      "sk#1(critical-days-first)",
+      "sk#6(critical-days-first)",
+      "sk#6(critical-days-first)+swap"
+    ],
+    "improvements": [
+      "0.88s → 7 créneaux / 330 min [sk#0(critical-days-first)]",
+      "1.36s → 5 créneaux / 240 min [sk#1(critical-days-first)]",
+      "3.66s → 4 créneaux / 240 min [sk#6(critical-days-first)]",
+      "17.82s → 4 créneaux / 195 min [sk#6(critical-days-first)+swap]",
+      "18.66s → 3 créneaux / 180 min [sk#6(critical-days-first)+swap]",
+      "27.07s → 3 créneaux / 150 min [sk#6(critical-days-first)+swap]",
+      "51.16s → 2 créneaux / 90 min [sk#6(critical-days-first)+swap]"
+    ],
+    "finalAllocation": {
+      "alice": [
+        375,
+        390,
+        0,
+        480,
+        480,
+        480
+      ],
+      "bruno": [
+        360,
+        405,
+        420,
+        0,
+        540,
+        480
+      ],
+      "chloe": [
+        360,
+        360,
+        435,
+        330,
+        300,
+        420
+      ],
+      "david": [
+        285,
+        240,
+        375,
+        480,
+        405,
+        420
+      ],
+      "elena": [
+        270,
+        255,
+        420,
+        360,
+        420,
+        480
+      ]
+    },
+    "finalAllocationOrigin": "swap(bruno/elena@2026-08-05/2026-08-07+60)",
+    "allocationsTested": 406,
+    "skeletonsGenerated": 24,
+    "skeletonsPlaced": 406,
+    "placementsRun": 406,
+    "placementsInfeasible": 0,
+    "shiftsGenerated": 102780,
+    "bestOrigin": "sk#6(critical-days-first)+swap",
+    "adaptedTargetByDate": {
+      "2026-08-03": 1440,
+      "2026-08-04": 1440,
+      "2026-08-05": 1440,
+      "2026-08-06": 1440,
+      "2026-08-07": 1860,
+      "2026-08-08": 1980
+    },
+    "surplusByDate": {
+      "2026-08-03": 210,
+      "2026-08-04": 210,
+      "2026-08-05": 210,
+      "2026-08-06": 210,
+      "2026-08-07": 285,
+      "2026-08-08": 300
+    },
+    "notes": [],
+    "proof": "none"
+  }
+}

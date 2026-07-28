@@ -1,0 +1,457 @@
+{
+  "status": "feasible-time-limit",
+  "problemFingerprint": "p3_74d958009f6590cc",
+  "solutionFingerprint": "s3_c1746e7f18f24473",
+  "solution": {
+    "version": "v3.0.0",
+    "problemFingerprint": "p3_74d958009f6590cc",
+    "assignments": [
+      {
+        "employeeId": "alice",
+        "date": "2026-08-03",
+        "segments": [
+          {
+            "startMinutes": 360,
+            "endMinutes": 840
+          }
+        ]
+      },
+      {
+        "employeeId": "bruno",
+        "date": "2026-08-03",
+        "segments": [
+          {
+            "startMinutes": 360,
+            "endMinutes": 720
+          }
+        ]
+      },
+      {
+        "employeeId": "chloe",
+        "date": "2026-08-03",
+        "segments": [
+          {
+            "startMinutes": 900,
+            "endMinutes": 1200
+          }
+        ]
+      },
+      {
+        "employeeId": "david",
+        "date": "2026-08-03",
+        "segments": [
+          {
+            "startMinutes": 570,
+            "endMinutes": 825
+          }
+        ]
+      },
+      {
+        "employeeId": "elena",
+        "date": "2026-08-03",
+        "segments": [
+          {
+            "startMinutes": 765,
+            "endMinutes": 1020
+          }
+        ]
+      },
+      {
+        "employeeId": "alice",
+        "date": "2026-08-04",
+        "segments": [
+          {
+            "startMinutes": 900,
+            "endMinutes": 1200
+          }
+        ]
+      },
+      {
+        "employeeId": "bruno",
+        "date": "2026-08-04",
+        "segments": [
+          {
+            "startMinutes": 360,
+            "endMinutes": 720
+          }
+        ]
+      },
+      {
+        "employeeId": "chloe",
+        "date": "2026-08-04",
+        "segments": [
+          {
+            "startMinutes": 510,
+            "endMinutes": 870
+          }
+        ]
+      },
+      {
+        "employeeId": "david",
+        "date": "2026-08-04",
+        "segments": [
+          {
+            "startMinutes": 360,
+            "endMinutes": 720
+          }
+        ]
+      },
+      {
+        "employeeId": "elena",
+        "date": "2026-08-04",
+        "segments": [
+          {
+            "startMinutes": 765,
+            "endMinutes": 1035
+          }
+        ]
+      },
+      {
+        "employeeId": "bruno",
+        "date": "2026-08-05",
+        "segments": [
+          {
+            "startMinutes": 585,
+            "endMinutes": 825
+          },
+          {
+            "startMinutes": 900,
+            "endMinutes": 1200
+          }
+        ]
+      },
+      {
+        "employeeId": "chloe",
+        "date": "2026-08-05",
+        "segments": [
+          {
+            "startMinutes": 360,
+            "endMinutes": 720
+          }
+        ]
+      },
+      {
+        "employeeId": "david",
+        "date": "2026-08-05",
+        "segments": [
+          {
+            "startMinutes": 360,
+            "endMinutes": 630
+          }
+        ]
+      },
+      {
+        "employeeId": "elena",
+        "date": "2026-08-05",
+        "segments": [
+          {
+            "startMinutes": 630,
+            "endMinutes": 1110
+          }
+        ]
+      },
+      {
+        "employeeId": "alice",
+        "date": "2026-08-06",
+        "segments": [
+          {
+            "startMinutes": 540,
+            "endMinutes": 1020
+          }
+        ]
+      },
+      {
+        "employeeId": "chloe",
+        "date": "2026-08-06",
+        "segments": [
+          {
+            "startMinutes": 360,
+            "endMinutes": 825
+          }
+        ]
+      },
+      {
+        "employeeId": "david",
+        "date": "2026-08-06",
+        "segments": [
+          {
+            "startMinutes": 360,
+            "endMinutes": 825
+          }
+        ]
+      },
+      {
+        "employeeId": "elena",
+        "date": "2026-08-06",
+        "segments": [
+          {
+            "startMinutes": 960,
+            "endMinutes": 1200
+          }
+        ]
+      },
+      {
+        "employeeId": "alice",
+        "date": "2026-08-07",
+        "segments": [
+          {
+            "startMinutes": 360,
+            "endMinutes": 825
+          }
+        ]
+      },
+      {
+        "employeeId": "bruno",
+        "date": "2026-08-07",
+        "segments": [
+          {
+            "startMinutes": 360,
+            "endMinutes": 675
+          },
+          {
+            "startMinutes": 765,
+            "endMinutes": 1020
+          }
+        ]
+      },
+      {
+        "employeeId": "chloe",
+        "date": "2026-08-07",
+        "segments": [
+          {
+            "startMinutes": 450,
+            "endMinutes": 690
+          }
+        ]
+      },
+      {
+        "employeeId": "david",
+        "date": "2026-08-07",
+        "segments": [
+          {
+            "startMinutes": 810,
+            "endMinutes": 1200
+          }
+        ]
+      },
+      {
+        "employeeId": "elena",
+        "date": "2026-08-07",
+        "segments": [
+          {
+            "startMinutes": 600,
+            "endMinutes": 1080
+          }
+        ]
+      },
+      {
+        "employeeId": "alice",
+        "date": "2026-08-08",
+        "segments": [
+          {
+            "startMinutes": 375,
+            "endMinutes": 855
+          }
+        ]
+      },
+      {
+        "employeeId": "bruno",
+        "date": "2026-08-08",
+        "segments": [
+          {
+            "startMinutes": 360,
+            "endMinutes": 735
+          }
+        ]
+      },
+      {
+        "employeeId": "chloe",
+        "date": "2026-08-08",
+        "segments": [
+          {
+            "startMinutes": 375,
+            "endMinutes": 855
+          }
+        ]
+      },
+      {
+        "employeeId": "david",
+        "date": "2026-08-08",
+        "segments": [
+          {
+            "startMinutes": 480,
+            "endMinutes": 945
+          }
+        ]
+      },
+      {
+        "employeeId": "elena",
+        "date": "2026-08-08",
+        "segments": [
+          {
+            "startMinutes": 720,
+            "endMinutes": 1200
+          }
+        ]
+      }
+    ],
+    "declaredMetrics": {
+      "totalDeficitMinutes": 210
+    }
+  },
+  "evaluation": {
+    "validHardConstraints": true,
+    "violations": [],
+    "underCoveredSlots": 3,
+    "totalDeficitMinutes": 210,
+    "dailyMinutesByDate": {
+      "2026-08-03": 1650,
+      "2026-08-04": 1650,
+      "2026-08-05": 1650,
+      "2026-08-06": 1650,
+      "2026-08-07": 2145,
+      "2026-08-08": 2280
+    },
+    "weeklyMinutesByEmployee": {
+      "alice": 2205,
+      "bruno": 2205,
+      "chloe": 2205,
+      "david": 2205,
+      "elena": 2205
+    },
+    "openingsByEmployee": {
+      "alice": 2,
+      "bruno": 4,
+      "chloe": 2,
+      "david": 3
+    },
+    "closingsByEmployee": {
+      "alice": 1,
+      "bruno": 1,
+      "chloe": 1,
+      "david": 1,
+      "elena": 2
+    },
+    "coverageDetails": [
+      {
+        "date": "2026-08-06",
+        "startMinutes": 900,
+        "endMinutes": 960,
+        "requiredEmployees": 2,
+        "minimumPresent": 1,
+        "deficitMinutes": 60,
+        "atomics": [
+          {
+            "startMinutes": 900,
+            "present": 1,
+            "missing": 1
+          },
+          {
+            "startMinutes": 915,
+            "present": 1,
+            "missing": 1
+          },
+          {
+            "startMinutes": 930,
+            "present": 1,
+            "missing": 1
+          },
+          {
+            "startMinutes": 945,
+            "present": 1,
+            "missing": 1
+          }
+        ]
+      },
+      {
+        "date": "2026-08-08",
+        "startMinutes": 360,
+        "endMinutes": 420,
+        "requiredEmployees": 4,
+        "minimumPresent": 1,
+        "deficitMinutes": 90,
+        "atomics": [
+          {
+            "startMinutes": 360,
+            "present": 1,
+            "missing": 3
+          },
+          {
+            "startMinutes": 375,
+            "present": 3,
+            "missing": 1
+          },
+          {
+            "startMinutes": 390,
+            "present": 3,
+            "missing": 1
+          },
+          {
+            "startMinutes": 405,
+            "present": 3,
+            "missing": 1
+          }
+        ]
+      },
+      {
+        "date": "2026-08-08",
+        "startMinutes": 420,
+        "endMinutes": 480,
+        "requiredEmployees": 4,
+        "minimumPresent": 3,
+        "deficitMinutes": 60,
+        "atomics": [
+          {
+            "startMinutes": 420,
+            "present": 3,
+            "missing": 1
+          },
+          {
+            "startMinutes": 435,
+            "present": 3,
+            "missing": 1
+          },
+          {
+            "startMinutes": 450,
+            "present": 3,
+            "missing": 1
+          },
+          {
+            "startMinutes": 465,
+            "present": 3,
+            "missing": 1
+          }
+        ]
+      }
+    ]
+  },
+  "diagnostics": {
+    "candidateCount": 29256,
+    "selectedCandidateCount": 28,
+    "candidateGenerationSeconds": 0.2693209000281058,
+    "modelBuildSeconds": 1.589690499997232,
+    "milpSeconds": 400.44329770002514,
+    "totalSeconds": 402.3282890000264,
+    "passes": [
+      {
+        "name": "1-under-covered-slots",
+        "scipyStatus": 1,
+        "message": "Time limit reached. (HiGHS Status 13: Time limit reached)",
+        "objective": 3.0,
+        "proven": false,
+        "seconds": 400.44329770002514
+      }
+    ],
+    "adaptedTargetShortSlots": 3,
+    "adaptedTargetDeficitMinutes": 210,
+    "surplusMinutesByDate": {
+      "2026-08-03": 210,
+      "2026-08-04": 210,
+      "2026-08-05": 210,
+      "2026-08-06": 210,
+      "2026-08-07": 285,
+      "2026-08-08": 300
+    },
+    "proof": "incumbent-not-proven"
+  }
+}

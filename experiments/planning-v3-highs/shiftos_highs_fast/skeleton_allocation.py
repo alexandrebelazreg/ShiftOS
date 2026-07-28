@@ -75,6 +75,24 @@ class DurationOption:
 
 
 @dataclass(frozen=True, slots=True)
+class DayReach:
+    """What a day needs so that its evening is covered at all.
+
+    Openers start exactly at opening and closers end exactly at closing, so the
+    two groups reach toward each other and someone has to bridge the gap. This
+    records who may bridge and how far the bridge must go.
+    """
+
+    day_index: int
+    amplitude: int
+    opener_indexes: tuple[int, ...]
+    closer_indexes: tuple[int, ...]
+    #: Ceilings of everyone holding no role: they may sit anywhere in the middle,
+    #: so they shorten the bridge for free.
+    free_reach: int
+
+
+@dataclass(frozen=True, slots=True)
 class DurationSpace:
     """Admissible durations per cell, under one skeleton."""
 
@@ -82,6 +100,9 @@ class DurationSpace:
     #: Cells the skeleton left with no workable duration at all. A skeleton with
     #: any of these cannot produce a schedule and is dropped before its MILP.
     dead_cells: tuple[tuple[int, int], ...]
+    #: Per day, what the roles force about reaching from opening to closing.
+    #: Empty for days where the role-free staff already cover any gap.
+    reaches: tuple[DayReach, ...] = ()
 
     def durations(self, employee_index: int, day_index: int) -> frozenset[int]:
         return frozenset(
@@ -101,6 +122,71 @@ def _prefix_demand(demand: DemandModel, date: str, step: int, origin: int, cells
     for index in range(1, cells + 1):
         profile[index] += profile[index - 1]
     return profile
+
+
+def _day_reaches(
+    problem: dict[str, Any],
+    model: AllocationModel,
+    skeleton: Skeleton,
+) -> tuple[DayReach, ...]:
+    """Which days need someone to bridge opening to closing, and who may do it.
+
+    The bound the ROLES force — the "bornes supplémentaires liées aux rôles
+    forcés" the design document asks the allocation to receive, and the piece
+    this engine was missing.
+
+    Every designated opener starts exactly at opening, so opener ``i`` is on the
+    floor until ``opening + d_i``. The closer ends exactly at closing, so they
+    reach back to ``closing − d_c``. Someone holding no role may sit anywhere in
+    their own window and shortens the bridge by at most their ceiling. So the day
+    is coverable only if
+
+        max over openers of d_i  +  free ceilings  +  d_c  ≥  amplitude
+
+    A first attempt used the openers' CEILINGS instead of their chosen durations,
+    to keep the bound a plain constant. It was valid but useless: one opener with
+    a split allowed reaches 600 minutes on paper, so the bound came out at the
+    minimum shift length and never bit — while the allocation handed that same
+    opener 420 and left two hours of the evening empty. The bound has to speak
+    about the durations actually chosen, which is why it is imposed inside the
+    MILP rather than as a domain filter.
+
+    Days where the role-free ceilings already span the gap are dropped here, so
+    the model only carries the constraint where it can bind.
+    """
+    employees = sorted(problem["employees"], key=lambda item: str(item["id"]))
+    days = sorted([d for d in problem["days"] if not d["closed"]], key=lambda d: d["date"])
+
+    reaches: list[DayReach] = []
+    for day_index, day in enumerate(days):
+        amplitude = int(day["closesAtMinutes"]) - int(day["opensAtMinutes"])
+        openers: list[int] = []
+        closers: list[int] = []
+        free_reach = 0
+        for employee_index in range(len(employees)):
+            cell = model.cell(employee_index, day_index)
+            if cell is None:
+                continue
+            if skeleton.opens(employee_index, day_index):
+                openers.append(employee_index)
+            elif skeleton.closes(employee_index, day_index):
+                closers.append(employee_index)
+            else:
+                free_reach += cell.maximum
+        if not openers or not closers:
+            continue
+        if free_reach >= amplitude:
+            continue
+        reaches.append(
+            DayReach(
+                day_index=day_index,
+                amplitude=amplitude,
+                opener_indexes=tuple(openers),
+                closer_indexes=tuple(closers),
+                free_reach=free_reach,
+            )
+        )
+    return tuple(reaches)
 
 
 def build_duration_space(
@@ -252,7 +338,11 @@ def build_duration_space(
             else:
                 dead.append(key)
 
-    return DurationSpace(options=options, dead_cells=tuple(dead))
+    return DurationSpace(
+        options=options,
+        dead_cells=tuple(dead),
+        reaches=_day_reaches(problem, model, skeleton),
+    )
 
 
 def solve_for_skeleton(
@@ -337,6 +427,49 @@ def solve_for_skeleton(
             if index == day_index
         }
         add(coefficients, budget / step, budget / step)
+
+    # ── The bridge from opening to closing ──────────────────────────────────
+    #
+    # One binary per (day, opener) saying "this one is the reacher", exactly one
+    # per day, and a big-M constraint that only binds on the chosen reacher:
+    #
+    #     d_reacher + free ceilings + Σ closers ≥ amplitude
+    #
+    # Without it the allocation is free to hand every opener a short day and the
+    # closer a short evening, which satisfies contracts and budgets exactly and
+    # leaves a hole in the middle that no placement can fill. That is precisely
+    # what happened on a real roster: four openers off by 14:00, the closer in at
+    # 16:00, and two hours with nobody in the shop — reported by the placement as
+    # infeasible, which is true and unhelpful, because the decision that doomed
+    # it was taken one phase earlier.
+    reachers: dict[tuple[int, int], int] = {}
+    for reach in space.reaches:
+        for employee_index in reach.opener_indexes:
+            reachers[(reach.day_index, employee_index)] = total + len(reachers)
+    total += len(reachers)
+
+    for reach in space.reaches:
+        add(
+            {reachers[(reach.day_index, e)]: 1.0 for e in reach.opener_indexes},
+            1.0,
+            1.0,
+        )
+        # M has to dominate the shortfall the constraint can express. The
+        # amplitude is that shortfall's ceiling, in steps.
+        big_m = reach.amplitude / step
+        for employee_index in reach.opener_indexes:
+            coefficients: dict[int, float] = {}
+            for option in space.options[(employee_index, reach.day_index)]:
+                coefficients[columns[(employee_index, reach.day_index, option.minutes)]] = (
+                    option.minutes / step
+                )
+            for closer_index in reach.closer_indexes:
+                for option in space.options[(closer_index, reach.day_index)]:
+                    column = columns[(closer_index, reach.day_index, option.minutes)]
+                    coefficients[column] = coefficients.get(column, 0.0) + option.minutes / step
+            coefficients[reachers[(reach.day_index, employee_index)]] = -big_m
+            floor = (reach.amplitude - reach.free_reach) / step - big_m
+            add(coefficients, floor, np.inf)
 
     objective = np.zeros(total)
     peak_demand = max(
