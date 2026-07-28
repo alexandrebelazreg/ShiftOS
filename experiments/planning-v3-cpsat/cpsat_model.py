@@ -341,7 +341,8 @@ def individual_daily_targets(problem):
     return targets
 
 
-def build_model(problem, preservation=None, with_distribution=False):
+def build_model(problem, preservation=None, with_distribution=False,
+                with_role_propagation=False):
     """Return (model, handles) for one PlanningProblemV3.
 
     `preservation` is optional and, when present, carries already-resolved
@@ -354,6 +355,7 @@ def build_model(problem, preservation=None, with_distribution=False):
     employees = problem["employees"]
     days = problem["days"]
     rules = problem["rules"]
+    step = problem["timeStepMinutes"]
 
     entry_of = {(e["employeeId"], e["date"]): e for e in problem["employeeDays"]}
     slots_of = {}
@@ -453,6 +455,77 @@ def build_model(problem, preservation=None, with_distribution=False):
                           for ci, c in enumerate(pool[(ei, di)]) if c["closes"])
                       <= employee["maximumClosings"])
 
+    # ── Explicit role variables, and the two implications they carry ───────
+    #
+    # `opens` and `closes` are already decidable from the candidate booleans —
+    # each candidate knows whether it starts at the opening or ends at the
+    # closing. But the solver could only reach the facts below THROUGH those
+    # booleans and through the integer start/end variables of the rest
+    # constraint, which is a long way round for something expressible as a
+    # two-literal clause. Naming the roles lets the two implications propagate
+    # directly.
+    #
+    # Both are REDUNDANT — they are consequences of constraints already stated,
+    # so they remove no legal schedule:
+    #
+    #   (1) `build_candidates` never emits a shift longer than
+    #       `maximumShiftMinutes`. On a day whose amplitude exceeds that, a
+    #       single continuous shift covering both the opening and the closing
+    #       would have to span the whole day, so no such candidate exists and
+    #       `opens AND closes` was already unreachable.
+    #
+    #   (2) The rest constraint already forbids ending at `closesAt[d]` and
+    #       starting at `opensAt[d+1]` when the night between them is shorter
+    #       than `minimumRestMinutes`.
+    #
+    # Neither reads a name, a weekday or a date: both are derived from the
+    # rules and the opening hours, so a sector that closes earlier or rests
+    # longer simply gets a different set of clauses — or none.
+    opens_v, closes_v = {}, {}
+    if with_role_propagation:
+        for ei in range(len(employees)):
+            for di in range(len(days)):
+                cands = pool[(ei, di)]
+                opener = model.NewBoolVar(f"opens_{ei}_{di}")
+                closer = model.NewBoolVar(f"closes_{ei}_{di}")
+                opens_v[(ei, di)], closes_v[(ei, di)] = opener, closer
+
+                opening_lits = [x[(ei, di, ci)] for ci, c in enumerate(cands) if c["opens"]]
+                closing_lits = [x[(ei, di, ci)] for ci, c in enumerate(cands) if c["closes"]]
+                # At most one candidate is ever selected, so each of these sums
+                # is already 0 or 1 and the equality is a channelling, not a
+                # restriction.
+                if opening_lits:
+                    model.Add(sum(opening_lits) == opener)
+                else:
+                    model.Add(opener == 0)
+                if closing_lits:
+                    model.Add(sum(closing_lits) == closer)
+                else:
+                    model.Add(closer == 0)
+
+        # (1) Nobody opens and closes the same over-long day.
+        for di, day in enumerate(days):
+            if day["closed"]:
+                continue
+            amplitude = day["closesAtMinutes"] - day["opensAtMinutes"]
+            if amplitude <= rules["maximumShiftMinutes"]:
+                continue
+            for ei in range(len(employees)):
+                model.AddBoolOr([opens_v[(ei, di)].Not(), closes_v[(ei, di)].Not()])
+
+        # (2) Whoever closes a day cannot open the next one when the night is
+        #     shorter than the minimum rest.
+        for di in range(len(days) - 1):
+            today, tomorrow = days[di], days[di + 1]
+            if today["closed"] or tomorrow["closed"]:
+                continue
+            night = tomorrow["opensAtMinutes"] - today["closesAtMinutes"] + 1440
+            if night >= rules["minimumRestMinutes"]:
+                continue
+            for ei in range(len(employees)):
+                model.AddBoolOr([closes_v[(ei, di)].Not(), opens_v[(ei, di + 1)].Not()])
+
     # Rest: gap*1440 - end[d] + start[d'] >= minimumRest, when both are worked.
     for ei in range(len(employees)):
         for di in range(len(days)):
@@ -491,28 +564,69 @@ def build_model(problem, preservation=None, with_distribution=False):
                 continue
             model.Add(x[(ei, di, match)] == 1)
 
-    # Coverage.
+    # ── Coverage — atomic sub-intervals, not per-shift containment ─────────
+    #
+    # FIXED 2026-07-24 (was a correctness bug, not a style choice). Coverage is
+    # a CONCURRENCY question — how many candidates are present at once — never
+    # "does one candidate span the whole slot." The old constraint,
+    #     c["start"] <= slot.start and c["end"] >= slot.end
+    # counted only candidates that individually cover the ENTIRE demand
+    # window, so three staggered shifts (06:00–12:30, 10:00–14:00, 12:15–17:45)
+    # that keep the floor staffed at 2–3 people throughout 12:00–13:00 counted
+    # as covered=1 — only the middle shift spans the full hour — reporting a
+    # deficit that never existed. `underCoveredSlots`, `deficitMinutes` and
+    # `businessDeficitCost` all derived from this, so all three were affected;
+    # see `features/core/shared/coverage.ts` for the worked example and the
+    # TypeScript twin of this reasoning (validator, V2 coverage calculator,
+    # board view-model) — this file cannot import it, so it reimplements the
+    # same semantics rather than sharing code across languages.
+    #
+    # Every demand slot is split into fixed sub-intervals of `step` width
+    # (clamped to the slot's own end for a non-step-aligned width). This is
+    # safe as a FIXED grid, rather than dynamic breakpoints, because every
+    # candidate's start and end are already `step`-aligned by construction
+    # (`build_candidates`): no candidate boundary can fall strictly inside one
+    # of these pieces, so a fixed grid and dynamic breakpoints agree exactly.
+    #
+    # `under` stays ONE entry per ORIGINAL demand slot — a slot counts as
+    # under-covered if ANY of its atomic pieces is short — so
+    # `underCoveredSlots` keeps meaning "how many demand slots," matching the
+    # TypeScript validator's unit. `shortfall`/`business` grow to one entry per
+    # atomic piece: a slot short for only part of its width now costs only
+    # that part, not the whole slot.
     under, shortfall, business = [], [], []
     for di, day in enumerate(days):
         for slot in slots_of.get(day["date"], []):
-            covering = [x[(ei, di, ci)] for ei in range(len(employees))
-                        for ci, c in enumerate(pool[(ei, di)])
-                        if c["start"] <= slot["startMinutes"] and c["end"] >= slot["endMinutes"]]
             need = slot["requiredEmployees"]
-            span = slot["endMinutes"] - slot["startMinutes"]
-            covered = sum(covering) if covering else 0
+            piece_unders = []
+            piece_start = slot["startMinutes"]
+            while piece_start < slot["endMinutes"]:
+                piece_end = min(piece_start + step, slot["endMinutes"])
+                covering = [x[(ei, di, ci)] for ei in range(len(employees))
+                            for ci, c in enumerate(pool[(ei, di)])
+                            if c["start"] <= piece_start and c["end"] >= piece_end]
+                covered = sum(covering) if covering else 0
+                piece_span = piece_end - piece_start
 
-            b = model.NewBoolVar(f"under_{di}_{slot['startMinutes']}")
-            model.Add(covered >= need).OnlyEnforceIf(b.Not())
-            model.Add(covered <= need - 1).OnlyEnforceIf(b)
-            under.append(b)
+                b = model.NewBoolVar(f"under_{di}_{slot['startMinutes']}_{piece_start}")
+                model.Add(covered >= need).OnlyEnforceIf(b.Not())
+                model.Add(covered <= need - 1).OnlyEnforceIf(b)
+                piece_unders.append(b)
 
-            miss = model.NewIntVar(0, need * span, f"miss_{di}_{slot['startMinutes']}")
-            model.Add(miss >= (need - covered) * span)
-            shortfall.append(miss)
-            # Business cost of THIS slot's shortfall: missing employee-minutes
-            # weighted by the budget of the day they fall on. Integers only.
-            business.append((miss, day["budgetMinutes"]))
+                miss = model.NewIntVar(0, need * piece_span,
+                                       f"miss_{di}_{slot['startMinutes']}_{piece_start}")
+                model.Add(miss >= (need - covered) * piece_span)
+                shortfall.append(miss)
+                # Business cost of THIS piece's shortfall: missing
+                # employee-minutes weighted by the budget of the day they fall
+                # on. Integers only.
+                business.append((miss, day["budgetMinutes"]))
+
+                piece_start = piece_end
+
+            slot_under = model.NewBoolVar(f"underslot_{di}_{slot['startMinutes']}")
+            model.AddMaxEquality(slot_under, piece_unders)
+            under.append(slot_under)
 
     # ── Deviation from each employee's individual daily target ─────────────
     #
@@ -535,6 +649,7 @@ def build_model(problem, preservation=None, with_distribution=False):
 
     handles = {"x": x, "pool": pool, "under": under, "shortfall": shortfall,
                "distributionDeviation": deviation, "distributionTargets": targets,
+               "opens": opens_v, "closes": closes_v,
                "business": business, "candidates": total_candidates,
                "works": works, "start": start_v, "end": end_v, "minutes": minutes_v,
                "employeeIndex": employee_index, "dayIndex": day_index,
@@ -621,6 +736,11 @@ def run_pass(solver, model, label, callback=None):
         # the incumbent. Either alone has been enough to mislead before.
         "proven": status == cp_model.OPTIMAL,
         "seconds": round(elapsed, 1),
+        # Search effort, not time: the figures that say whether a redundant
+        # constraint actually helped propagation or merely happened to run on a
+        # quieter machine.
+        "branches": solver.NumBranches(),
+        "conflicts": solver.NumConflicts(),
     }
 
 

@@ -1,0 +1,572 @@
+{
+  "version": "v3.0.0",
+  "planningId": "accueil_canonical",
+  "sectorId": "accueil",
+  "period": {
+    "start": "2026-07-20",
+    "end": "2026-07-26"
+  },
+  "timeStepMinutes": 15,
+  "employees": [
+    {
+      "id": "brigitte",
+      "firstName": "brigitte",
+      "lastName": "Accueil",
+      "contractMinutes": 1920,
+      "workingDays": [
+        "monday",
+        "tuesday",
+        "wednesday",
+        "friday",
+        "saturday"
+      ],
+      "fixedRestDays": [
+        "thursday",
+        "sunday"
+      ],
+      "minimumDailyMinutes": 240,
+      "maximumDailyMinutes": 600,
+      "canOpen": true,
+      "canClose": true,
+      "canSplitShift": false,
+      "maximumOpenings": 3,
+      "maximumClosings": 2,
+      "prefersOpening": false,
+      "prefersClosing": false
+    },
+    {
+      "id": "kenza",
+      "firstName": "kenza",
+      "lastName": "Accueil",
+      "contractMinutes": 600,
+      "workingDays": [
+        "saturday"
+      ],
+      "fixedRestDays": [
+        "monday",
+        "tuesday",
+        "wednesday",
+        "thursday",
+        "friday",
+        "sunday"
+      ],
+      "minimumDailyMinutes": 240,
+      "maximumDailyMinutes": 600,
+      "canOpen": true,
+      "canClose": true,
+      "canSplitShift": true,
+      "maximumOpenings": 3,
+      "maximumClosings": 2,
+      "prefersOpening": false,
+      "prefersClosing": false
+    },
+    {
+      "id": "marie",
+      "firstName": "marie",
+      "lastName": "Accueil",
+      "contractMinutes": 1560,
+      "workingDays": [
+        "monday",
+        "thursday",
+        "friday",
+        "saturday"
+      ],
+      "fixedRestDays": [
+        "tuesday",
+        "wednesday",
+        "sunday"
+      ],
+      "minimumDailyMinutes": 240,
+      "maximumDailyMinutes": 600,
+      "canOpen": true,
+      "canClose": true,
+      "canSplitShift": false,
+      "maximumOpenings": 3,
+      "maximumClosings": 2,
+      "prefersOpening": false,
+      "prefersClosing": false
+    },
+    {
+      "id": "marine",
+      "firstName": "marine",
+      "lastName": "Accueil",
+      "contractMinutes": 2205,
+      "workingDays": [
+        "monday",
+        "tuesday",
+        "wednesday",
+        "thursday",
+        "saturday"
+      ],
+      "fixedRestDays": [
+        "friday",
+        "sunday"
+      ],
+      "minimumDailyMinutes": 240,
+      "maximumDailyMinutes": 600,
+      "canOpen": true,
+      "canClose": true,
+      "canSplitShift": true,
+      "maximumOpenings": 3,
+      "maximumClosings": 2,
+      "prefersOpening": false,
+      "prefersClosing": false
+    }
+  ],
+  "days": [
+    {
+      "date": "2026-07-20",
+      "weekDay": "monday",
+      "weekKey": "2026-W30",
+      "closed": false,
+      "opensAtMinutes": 450,
+      "closesAtMinutes": 1245,
+      "budgetMinutes": 1080
+    },
+    {
+      "date": "2026-07-21",
+      "weekDay": "tuesday",
+      "weekKey": "2026-W30",
+      "closed": false,
+      "opensAtMinutes": 450,
+      "closesAtMinutes": 1245,
+      "budgetMinutes": 900
+    },
+    {
+      "date": "2026-07-22",
+      "weekDay": "wednesday",
+      "weekKey": "2026-W30",
+      "closed": false,
+      "opensAtMinutes": 450,
+      "closesAtMinutes": 1245,
+      "budgetMinutes": 900
+    },
+    {
+      "date": "2026-07-23",
+      "weekDay": "thursday",
+      "weekKey": "2026-W30",
+      "closed": false,
+      "opensAtMinutes": 450,
+      "closesAtMinutes": 1245,
+      "budgetMinutes": 900
+    },
+    {
+      "date": "2026-07-24",
+      "weekDay": "friday",
+      "weekKey": "2026-W30",
+      "closed": false,
+      "opensAtMinutes": 450,
+      "closesAtMinutes": 1245,
+      "budgetMinutes": 900
+    },
+    {
+      "date": "2026-07-25",
+      "weekDay": "saturday",
+      "weekKey": "2026-W30",
+      "closed": false,
+      "opensAtMinutes": 450,
+      "closesAtMinutes": 1245,
+      "budgetMinutes": 1605
+    },
+    {
+      "date": "2026-07-26",
+      "weekDay": "sunday",
+      "weekKey": "2026-W30",
+      "closed": true,
+      "opensAtMinutes": null,
+      "closesAtMinutes": null,
+      "budgetMinutes": 0
+    }
+  ],
+  "employeeDays": [
+    {
+      "employeeId": "brigitte",
+      "date": "2026-07-20",
+      "available": true,
+      "mandatory": true,
+      "fixedRest": false,
+      "earliestStartMinutes": 450,
+      "latestEndMinutes": 1245,
+      "maximumMinutes": 600
+    },
+    {
+      "employeeId": "brigitte",
+      "date": "2026-07-21",
+      "available": true,
+      "mandatory": true,
+      "fixedRest": false,
+      "earliestStartMinutes": 450,
+      "latestEndMinutes": 1245,
+      "maximumMinutes": 600
+    },
+    {
+      "employeeId": "brigitte",
+      "date": "2026-07-22",
+      "available": true,
+      "mandatory": true,
+      "fixedRest": false,
+      "earliestStartMinutes": 450,
+      "latestEndMinutes": 1245,
+      "maximumMinutes": 600
+    },
+    {
+      "employeeId": "brigitte",
+      "date": "2026-07-23",
+      "available": false,
+      "mandatory": false,
+      "fixedRest": true,
+      "earliestStartMinutes": 450,
+      "latestEndMinutes": 1245,
+      "maximumMinutes": 0,
+      "unavailableReason": "fixed-rest"
+    },
+    {
+      "employeeId": "brigitte",
+      "date": "2026-07-24",
+      "available": true,
+      "mandatory": true,
+      "fixedRest": false,
+      "earliestStartMinutes": 450,
+      "latestEndMinutes": 1245,
+      "maximumMinutes": 600
+    },
+    {
+      "employeeId": "brigitte",
+      "date": "2026-07-25",
+      "available": true,
+      "mandatory": true,
+      "fixedRest": false,
+      "earliestStartMinutes": 450,
+      "latestEndMinutes": 1245,
+      "maximumMinutes": 600
+    },
+    {
+      "employeeId": "brigitte",
+      "date": "2026-07-26",
+      "available": false,
+      "mandatory": false,
+      "fixedRest": true,
+      "earliestStartMinutes": 0,
+      "latestEndMinutes": 0,
+      "maximumMinutes": 0,
+      "unavailableReason": "closed"
+    },
+    {
+      "employeeId": "kenza",
+      "date": "2026-07-20",
+      "available": false,
+      "mandatory": false,
+      "fixedRest": true,
+      "earliestStartMinutes": 450,
+      "latestEndMinutes": 1245,
+      "maximumMinutes": 0,
+      "unavailableReason": "fixed-rest"
+    },
+    {
+      "employeeId": "kenza",
+      "date": "2026-07-21",
+      "available": false,
+      "mandatory": false,
+      "fixedRest": true,
+      "earliestStartMinutes": 450,
+      "latestEndMinutes": 1245,
+      "maximumMinutes": 0,
+      "unavailableReason": "fixed-rest"
+    },
+    {
+      "employeeId": "kenza",
+      "date": "2026-07-22",
+      "available": false,
+      "mandatory": false,
+      "fixedRest": true,
+      "earliestStartMinutes": 450,
+      "latestEndMinutes": 1245,
+      "maximumMinutes": 0,
+      "unavailableReason": "fixed-rest"
+    },
+    {
+      "employeeId": "kenza",
+      "date": "2026-07-23",
+      "available": false,
+      "mandatory": false,
+      "fixedRest": true,
+      "earliestStartMinutes": 450,
+      "latestEndMinutes": 1245,
+      "maximumMinutes": 0,
+      "unavailableReason": "fixed-rest"
+    },
+    {
+      "employeeId": "kenza",
+      "date": "2026-07-24",
+      "available": false,
+      "mandatory": false,
+      "fixedRest": true,
+      "earliestStartMinutes": 450,
+      "latestEndMinutes": 1245,
+      "maximumMinutes": 0,
+      "unavailableReason": "fixed-rest"
+    },
+    {
+      "employeeId": "kenza",
+      "date": "2026-07-25",
+      "available": true,
+      "mandatory": true,
+      "fixedRest": false,
+      "earliestStartMinutes": 450,
+      "latestEndMinutes": 1245,
+      "maximumMinutes": 600
+    },
+    {
+      "employeeId": "kenza",
+      "date": "2026-07-26",
+      "available": false,
+      "mandatory": false,
+      "fixedRest": true,
+      "earliestStartMinutes": 0,
+      "latestEndMinutes": 0,
+      "maximumMinutes": 0,
+      "unavailableReason": "closed"
+    },
+    {
+      "employeeId": "marie",
+      "date": "2026-07-20",
+      "available": true,
+      "mandatory": true,
+      "fixedRest": false,
+      "earliestStartMinutes": 450,
+      "latestEndMinutes": 1245,
+      "maximumMinutes": 600
+    },
+    {
+      "employeeId": "marie",
+      "date": "2026-07-21",
+      "available": false,
+      "mandatory": false,
+      "fixedRest": true,
+      "earliestStartMinutes": 450,
+      "latestEndMinutes": 1245,
+      "maximumMinutes": 0,
+      "unavailableReason": "fixed-rest"
+    },
+    {
+      "employeeId": "marie",
+      "date": "2026-07-22",
+      "available": false,
+      "mandatory": false,
+      "fixedRest": true,
+      "earliestStartMinutes": 450,
+      "latestEndMinutes": 1245,
+      "maximumMinutes": 0,
+      "unavailableReason": "fixed-rest"
+    },
+    {
+      "employeeId": "marie",
+      "date": "2026-07-23",
+      "available": true,
+      "mandatory": true,
+      "fixedRest": false,
+      "earliestStartMinutes": 450,
+      "latestEndMinutes": 1245,
+      "maximumMinutes": 600
+    },
+    {
+      "employeeId": "marie",
+      "date": "2026-07-24",
+      "available": true,
+      "mandatory": true,
+      "fixedRest": false,
+      "earliestStartMinutes": 450,
+      "latestEndMinutes": 1245,
+      "maximumMinutes": 600
+    },
+    {
+      "employeeId": "marie",
+      "date": "2026-07-25",
+      "available": true,
+      "mandatory": true,
+      "fixedRest": false,
+      "earliestStartMinutes": 450,
+      "latestEndMinutes": 1245,
+      "maximumMinutes": 600
+    },
+    {
+      "employeeId": "marie",
+      "date": "2026-07-26",
+      "available": false,
+      "mandatory": false,
+      "fixedRest": true,
+      "earliestStartMinutes": 0,
+      "latestEndMinutes": 0,
+      "maximumMinutes": 0,
+      "unavailableReason": "closed"
+    },
+    {
+      "employeeId": "marine",
+      "date": "2026-07-20",
+      "available": true,
+      "mandatory": true,
+      "fixedRest": false,
+      "earliestStartMinutes": 450,
+      "latestEndMinutes": 1245,
+      "maximumMinutes": 600
+    },
+    {
+      "employeeId": "marine",
+      "date": "2026-07-21",
+      "available": true,
+      "mandatory": true,
+      "fixedRest": false,
+      "earliestStartMinutes": 450,
+      "latestEndMinutes": 1245,
+      "maximumMinutes": 600
+    },
+    {
+      "employeeId": "marine",
+      "date": "2026-07-22",
+      "available": true,
+      "mandatory": true,
+      "fixedRest": false,
+      "earliestStartMinutes": 450,
+      "latestEndMinutes": 1245,
+      "maximumMinutes": 600
+    },
+    {
+      "employeeId": "marine",
+      "date": "2026-07-23",
+      "available": true,
+      "mandatory": true,
+      "fixedRest": false,
+      "earliestStartMinutes": 450,
+      "latestEndMinutes": 1245,
+      "maximumMinutes": 600
+    },
+    {
+      "employeeId": "marine",
+      "date": "2026-07-24",
+      "available": false,
+      "mandatory": false,
+      "fixedRest": true,
+      "earliestStartMinutes": 450,
+      "latestEndMinutes": 1245,
+      "maximumMinutes": 0,
+      "unavailableReason": "fixed-rest"
+    },
+    {
+      "employeeId": "marine",
+      "date": "2026-07-25",
+      "available": true,
+      "mandatory": true,
+      "fixedRest": false,
+      "earliestStartMinutes": 450,
+      "latestEndMinutes": 1245,
+      "maximumMinutes": 600
+    },
+    {
+      "employeeId": "marine",
+      "date": "2026-07-26",
+      "available": false,
+      "mandatory": false,
+      "fixedRest": true,
+      "earliestStartMinutes": 0,
+      "latestEndMinutes": 0,
+      "maximumMinutes": 0,
+      "unavailableReason": "closed"
+    }
+  ],
+  "demandSlots": [
+    {
+      "id": "req_accueil_2026-07-20_0730",
+      "date": "2026-07-20",
+      "startMinutes": 450,
+      "endMinutes": 1245,
+      "requiredEmployees": 1,
+      "hardMinimumEmployees": 1,
+      "maximumEmployees": null
+    },
+    {
+      "id": "req_accueil_2026-07-21_0730",
+      "date": "2026-07-21",
+      "startMinutes": 450,
+      "endMinutes": 1245,
+      "requiredEmployees": 1,
+      "hardMinimumEmployees": 1,
+      "maximumEmployees": null
+    },
+    {
+      "id": "req_accueil_2026-07-22_0730",
+      "date": "2026-07-22",
+      "startMinutes": 450,
+      "endMinutes": 1245,
+      "requiredEmployees": 1,
+      "hardMinimumEmployees": 1,
+      "maximumEmployees": null
+    },
+    {
+      "id": "req_accueil_2026-07-23_0730",
+      "date": "2026-07-23",
+      "startMinutes": 450,
+      "endMinutes": 1245,
+      "requiredEmployees": 1,
+      "hardMinimumEmployees": 1,
+      "maximumEmployees": null
+    },
+    {
+      "id": "req_accueil_2026-07-24_0730",
+      "date": "2026-07-24",
+      "startMinutes": 450,
+      "endMinutes": 1245,
+      "requiredEmployees": 1,
+      "hardMinimumEmployees": 1,
+      "maximumEmployees": null
+    },
+    {
+      "id": "req_accueil_2026-07-25_0730",
+      "date": "2026-07-25",
+      "startMinutes": 450,
+      "endMinutes": 600,
+      "requiredEmployees": 1,
+      "hardMinimumEmployees": 1,
+      "maximumEmployees": null
+    },
+    {
+      "id": "req_accueil_2026-07-25_1000",
+      "date": "2026-07-25",
+      "startMinutes": 600,
+      "endMinutes": 1110,
+      "requiredEmployees": 2,
+      "hardMinimumEmployees": 2,
+      "maximumEmployees": null
+    },
+    {
+      "id": "req_accueil_2026-07-25_1830",
+      "date": "2026-07-25",
+      "startMinutes": 1110,
+      "endMinutes": 1245,
+      "requiredEmployees": 1,
+      "hardMinimumEmployees": 1,
+      "maximumEmployees": null
+    }
+  ],
+  "rules": {
+    "minimumShiftMinutes": 240,
+    "maximumShiftMinutes": 600,
+    "minimumRestMinutes": 720,
+    "maximumConsecutiveWorkedDays": 6,
+    "maximumConsecutiveWorkedDaysSource": "derived-fallback",
+    "splitShiftAllowed": true,
+    "maximumSplitMinutes": 90,
+    "minimumSplitMinutes": 45,
+    "maximumContinuousMinutes": 480,
+    "maximumSplitsPerDay": null,
+    "minimumOpeningsPerDay": 1,
+    "exactClosingsPerDay": 1
+  },
+  "objectives": [
+    "coverage-deficit",
+    "contract-deviation",
+    "avoidable-surplus",
+    "opening-fairness",
+    "closing-fairness",
+    "preference-satisfaction"
+  ]
+}

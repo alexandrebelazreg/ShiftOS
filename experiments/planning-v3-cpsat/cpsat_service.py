@@ -216,6 +216,9 @@ def solve(request):
     distribution_pass = options.get("distributionPass", profile.get("distributionPass", "off"))
     if distribution_pass not in DISTRIBUTION_PASS_PLACEMENTS:
         distribution_pass = "off"
+    # Redundant role clauses. Off by default until measured: they can only help
+    # or cost nothing in theory, and theory is not a measurement.
+    role_propagation = bool(options.get("rolePropagation", profile.get("rolePropagation", False)))
 
     # ── Necessary conditions, before any search ────────────────────────────
     # Each violation is a proof the week cannot be staffed as posed. Returned as
@@ -243,7 +246,8 @@ def solve(request):
 
     try:
         model, handles = build_model(problem, preservation,
-                                     with_distribution=distribution_pass != "off")
+                                     with_distribution=distribution_pass != "off",
+                                     with_role_propagation=role_propagation)
     except (KeyError, TypeError, ValueError) as error:
         return envelope(request_id, "invalid-problem",
                         error={"code": "model-error", "message": f"{type(error).__name__}: {error}"})

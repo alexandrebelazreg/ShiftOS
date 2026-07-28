@@ -1,6 +1,6 @@
 {
   "version": "v3.0.0",
-  "planningId": "drive_historical",
+  "planningId": "drive_canonical",
   "sectorId": "drive",
   "period": {
     "start": "2026-07-20",
@@ -30,7 +30,7 @@
       "canClose": true,
       "canSplitShift": true,
       "maximumOpenings": null,
-      "maximumClosings": 1,
+      "maximumClosings": 2,
       "prefersOpening": false,
       "prefersClosing": false
     },
@@ -52,7 +52,7 @@
       ],
       "minimumDailyMinutes": 240,
       "maximumDailyMinutes": 600,
-      "canOpen": false,
+      "canOpen": true,
       "canClose": true,
       "canSplitShift": false,
       "maximumOpenings": null,
@@ -64,7 +64,7 @@
       "id": "erwan",
       "firstName": "erwan",
       "lastName": "Drive",
-      "contractMinutes": 2205,
+      "contractMinutes": 0,
       "workingDays": [
         "monday",
         "tuesday",
@@ -82,7 +82,7 @@
       "canClose": true,
       "canSplitShift": false,
       "maximumOpenings": null,
-      "maximumClosings": 1,
+      "maximumClosings": 2,
       "prefersOpening": false,
       "prefersClosing": false
     },
@@ -94,12 +94,12 @@
       "workingDays": [
         "monday",
         "tuesday",
-        "wednesday",
         "thursday",
         "friday",
         "saturday"
       ],
       "fixedRestDays": [
+        "wednesday",
         "sunday"
       ],
       "minimumDailyMinutes": 240,
@@ -108,7 +108,7 @@
       "canClose": true,
       "canSplitShift": false,
       "maximumOpenings": null,
-      "maximumClosings": 1,
+      "maximumClosings": 2,
       "prefersOpening": false,
       "prefersClosing": false
     },
@@ -116,7 +116,7 @@
       "id": "valentin",
       "firstName": "valentin",
       "lastName": "Drive",
-      "contractMinutes": 2205,
+      "contractMinutes": 0,
       "workingDays": [
         "monday",
         "tuesday",
@@ -133,8 +133,8 @@
       "canOpen": true,
       "canClose": true,
       "canSplitShift": false,
-      "maximumOpenings": 1,
-      "maximumClosings": 1,
+      "maximumOpenings": null,
+      "maximumClosings": 2,
       "prefersOpening": false,
       "prefersClosing": false
     }
@@ -147,7 +147,7 @@
       "closed": false,
       "opensAtMinutes": 360,
       "closesAtMinutes": 1200,
-      "budgetMinutes": 1650
+      "budgetMinutes": 1020
     },
     {
       "date": "2026-07-21",
@@ -156,7 +156,7 @@
       "closed": false,
       "opensAtMinutes": 360,
       "closesAtMinutes": 1200,
-      "budgetMinutes": 1650
+      "budgetMinutes": 1020
     },
     {
       "date": "2026-07-22",
@@ -165,7 +165,7 @@
       "closed": false,
       "opensAtMinutes": 360,
       "closesAtMinutes": 1200,
-      "budgetMinutes": 1650
+      "budgetMinutes": 960
     },
     {
       "date": "2026-07-23",
@@ -174,7 +174,7 @@
       "closed": false,
       "opensAtMinutes": 360,
       "closesAtMinutes": 1200,
-      "budgetMinutes": 1650
+      "budgetMinutes": 960
     },
     {
       "date": "2026-07-24",
@@ -183,7 +183,7 @@
       "closed": false,
       "opensAtMinutes": 360,
       "closesAtMinutes": 1200,
-      "budgetMinutes": 2430
+      "budgetMinutes": 1440
     },
     {
       "date": "2026-07-25",
@@ -192,7 +192,7 @@
       "closed": false,
       "opensAtMinutes": 360,
       "closesAtMinutes": 1200,
-      "budgetMinutes": 1995
+      "budgetMinutes": 1215
     },
     {
       "date": "2026-07-26",
@@ -283,7 +283,7 @@
       "available": true,
       "mandatory": true,
       "fixedRest": false,
-      "earliestStartMinutes": 360,
+      "earliestStartMinutes": 480,
       "latestEndMinutes": 1200,
       "maximumMinutes": 600
     },
@@ -293,7 +293,7 @@
       "available": true,
       "mandatory": true,
       "fixedRest": false,
-      "earliestStartMinutes": 360,
+      "earliestStartMinutes": 480,
       "latestEndMinutes": 1200,
       "maximumMinutes": 600
     },
@@ -303,7 +303,7 @@
       "available": true,
       "mandatory": true,
       "fixedRest": false,
-      "earliestStartMinutes": 360,
+      "earliestStartMinutes": 480,
       "latestEndMinutes": 1200,
       "maximumMinutes": 600
     },
@@ -313,7 +313,7 @@
       "available": true,
       "mandatory": true,
       "fixedRest": false,
-      "earliestStartMinutes": 360,
+      "earliestStartMinutes": 480,
       "latestEndMinutes": 1200,
       "maximumMinutes": 600
     },
@@ -323,7 +323,7 @@
       "available": true,
       "mandatory": true,
       "fixedRest": false,
-      "earliestStartMinutes": 360,
+      "earliestStartMinutes": 480,
       "latestEndMinutes": 1200,
       "maximumMinutes": 600
     },
@@ -333,12 +333,89 @@
       "available": true,
       "mandatory": true,
       "fixedRest": false,
-      "earliestStartMinutes": 360,
+      "earliestStartMinutes": 480,
       "latestEndMinutes": 1200,
       "maximumMinutes": 600
     },
     {
       "employeeId": "dylan",
+      "date": "2026-07-26",
+      "available": false,
+      "mandatory": false,
+      "fixedRest": true,
+      "earliestStartMinutes": 480,
+      "latestEndMinutes": 0,
+      "maximumMinutes": 0,
+      "unavailableReason": "closed"
+    },
+    {
+      "employeeId": "erwan",
+      "date": "2026-07-20",
+      "available": false,
+      "mandatory": false,
+      "fixedRest": false,
+      "earliestStartMinutes": 360,
+      "latestEndMinutes": 1200,
+      "maximumMinutes": 0,
+      "unavailableReason": "absence"
+    },
+    {
+      "employeeId": "erwan",
+      "date": "2026-07-21",
+      "available": false,
+      "mandatory": false,
+      "fixedRest": false,
+      "earliestStartMinutes": 360,
+      "latestEndMinutes": 1200,
+      "maximumMinutes": 0,
+      "unavailableReason": "absence"
+    },
+    {
+      "employeeId": "erwan",
+      "date": "2026-07-22",
+      "available": false,
+      "mandatory": false,
+      "fixedRest": false,
+      "earliestStartMinutes": 360,
+      "latestEndMinutes": 1200,
+      "maximumMinutes": 0,
+      "unavailableReason": "absence"
+    },
+    {
+      "employeeId": "erwan",
+      "date": "2026-07-23",
+      "available": false,
+      "mandatory": false,
+      "fixedRest": false,
+      "earliestStartMinutes": 360,
+      "latestEndMinutes": 1200,
+      "maximumMinutes": 0,
+      "unavailableReason": "absence"
+    },
+    {
+      "employeeId": "erwan",
+      "date": "2026-07-24",
+      "available": false,
+      "mandatory": false,
+      "fixedRest": false,
+      "earliestStartMinutes": 360,
+      "latestEndMinutes": 1200,
+      "maximumMinutes": 0,
+      "unavailableReason": "absence"
+    },
+    {
+      "employeeId": "erwan",
+      "date": "2026-07-25",
+      "available": false,
+      "mandatory": false,
+      "fixedRest": false,
+      "earliestStartMinutes": 360,
+      "latestEndMinutes": 1200,
+      "maximumMinutes": 0,
+      "unavailableReason": "absence"
+    },
+    {
+      "employeeId": "erwan",
       "date": "2026-07-26",
       "available": false,
       "mandatory": false,
@@ -349,7 +426,7 @@
       "unavailableReason": "closed"
     },
     {
-      "employeeId": "erwan",
+      "employeeId": "luca",
       "date": "2026-07-20",
       "available": true,
       "mandatory": true,
@@ -359,7 +436,7 @@
       "maximumMinutes": 600
     },
     {
-      "employeeId": "erwan",
+      "employeeId": "luca",
       "date": "2026-07-21",
       "available": true,
       "mandatory": true,
@@ -369,85 +446,15 @@
       "maximumMinutes": 600
     },
     {
-      "employeeId": "erwan",
+      "employeeId": "luca",
       "date": "2026-07-22",
-      "available": true,
-      "mandatory": true,
-      "fixedRest": false,
-      "earliestStartMinutes": 360,
-      "latestEndMinutes": 1200,
-      "maximumMinutes": 600
-    },
-    {
-      "employeeId": "erwan",
-      "date": "2026-07-23",
-      "available": true,
-      "mandatory": true,
-      "fixedRest": false,
-      "earliestStartMinutes": 360,
-      "latestEndMinutes": 1200,
-      "maximumMinutes": 600
-    },
-    {
-      "employeeId": "erwan",
-      "date": "2026-07-24",
-      "available": true,
-      "mandatory": true,
-      "fixedRest": false,
-      "earliestStartMinutes": 360,
-      "latestEndMinutes": 1200,
-      "maximumMinutes": 600
-    },
-    {
-      "employeeId": "erwan",
-      "date": "2026-07-25",
-      "available": true,
-      "mandatory": true,
-      "fixedRest": false,
-      "earliestStartMinutes": 360,
-      "latestEndMinutes": 1200,
-      "maximumMinutes": 600
-    },
-    {
-      "employeeId": "erwan",
-      "date": "2026-07-26",
       "available": false,
       "mandatory": false,
       "fixedRest": true,
-      "earliestStartMinutes": 0,
-      "latestEndMinutes": 0,
+      "earliestStartMinutes": 360,
+      "latestEndMinutes": 1200,
       "maximumMinutes": 0,
-      "unavailableReason": "closed"
-    },
-    {
-      "employeeId": "luca",
-      "date": "2026-07-20",
-      "available": true,
-      "mandatory": true,
-      "fixedRest": false,
-      "earliestStartMinutes": 360,
-      "latestEndMinutes": 1200,
-      "maximumMinutes": 600
-    },
-    {
-      "employeeId": "luca",
-      "date": "2026-07-21",
-      "available": true,
-      "mandatory": true,
-      "fixedRest": false,
-      "earliestStartMinutes": 360,
-      "latestEndMinutes": 1200,
-      "maximumMinutes": 600
-    },
-    {
-      "employeeId": "luca",
-      "date": "2026-07-22",
-      "available": true,
-      "mandatory": true,
-      "fixedRest": false,
-      "earliestStartMinutes": 360,
-      "latestEndMinutes": 1200,
-      "maximumMinutes": 600
+      "unavailableReason": "fixed-rest"
     },
     {
       "employeeId": "luca",
@@ -493,62 +500,68 @@
     {
       "employeeId": "valentin",
       "date": "2026-07-20",
-      "available": true,
-      "mandatory": true,
+      "available": false,
+      "mandatory": false,
       "fixedRest": false,
       "earliestStartMinutes": 360,
       "latestEndMinutes": 1200,
-      "maximumMinutes": 600
+      "maximumMinutes": 0,
+      "unavailableReason": "absence"
     },
     {
       "employeeId": "valentin",
       "date": "2026-07-21",
-      "available": true,
-      "mandatory": true,
+      "available": false,
+      "mandatory": false,
       "fixedRest": false,
       "earliestStartMinutes": 360,
       "latestEndMinutes": 1200,
-      "maximumMinutes": 600
+      "maximumMinutes": 0,
+      "unavailableReason": "absence"
     },
     {
       "employeeId": "valentin",
       "date": "2026-07-22",
-      "available": true,
-      "mandatory": true,
+      "available": false,
+      "mandatory": false,
       "fixedRest": false,
       "earliestStartMinutes": 360,
       "latestEndMinutes": 1200,
-      "maximumMinutes": 600
+      "maximumMinutes": 0,
+      "unavailableReason": "absence"
     },
     {
       "employeeId": "valentin",
       "date": "2026-07-23",
-      "available": true,
-      "mandatory": true,
+      "available": false,
+      "mandatory": false,
       "fixedRest": false,
       "earliestStartMinutes": 360,
       "latestEndMinutes": 1200,
-      "maximumMinutes": 600
+      "maximumMinutes": 0,
+      "unavailableReason": "absence"
     },
     {
       "employeeId": "valentin",
       "date": "2026-07-24",
-      "available": true,
-      "mandatory": true,
+      "available": false,
+      "mandatory": false,
       "fixedRest": false,
       "earliestStartMinutes": 360,
       "latestEndMinutes": 1200,
-      "maximumMinutes": 600
+      "maximumMinutes": 0,
+      "unavailableReason": "absence"
     },
     {
       "employeeId": "valentin",
       "date": "2026-07-25",
-      "available": true,
-      "mandatory": true,
+      "available": false,
+      "mandatory": false,
       "fixedRest": false,
       "earliestStartMinutes": 360,
       "latestEndMinutes": 1200,
-      "maximumMinutes": 600
+      "maximumMinutes": 0,
+      "unavailableReason": "absence"
     },
     {
       "employeeId": "valentin",
@@ -569,6 +582,7 @@
       "startMinutes": 360,
       "endMinutes": 420,
       "requiredEmployees": 2,
+      "hardMinimumEmployees": 1,
       "maximumEmployees": null
     },
     {
@@ -577,6 +591,7 @@
       "startMinutes": 420,
       "endMinutes": 480,
       "requiredEmployees": 2,
+      "hardMinimumEmployees": 1,
       "maximumEmployees": null
     },
     {
@@ -585,6 +600,7 @@
       "startMinutes": 480,
       "endMinutes": 540,
       "requiredEmployees": 1,
+      "hardMinimumEmployees": 1,
       "maximumEmployees": null
     },
     {
@@ -593,6 +609,7 @@
       "startMinutes": 540,
       "endMinutes": 600,
       "requiredEmployees": 1,
+      "hardMinimumEmployees": 1,
       "maximumEmployees": null
     },
     {
@@ -601,6 +618,7 @@
       "startMinutes": 600,
       "endMinutes": 660,
       "requiredEmployees": 3,
+      "hardMinimumEmployees": 1,
       "maximumEmployees": null
     },
     {
@@ -609,6 +627,7 @@
       "startMinutes": 660,
       "endMinutes": 720,
       "requiredEmployees": 3,
+      "hardMinimumEmployees": 1,
       "maximumEmployees": null
     },
     {
@@ -617,6 +636,7 @@
       "startMinutes": 720,
       "endMinutes": 780,
       "requiredEmployees": 1,
+      "hardMinimumEmployees": 1,
       "maximumEmployees": null
     },
     {
@@ -625,6 +645,7 @@
       "startMinutes": 780,
       "endMinutes": 840,
       "requiredEmployees": 1,
+      "hardMinimumEmployees": 1,
       "maximumEmployees": null
     },
     {
@@ -633,6 +654,7 @@
       "startMinutes": 840,
       "endMinutes": 900,
       "requiredEmployees": 1,
+      "hardMinimumEmployees": 1,
       "maximumEmployees": null
     },
     {
@@ -641,6 +663,7 @@
       "startMinutes": 900,
       "endMinutes": 960,
       "requiredEmployees": 1,
+      "hardMinimumEmployees": 1,
       "maximumEmployees": null
     },
     {
@@ -649,6 +672,7 @@
       "startMinutes": 960,
       "endMinutes": 1020,
       "requiredEmployees": 2,
+      "hardMinimumEmployees": 1,
       "maximumEmployees": null
     },
     {
@@ -657,6 +681,7 @@
       "startMinutes": 1020,
       "endMinutes": 1080,
       "requiredEmployees": 1,
+      "hardMinimumEmployees": 1,
       "maximumEmployees": null
     },
     {
@@ -665,6 +690,7 @@
       "startMinutes": 1080,
       "endMinutes": 1140,
       "requiredEmployees": 1,
+      "hardMinimumEmployees": 1,
       "maximumEmployees": null
     },
     {
@@ -673,6 +699,7 @@
       "startMinutes": 1140,
       "endMinutes": 1200,
       "requiredEmployees": 1,
+      "hardMinimumEmployees": 1,
       "maximumEmployees": null
     },
     {
@@ -681,6 +708,7 @@
       "startMinutes": 360,
       "endMinutes": 420,
       "requiredEmployees": 2,
+      "hardMinimumEmployees": 1,
       "maximumEmployees": null
     },
     {
@@ -689,6 +717,7 @@
       "startMinutes": 420,
       "endMinutes": 480,
       "requiredEmployees": 2,
+      "hardMinimumEmployees": 1,
       "maximumEmployees": null
     },
     {
@@ -697,6 +726,7 @@
       "startMinutes": 480,
       "endMinutes": 540,
       "requiredEmployees": 1,
+      "hardMinimumEmployees": 1,
       "maximumEmployees": null
     },
     {
@@ -705,6 +735,7 @@
       "startMinutes": 540,
       "endMinutes": 600,
       "requiredEmployees": 1,
+      "hardMinimumEmployees": 1,
       "maximumEmployees": null
     },
     {
@@ -713,6 +744,7 @@
       "startMinutes": 600,
       "endMinutes": 660,
       "requiredEmployees": 3,
+      "hardMinimumEmployees": 1,
       "maximumEmployees": null
     },
     {
@@ -721,6 +753,7 @@
       "startMinutes": 660,
       "endMinutes": 720,
       "requiredEmployees": 3,
+      "hardMinimumEmployees": 1,
       "maximumEmployees": null
     },
     {
@@ -729,6 +762,7 @@
       "startMinutes": 720,
       "endMinutes": 780,
       "requiredEmployees": 1,
+      "hardMinimumEmployees": 1,
       "maximumEmployees": null
     },
     {
@@ -737,6 +771,7 @@
       "startMinutes": 780,
       "endMinutes": 840,
       "requiredEmployees": 1,
+      "hardMinimumEmployees": 1,
       "maximumEmployees": null
     },
     {
@@ -745,6 +780,7 @@
       "startMinutes": 840,
       "endMinutes": 900,
       "requiredEmployees": 1,
+      "hardMinimumEmployees": 1,
       "maximumEmployees": null
     },
     {
@@ -753,6 +789,7 @@
       "startMinutes": 900,
       "endMinutes": 960,
       "requiredEmployees": 1,
+      "hardMinimumEmployees": 1,
       "maximumEmployees": null
     },
     {
@@ -761,6 +798,7 @@
       "startMinutes": 960,
       "endMinutes": 1020,
       "requiredEmployees": 2,
+      "hardMinimumEmployees": 1,
       "maximumEmployees": null
     },
     {
@@ -769,6 +807,7 @@
       "startMinutes": 1020,
       "endMinutes": 1080,
       "requiredEmployees": 1,
+      "hardMinimumEmployees": 1,
       "maximumEmployees": null
     },
     {
@@ -777,6 +816,7 @@
       "startMinutes": 1080,
       "endMinutes": 1140,
       "requiredEmployees": 1,
+      "hardMinimumEmployees": 1,
       "maximumEmployees": null
     },
     {
@@ -785,6 +825,7 @@
       "startMinutes": 1140,
       "endMinutes": 1200,
       "requiredEmployees": 1,
+      "hardMinimumEmployees": 1,
       "maximumEmployees": null
     },
     {
@@ -793,6 +834,7 @@
       "startMinutes": 360,
       "endMinutes": 420,
       "requiredEmployees": 2,
+      "hardMinimumEmployees": 1,
       "maximumEmployees": null
     },
     {
@@ -801,6 +843,7 @@
       "startMinutes": 420,
       "endMinutes": 480,
       "requiredEmployees": 2,
+      "hardMinimumEmployees": 1,
       "maximumEmployees": null
     },
     {
@@ -809,6 +852,7 @@
       "startMinutes": 480,
       "endMinutes": 540,
       "requiredEmployees": 1,
+      "hardMinimumEmployees": 1,
       "maximumEmployees": null
     },
     {
@@ -817,6 +861,7 @@
       "startMinutes": 540,
       "endMinutes": 600,
       "requiredEmployees": 1,
+      "hardMinimumEmployees": 1,
       "maximumEmployees": null
     },
     {
@@ -825,6 +870,7 @@
       "startMinutes": 600,
       "endMinutes": 660,
       "requiredEmployees": 3,
+      "hardMinimumEmployees": 1,
       "maximumEmployees": null
     },
     {
@@ -833,6 +879,7 @@
       "startMinutes": 660,
       "endMinutes": 720,
       "requiredEmployees": 3,
+      "hardMinimumEmployees": 1,
       "maximumEmployees": null
     },
     {
@@ -841,6 +888,7 @@
       "startMinutes": 720,
       "endMinutes": 780,
       "requiredEmployees": 1,
+      "hardMinimumEmployees": 1,
       "maximumEmployees": null
     },
     {
@@ -849,6 +897,7 @@
       "startMinutes": 780,
       "endMinutes": 840,
       "requiredEmployees": 1,
+      "hardMinimumEmployees": 1,
       "maximumEmployees": null
     },
     {
@@ -857,6 +906,7 @@
       "startMinutes": 840,
       "endMinutes": 900,
       "requiredEmployees": 1,
+      "hardMinimumEmployees": 1,
       "maximumEmployees": null
     },
     {
@@ -865,6 +915,7 @@
       "startMinutes": 900,
       "endMinutes": 960,
       "requiredEmployees": 1,
+      "hardMinimumEmployees": 1,
       "maximumEmployees": null
     },
     {
@@ -873,6 +924,7 @@
       "startMinutes": 960,
       "endMinutes": 1020,
       "requiredEmployees": 2,
+      "hardMinimumEmployees": 1,
       "maximumEmployees": null
     },
     {
@@ -881,6 +933,7 @@
       "startMinutes": 1020,
       "endMinutes": 1080,
       "requiredEmployees": 1,
+      "hardMinimumEmployees": 1,
       "maximumEmployees": null
     },
     {
@@ -889,6 +942,7 @@
       "startMinutes": 1080,
       "endMinutes": 1140,
       "requiredEmployees": 1,
+      "hardMinimumEmployees": 1,
       "maximumEmployees": null
     },
     {
@@ -897,6 +951,7 @@
       "startMinutes": 1140,
       "endMinutes": 1200,
       "requiredEmployees": 1,
+      "hardMinimumEmployees": 1,
       "maximumEmployees": null
     },
     {
@@ -905,6 +960,7 @@
       "startMinutes": 360,
       "endMinutes": 420,
       "requiredEmployees": 2,
+      "hardMinimumEmployees": 1,
       "maximumEmployees": null
     },
     {
@@ -913,6 +969,7 @@
       "startMinutes": 420,
       "endMinutes": 480,
       "requiredEmployees": 2,
+      "hardMinimumEmployees": 1,
       "maximumEmployees": null
     },
     {
@@ -921,6 +978,7 @@
       "startMinutes": 480,
       "endMinutes": 540,
       "requiredEmployees": 1,
+      "hardMinimumEmployees": 1,
       "maximumEmployees": null
     },
     {
@@ -929,6 +987,7 @@
       "startMinutes": 540,
       "endMinutes": 600,
       "requiredEmployees": 1,
+      "hardMinimumEmployees": 1,
       "maximumEmployees": null
     },
     {
@@ -937,6 +996,7 @@
       "startMinutes": 600,
       "endMinutes": 660,
       "requiredEmployees": 3,
+      "hardMinimumEmployees": 1,
       "maximumEmployees": null
     },
     {
@@ -945,6 +1005,7 @@
       "startMinutes": 660,
       "endMinutes": 720,
       "requiredEmployees": 3,
+      "hardMinimumEmployees": 1,
       "maximumEmployees": null
     },
     {
@@ -953,6 +1014,7 @@
       "startMinutes": 720,
       "endMinutes": 780,
       "requiredEmployees": 1,
+      "hardMinimumEmployees": 1,
       "maximumEmployees": null
     },
     {
@@ -961,6 +1023,7 @@
       "startMinutes": 780,
       "endMinutes": 840,
       "requiredEmployees": 1,
+      "hardMinimumEmployees": 1,
       "maximumEmployees": null
     },
     {
@@ -969,6 +1032,7 @@
       "startMinutes": 840,
       "endMinutes": 900,
       "requiredEmployees": 1,
+      "hardMinimumEmployees": 1,
       "maximumEmployees": null
     },
     {
@@ -977,6 +1041,7 @@
       "startMinutes": 900,
       "endMinutes": 960,
       "requiredEmployees": 1,
+      "hardMinimumEmployees": 1,
       "maximumEmployees": null
     },
     {
@@ -985,6 +1050,7 @@
       "startMinutes": 960,
       "endMinutes": 1020,
       "requiredEmployees": 2,
+      "hardMinimumEmployees": 1,
       "maximumEmployees": null
     },
     {
@@ -993,6 +1059,7 @@
       "startMinutes": 1020,
       "endMinutes": 1080,
       "requiredEmployees": 1,
+      "hardMinimumEmployees": 1,
       "maximumEmployees": null
     },
     {
@@ -1001,6 +1068,7 @@
       "startMinutes": 1080,
       "endMinutes": 1140,
       "requiredEmployees": 1,
+      "hardMinimumEmployees": 1,
       "maximumEmployees": null
     },
     {
@@ -1009,6 +1077,7 @@
       "startMinutes": 1140,
       "endMinutes": 1200,
       "requiredEmployees": 1,
+      "hardMinimumEmployees": 1,
       "maximumEmployees": null
     },
     {
@@ -1017,6 +1086,7 @@
       "startMinutes": 360,
       "endMinutes": 420,
       "requiredEmployees": 2,
+      "hardMinimumEmployees": 1,
       "maximumEmployees": null
     },
     {
@@ -1025,6 +1095,7 @@
       "startMinutes": 420,
       "endMinutes": 480,
       "requiredEmployees": 1,
+      "hardMinimumEmployees": 1,
       "maximumEmployees": null
     },
     {
@@ -1033,6 +1104,7 @@
       "startMinutes": 480,
       "endMinutes": 540,
       "requiredEmployees": 3,
+      "hardMinimumEmployees": 1,
       "maximumEmployees": null
     },
     {
@@ -1041,6 +1113,7 @@
       "startMinutes": 540,
       "endMinutes": 600,
       "requiredEmployees": 1,
+      "hardMinimumEmployees": 1,
       "maximumEmployees": null
     },
     {
@@ -1049,6 +1122,7 @@
       "startMinutes": 600,
       "endMinutes": 660,
       "requiredEmployees": 4,
+      "hardMinimumEmployees": 1,
       "maximumEmployees": null
     },
     {
@@ -1057,6 +1131,7 @@
       "startMinutes": 660,
       "endMinutes": 720,
       "requiredEmployees": 1,
+      "hardMinimumEmployees": 1,
       "maximumEmployees": null
     },
     {
@@ -1065,6 +1140,7 @@
       "startMinutes": 720,
       "endMinutes": 780,
       "requiredEmployees": 1,
+      "hardMinimumEmployees": 1,
       "maximumEmployees": null
     },
     {
@@ -1073,6 +1149,7 @@
       "startMinutes": 780,
       "endMinutes": 840,
       "requiredEmployees": 1,
+      "hardMinimumEmployees": 1,
       "maximumEmployees": null
     },
     {
@@ -1081,6 +1158,7 @@
       "startMinutes": 840,
       "endMinutes": 900,
       "requiredEmployees": 1,
+      "hardMinimumEmployees": 1,
       "maximumEmployees": null
     },
     {
@@ -1089,6 +1167,7 @@
       "startMinutes": 900,
       "endMinutes": 960,
       "requiredEmployees": 1,
+      "hardMinimumEmployees": 1,
       "maximumEmployees": null
     },
     {
@@ -1097,6 +1176,7 @@
       "startMinutes": 960,
       "endMinutes": 1020,
       "requiredEmployees": 3,
+      "hardMinimumEmployees": 1,
       "maximumEmployees": null
     },
     {
@@ -1105,6 +1185,7 @@
       "startMinutes": 1020,
       "endMinutes": 1080,
       "requiredEmployees": 2,
+      "hardMinimumEmployees": 1,
       "maximumEmployees": null
     },
     {
@@ -1113,6 +1194,7 @@
       "startMinutes": 1080,
       "endMinutes": 1140,
       "requiredEmployees": 1,
+      "hardMinimumEmployees": 1,
       "maximumEmployees": null
     },
     {
@@ -1121,6 +1203,7 @@
       "startMinutes": 1140,
       "endMinutes": 1200,
       "requiredEmployees": 1,
+      "hardMinimumEmployees": 1,
       "maximumEmployees": null
     },
     {
@@ -1129,6 +1212,7 @@
       "startMinutes": 360,
       "endMinutes": 420,
       "requiredEmployees": 4,
+      "hardMinimumEmployees": 1,
       "maximumEmployees": null
     },
     {
@@ -1137,6 +1221,7 @@
       "startMinutes": 420,
       "endMinutes": 480,
       "requiredEmployees": 1,
+      "hardMinimumEmployees": 1,
       "maximumEmployees": null
     },
     {
@@ -1145,6 +1230,7 @@
       "startMinutes": 480,
       "endMinutes": 540,
       "requiredEmployees": 1,
+      "hardMinimumEmployees": 1,
       "maximumEmployees": null
     },
     {
@@ -1153,6 +1239,7 @@
       "startMinutes": 540,
       "endMinutes": 600,
       "requiredEmployees": 1,
+      "hardMinimumEmployees": 1,
       "maximumEmployees": null
     },
     {
@@ -1161,6 +1248,7 @@
       "startMinutes": 600,
       "endMinutes": 660,
       "requiredEmployees": 1,
+      "hardMinimumEmployees": 1,
       "maximumEmployees": null
     },
     {
@@ -1169,6 +1257,7 @@
       "startMinutes": 660,
       "endMinutes": 720,
       "requiredEmployees": 4,
+      "hardMinimumEmployees": 1,
       "maximumEmployees": null
     },
     {
@@ -1177,6 +1266,7 @@
       "startMinutes": 720,
       "endMinutes": 780,
       "requiredEmployees": 1,
+      "hardMinimumEmployees": 1,
       "maximumEmployees": null
     },
     {
@@ -1185,6 +1275,7 @@
       "startMinutes": 780,
       "endMinutes": 840,
       "requiredEmployees": 1,
+      "hardMinimumEmployees": 1,
       "maximumEmployees": null
     },
     {
@@ -1193,6 +1284,7 @@
       "startMinutes": 840,
       "endMinutes": 900,
       "requiredEmployees": 1,
+      "hardMinimumEmployees": 1,
       "maximumEmployees": null
     },
     {
@@ -1201,6 +1293,7 @@
       "startMinutes": 900,
       "endMinutes": 960,
       "requiredEmployees": 1,
+      "hardMinimumEmployees": 1,
       "maximumEmployees": null
     },
     {
@@ -1209,6 +1302,7 @@
       "startMinutes": 960,
       "endMinutes": 1020,
       "requiredEmployees": 1,
+      "hardMinimumEmployees": 1,
       "maximumEmployees": null
     },
     {
@@ -1217,6 +1311,7 @@
       "startMinutes": 1020,
       "endMinutes": 1080,
       "requiredEmployees": 1,
+      "hardMinimumEmployees": 1,
       "maximumEmployees": null
     },
     {
@@ -1225,6 +1320,7 @@
       "startMinutes": 1080,
       "endMinutes": 1140,
       "requiredEmployees": 1,
+      "hardMinimumEmployees": 1,
       "maximumEmployees": null
     },
     {
@@ -1233,6 +1329,7 @@
       "startMinutes": 1140,
       "endMinutes": 1200,
       "requiredEmployees": 1,
+      "hardMinimumEmployees": 1,
       "maximumEmployees": null
     }
   ],
@@ -1244,8 +1341,8 @@
     "maximumConsecutiveWorkedDaysSource": "derived-fallback",
     "splitShiftAllowed": true,
     "maximumSplitMinutes": 90,
-    "minimumSplitMinutes": 15,
-    "maximumContinuousMinutes": null,
+    "minimumSplitMinutes": 45,
+    "maximumContinuousMinutes": 480,
     "maximumSplitsPerDay": null,
     "minimumOpeningsPerDay": 1,
     "exactClosingsPerDay": 1

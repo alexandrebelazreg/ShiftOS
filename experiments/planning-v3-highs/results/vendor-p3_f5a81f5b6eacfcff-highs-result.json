@@ -1,0 +1,346 @@
+{
+  "status": "feasible",
+  "problemFingerprint": "p3_f5a81f5b6eacfcff",
+  "solutionFingerprint": "s3_e9c6e98a1700d926",
+  "solution": {
+    "version": "v3.0.0",
+    "problemFingerprint": "p3_f5a81f5b6eacfcff",
+    "assignments": [
+      {
+        "employeeId": "arthur",
+        "date": "2026-07-20",
+        "segments": [
+          {
+            "startMinutes": 360,
+            "endMinutes": 675
+          }
+        ]
+      },
+      {
+        "employeeId": "dylan",
+        "date": "2026-07-20",
+        "segments": [
+          {
+            "startMinutes": 480,
+            "endMinutes": 720
+          }
+        ]
+      },
+      {
+        "employeeId": "erwan",
+        "date": "2026-07-20",
+        "segments": [
+          {
+            "startMinutes": 360,
+            "endMinutes": 720
+          }
+        ]
+      },
+      {
+        "employeeId": "luca",
+        "date": "2026-07-20",
+        "segments": [
+          {
+            "startMinutes": 810,
+            "endMinutes": 1200
+          }
+        ]
+      },
+      {
+        "employeeId": "valentin",
+        "date": "2026-07-20",
+        "segments": [
+          {
+            "startMinutes": 675,
+            "endMinutes": 1020
+          }
+        ]
+      },
+      {
+        "employeeId": "arthur",
+        "date": "2026-07-21",
+        "segments": [
+          {
+            "startMinutes": 840,
+            "endMinutes": 1200
+          }
+        ]
+      },
+      {
+        "employeeId": "dylan",
+        "date": "2026-07-21",
+        "segments": [
+          {
+            "startMinutes": 480,
+            "endMinutes": 720
+          }
+        ]
+      },
+      {
+        "employeeId": "erwan",
+        "date": "2026-07-21",
+        "segments": [
+          {
+            "startMinutes": 360,
+            "endMinutes": 615
+          }
+        ]
+      },
+      {
+        "employeeId": "luca",
+        "date": "2026-07-21",
+        "segments": [
+          {
+            "startMinutes": 585,
+            "endMinutes": 1020
+          }
+        ]
+      },
+      {
+        "employeeId": "valentin",
+        "date": "2026-07-21",
+        "segments": [
+          {
+            "startMinutes": 360,
+            "endMinutes": 720
+          }
+        ]
+      },
+      {
+        "employeeId": "arthur",
+        "date": "2026-07-22",
+        "segments": [
+          {
+            "startMinutes": 720,
+            "endMinutes": 1200
+          }
+        ]
+      },
+      {
+        "employeeId": "dylan",
+        "date": "2026-07-22",
+        "segments": [
+          {
+            "startMinutes": 600,
+            "endMinutes": 1020
+          }
+        ]
+      },
+      {
+        "employeeId": "erwan",
+        "date": "2026-07-22",
+        "segments": [
+          {
+            "startMinutes": 360,
+            "endMinutes": 735
+          }
+        ]
+      },
+      {
+        "employeeId": "valentin",
+        "date": "2026-07-22",
+        "segments": [
+          {
+            "startMinutes": 360,
+            "endMinutes": 735
+          }
+        ]
+      },
+      {
+        "employeeId": "dylan",
+        "date": "2026-07-23",
+        "segments": [
+          {
+            "startMinutes": 585,
+            "endMinutes": 1020
+          }
+        ]
+      },
+      {
+        "employeeId": "erwan",
+        "date": "2026-07-23",
+        "segments": [
+          {
+            "startMinutes": 360,
+            "endMinutes": 735
+          }
+        ]
+      },
+      {
+        "employeeId": "luca",
+        "date": "2026-07-23",
+        "segments": [
+          {
+            "startMinutes": 735,
+            "endMinutes": 1200
+          }
+        ]
+      },
+      {
+        "employeeId": "valentin",
+        "date": "2026-07-23",
+        "segments": [
+          {
+            "startMinutes": 360,
+            "endMinutes": 735
+          }
+        ]
+      },
+      {
+        "employeeId": "arthur",
+        "date": "2026-07-24",
+        "segments": [
+          {
+            "startMinutes": 390,
+            "endMinutes": 660
+          },
+          {
+            "startMinutes": 750,
+            "endMinutes": 1080
+          }
+        ]
+      },
+      {
+        "employeeId": "dylan",
+        "date": "2026-07-24",
+        "segments": [
+          {
+            "startMinutes": 720,
+            "endMinutes": 1200
+          }
+        ]
+      },
+      {
+        "employeeId": "erwan",
+        "date": "2026-07-24",
+        "segments": [
+          {
+            "startMinutes": 360,
+            "endMinutes": 840
+          }
+        ]
+      },
+      {
+        "employeeId": "luca",
+        "date": "2026-07-24",
+        "segments": [
+          {
+            "startMinutes": 540,
+            "endMinutes": 1020
+          }
+        ]
+      },
+      {
+        "employeeId": "valentin",
+        "date": "2026-07-24",
+        "segments": [
+          {
+            "startMinutes": 360,
+            "endMinutes": 750
+          }
+        ]
+      },
+      {
+        "employeeId": "arthur",
+        "date": "2026-07-25",
+        "segments": [
+          {
+            "startMinutes": 360,
+            "endMinutes": 810
+          }
+        ]
+      },
+      {
+        "employeeId": "dylan",
+        "date": "2026-07-25",
+        "segments": [
+          {
+            "startMinutes": 810,
+            "endMinutes": 1200
+          }
+        ]
+      },
+      {
+        "employeeId": "erwan",
+        "date": "2026-07-25",
+        "segments": [
+          {
+            "startMinutes": 360,
+            "endMinutes": 720
+          }
+        ]
+      },
+      {
+        "employeeId": "luca",
+        "date": "2026-07-25",
+        "segments": [
+          {
+            "startMinutes": 360,
+            "endMinutes": 795
+          }
+        ]
+      },
+      {
+        "employeeId": "valentin",
+        "date": "2026-07-25",
+        "segments": [
+          {
+            "startMinutes": 360,
+            "endMinutes": 720
+          }
+        ]
+      }
+    ],
+    "declaredMetrics": {
+      "totalDeficitMinutes": 0
+    }
+  },
+  "evaluation": {
+    "validHardConstraints": true,
+    "violations": [],
+    "underCoveredSlots": 0,
+    "totalDeficitMinutes": 0,
+    "dailyMinutesByDate": {
+      "2026-07-20": 1650,
+      "2026-07-21": 1650,
+      "2026-07-22": 1650,
+      "2026-07-23": 1650,
+      "2026-07-24": 2430,
+      "2026-07-25": 1995,
+      "2026-07-26": 0
+    },
+    "weeklyMinutesByEmployee": {
+      "arthur": 2205,
+      "dylan": 2205,
+      "erwan": 2205,
+      "luca": 2205,
+      "valentin": 2205
+    },
+    "openingsByEmployee": {
+      "arthur": 2,
+      "erwan": 6,
+      "luca": 1,
+      "valentin": 5
+    },
+    "closingsByEmployee": {
+      "arthur": 2,
+      "dylan": 2,
+      "erwan": 0,
+      "luca": 2,
+      "valentin": 0
+    },
+    "coverageDetails": []
+  },
+  "diagnostics": {
+    "candidateCount": 28542,
+    "selectedCandidateCount": 28,
+    "candidateGenerationSeconds": 0.1139626170001975,
+    "modelBuildSeconds": 0.7767142459997558,
+    "milpSeconds": 14.824693118000141,
+    "totalSeconds": 15.73236209400011,
+    "scipyStatus": 0,
+    "scipyMessage": "Optimization terminated successfully. (HiGHS Status 7: Optimal)",
+    "objectiveValue": 1380024.0356736411,
+    "proof": "zero-deficit-feasible; secondary-objective-optimal"
+  }
+}
