@@ -236,8 +236,40 @@ export function maxPresenceProfile(
     }
 
     // Free to start anywhere in their window, so possibly present anywhere in
-    // it. An over-count, which keeps the deficit a lower bound.
-    cover(entry.earliestStartMinutes, entry.latestEndMinutes)
+    // it — EXCEPT on the two boundary cells.
+    //
+    // The candidate generator enforces the skeleton both ways: a role held is
+    // required, a role not held is forbidden. So at the opening cell the people
+    // on the floor are exactly the designated openers, and at the closing cell
+    // exactly the designated closers. Nobody else can be there, whatever the
+    // placement does with the rest of the day.
+    //
+    // Counting them there anyway is not a loose bound, it is a FALSE one in the
+    // only place where the skeleton alone decides coverage. Measured on the
+    // sibling Python engine, which had the identical defect: a Saturday whose
+    // demand wanted four openers scored the same with three, because the
+    // missing fourth was counted present at opening regardless — and that slot
+    // was then lost in every schedule the engine built, with nothing in any
+    // diagnostic able to say why.
+    //
+    // Excluding a cell they cannot occupy removes impossible presence, so this
+    // stays an UPPER bound on presence and the score stays a LOWER bound on the
+    // deficit. The two guards keep it exact when a window genuinely reaches
+    // past a boundary: someone whose window starts before opening could hold
+    // the opening cell without starting on it, and symmetrically at closing.
+    //
+    // MEASURED HERE, AND IT CHANGED NOTHING. Drive stayed at 4 slots / 195
+    // minutes, Accueil at zero, the reduced-roster week at 25 / 2115. Unlike
+    // the Python engine, this one still allocates BEFORE choosing roles, so its
+    // skeletons are ranked against an allocation that was picked blind and the
+    // ranking is not what limits it. The fix is kept because the old bound was
+    // false and a false bound is worth removing on its own — not because it
+    // bought anything yet.
+    let earliest = entry.earliestStartMinutes
+    let latest = entry.latestEndMinutes
+    if (earliest >= opensAt) earliest = Math.max(earliest, opensAt + step)
+    if (latest <= closesAt) latest = Math.min(latest, closesAt - step)
+    cover(earliest, latest)
   }
 
   return profile
