@@ -62,6 +62,11 @@ __pycache__/
 /experiments/planning-v3-highs/results/scenario-*.json
 /experiments/planning-v3-highs/results/fast-*.json
 
+# captures de problèmes réels (PLANNING_V3_DUMP_DIR). Elles portent des noms,
+# des contrats et des disponibilités : elles ne quittent jamais la machine.
+/tmp/
+/planning-dumps/
+
 # campagne de perturbations : les problèmes comme les résultats sont regénérés
 # par `perturbations.py` depuis la seule fixture Drive canonique, qui EST
 # versionnée. Les tests TypeScript qui les auditent se désactivent proprement

@@ -70,6 +70,20 @@ export async function POST(request: Request): Promise<Response> {
     return refuse(parsed.code, parsed.message, parsed.code === "payload-too-large" ? 413 : 400)
   }
 
+  // Opt-in capture of the REAL problem, for diagnosing a real week.
+  //
+  // Every engine measurement so far has been taken on hand-built fixtures. They
+  // are faithful to the rules and say nothing about the shapes a live roster
+  // actually produces — part-time contracts, a day closed mid-week, a period
+  // spanning two weeks. When a manager reports a result the fixtures never
+  // predicted, the only way to explain it is to solve THEIR week, and the only
+  // way to solve it is to have it.
+  //
+  // Off unless `PLANNING_V3_DUMP_DIR` is set, and never on by default: a
+  // planning problem carries names, contracts and availabilities, so writing it
+  // to disk is a deliberate act, not a side effect of clicking Générer.
+  await dumpProblem(parsed.body.problem)
+
   const solveRequest = buildSolvePlanningRequest(
     parsed.body.problem,
     parsed.body.regeneration ?? null,
@@ -153,6 +167,32 @@ export async function POST(request: Request): Promise<Response> {
  * `outcome` and act on it. The client turns this into a `backend-error`
  * response itself, which is the one honest translation.
  */
+/**
+ * Write the incoming problem where an engineer can replay it.
+ *
+ * Named by fingerprint, so two clicks on the same week overwrite one file
+ * instead of filling a directory, and two clicks on DIFFERENT weeks never
+ * collide — which is precisely what the fingerprint is for.
+ *
+ * Failure here is swallowed on purpose. A full disk or a bad path must not turn
+ * a working generation into an error: this is an aid to diagnosis, and an aid
+ * that can break the thing it observes is worse than no aid.
+ */
+async function dumpProblem(problem: unknown): Promise<void> {
+  const directory = process.env.PLANNING_V3_DUMP_DIR
+  if (directory === undefined || directory.trim().length === 0) return
+  try {
+    const { mkdir, writeFile } = await import("node:fs/promises")
+    const { join } = await import("node:path")
+    const { fingerprintProblem } = await import("@/features/core/planning-v3/validator")
+    await mkdir(directory, { recursive: true })
+    const name = `${fingerprintProblem(problem as never)}-problem.json`
+    await writeFile(join(directory, name), JSON.stringify(problem, null, 2) + "\n", "utf8")
+  } catch {
+    // Deliberately silent. See above.
+  }
+}
+
 function refuse(code: string, message: string, status: number): Response {
   return Response.json({ code, message }, { status })
 }
