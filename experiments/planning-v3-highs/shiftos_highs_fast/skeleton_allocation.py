@@ -44,6 +44,7 @@ MILP then chooses from a domain where every value is placeable by construction.
 
 from __future__ import annotations
 
+import time
 from dataclasses import dataclass
 from typing import Any
 
@@ -54,7 +55,7 @@ from scipy.sparse import coo_matrix
 from shiftos_highs.demand import DemandModel
 
 from .allocation import Allocation, AllocationModel
-from .shifts import _tighten_for_rest
+from .shifts import Segment, _sector_patterns, _tighten_for_rest, sole_server_duties
 from .skeleton import Skeleton
 
 #: Enough shapes to find the best position without paying for a full
@@ -110,15 +111,47 @@ class DurationSpace:
         )
 
 
-def _prefix_demand(demand: DemandModel, date: str, step: int, origin: int, cells: int) -> list[int]:
-    """Cumulative adapted target, so covering [a, b) costs one subtraction."""
+# The problem, demand model and rules are immutable during one solve.  A cell's
+# duration options therefore depend only on its identity, tightened window and
+# role under the current skeleton.  Reusing this cache avoids probing the same
+# hundreds of split shapes again for every near-identical skeleton.
+DurationOptionCacheKey = tuple[int, int, int, int, bool, bool]
+DurationOptionCache = dict[DurationOptionCacheKey, tuple[DurationOption, ...]]
+
+
+def _check_deadline(deadline: float | None) -> None:
+    if deadline is not None and time.perf_counter() >= deadline:
+        raise TimeoutError("budget épuisé pendant l'énumération des durées")
+
+
+def _prefix_demand(
+    demand: DemandModel,
+    date: str,
+    step: int,
+    origin: int,
+    cells: int,
+    *,
+    reference: bool = False,
+) -> list[int]:
+    """Cumulative target, so covering [a, b) costs one subtraction.
+
+    `reference` picks WHICH target. A market zone reads the configured demand,
+    a single sector the adapted one, and the difference is not cosmetic: the
+    adapted target of a zone short of hands drops to zero at the end of the day,
+    so an evening position scores zero here and the allocation quietly prefers
+    durations that sit in the morning — the very concentration the placement is
+    then blamed for. The zone's placement measures itself against the reference
+    demand, and this is the same question asked earlier.
+    """
     profile = [0] * (cells + 1)
     day = demand.days.get(date)
     if day is not None:
         for interval in day.intervals:
             index = (interval.start - origin) // step
             if 0 <= index < cells:
-                profile[index + 1] = interval.adapted_target
+                profile[index + 1] = (
+                    interval.reference_required if reference else interval.adapted_target
+                )
     for index in range(1, cells + 1):
         profile[index] += profile[index - 1]
     return profile
@@ -194,6 +227,9 @@ def build_duration_space(
     model: AllocationModel,
     demand: DemandModel,
     skeleton: Skeleton,
+    *,
+    cache: DurationOptionCache | None = None,
+    deadline: float | None = None,
 ) -> DurationSpace:
     """Which durations each cell can actually work, given its role.
 
@@ -231,8 +267,17 @@ def build_duration_space(
 
     options: dict[tuple[int, int], tuple[DurationOption, ...]] = {}
     dead: list[tuple[int, int]] = []
+    # Comptoirs à serveur unique : une seule personne peut y tenir l'ouverture
+    # ET la fermeture, donc elle y est d'un bout à l'autre. Une durée qui ne
+    # laisse pas la place à cette plage — plus, le cas échéant, un second bloc
+    # d'au moins une heure ailleurs — n'est pas travaillable, et ce module doit
+    # le dire ICI. Sinon il annonce une durée que le générateur laissera vide,
+    # et le pipeline compte cette divergence comme une recherche pilotée par un
+    # mensonge sur ce qui est plaçable.
+    duties = sole_server_duties(problem)
 
     for day_index, day in enumerate(days):
+        _check_deadline(deadline)
         opens_at = int(day["opensAtMinutes"])
         closes_at = int(day["closesAtMinutes"])
         end_of_day = closes_at
@@ -241,16 +286,50 @@ def build_duration_space(
             for interval in day_demand.intervals:
                 end_of_day = max(end_of_day, interval.end)
         cells = max(0, -(-(end_of_day - opens_at) // step))
-        prefix = _prefix_demand(demand, day["date"], step, opens_at, cells)
+        multi_sector = bool(problem.get("sectors"))
+        prefix = _prefix_demand(
+            demand, day["date"], step, opens_at, cells, reference=multi_sector
+        )
+        # ── La demande que CETTE personne peut servir ───────────────────────
+        #
+        # Un salarié de zone n'est autorisé que sur deux comptoirs. Classer ses
+        # durées sur la demande de la zone entière lui compte des heures qu'il
+        # ne pourra jamais tenir : la journée paraît chargée à l'heure où c'est
+        # le comptoir du voisin qui l'est, et l'allocation lui donne des minutes
+        # là où elles ne serviront à personne. Un prefix par ENSEMBLE de
+        # comptoirs autorisés répond à la vraie question — ils sont peu nombreux
+        # et partagés, donc le cache tient en quelques entrées.
+        by_allowed: dict[tuple[str, ...], list[int]] = {}
 
-        def covered(start: int, stop: int) -> int:
+        def prefix_for(allowed: tuple[str, ...]) -> list[int]:
+            if not multi_sector or not allowed:
+                return prefix
+            known = by_allowed.get(allowed)
+            if known is not None:
+                return known
+            own = [0] * (cells + 1)
+            day_own = demand.days.get(day["date"])
+            if day_own is not None:
+                for interval in day_own.sector_intervals:
+                    if interval.sector_id not in allowed:
+                        continue
+                    index = (interval.start - opens_at) // step
+                    if 0 <= index < cells:
+                        own[index + 1] += interval.reference_required
+            for index in range(1, cells + 1):
+                own[index] += own[index - 1]
+            by_allowed[allowed] = own
+            return own
+
+        def covered(start: int, stop: int, own: list[int]) -> int:
             first = max(0, (start - opens_at) // step)
             last = min(cells, -(-(stop - opens_at) // step))
             if last <= first:
                 return 0
-            return prefix[last] - prefix[first]
+            return own[last] - own[first]
 
         for employee_index, employee in enumerate(employees):
+            _check_deadline(deadline)
             cell = model.cell(employee_index, day_index)
             if cell is None:
                 continue
@@ -264,8 +343,57 @@ def build_duration_space(
                 and int(rules.get("maximumSplitsPerDay") or 1) >= 1
             )
 
+            cache_key: DurationOptionCacheKey = (
+                employee_index,
+                day_index,
+                earliest,
+                latest,
+                opens,
+                closes,
+            )
+            if cache is not None and cache_key in cache:
+                cached = cache[cache_key]
+                if cached:
+                    options[key] = cached
+                else:
+                    dead.append(key)
+                continue
+
+            own_prefix = prefix_for(
+                tuple(
+                    sorted(str(value) for value in employee.get("allowedSectorIds") or ())
+                )
+            )
+
+            duty = duties.get((str(employee["id"]), day["date"]), ())
+            # Les deux bornes que la plage forcée impose, calculées une fois.
+            # Une forme qui ne l'enveloppe pas ne peut admettre aucune lecture —
+            # le vérifier ici coûte deux comparaisons, alors qu'interroger le
+            # générateur de motifs coûtait cinquante fois le reste du sondage :
+            # dix secondes et demie sur une semaine réelle, contre deux dixièmes
+            # pour tout le travail restant.
+            must_start_by = min((opens for _s, opens, _c in duty), default=None)
+            must_end_after = max((closes for _s, _o, closes in duty), default=None)
+
+            def shapes_into_sectors(segments: tuple[Segment, ...]) -> bool:
+                """La forme admet-elle une lecture par rayon ?
+
+                Filtre arithmétique d'abord, générateur ensuite — et c'est bien
+                la MÊME fonction que lui qui tranche au bout, sans quoi les deux
+                lectures des règles pourraient diverger. Sans contrainte forcée,
+                la question est déjà tranchée ailleurs et on ne la repose pas.
+                """
+                if not duty:
+                    return True
+                if must_start_by is not None and segments[0].start > must_start_by:
+                    return False
+                if must_end_after is not None and segments[-1].end < must_end_after:
+                    return False
+                return bool(_sector_patterns(problem, employee, day, segments, step, duty))
+
             found: list[DurationOption] = []
             for minutes in range(cell.minimum, cell.maximum + 1, step):
+                _check_deadline(deadline)
                 starts = 0
                 best = 0
 
@@ -280,12 +408,18 @@ def build_duration_space(
                         end = start + minutes
                         if start < earliest or end > latest:
                             continue
-                        if (start == opens_at) != opens:
+                        if opens and start != opens_at:
                             continue
-                        if (end == closes_at) != closes:
+                        if closes and end != closes_at:
+                            continue
+                        if start == opens_at and not employee["canOpen"]:
+                            continue
+                        if end == closes_at and not employee["canClose"]:
+                            continue
+                        if not shapes_into_sectors((Segment(start, end),)):
                             continue
                         starts += 1
-                        best = max(best, covered(start, end))
+                        best = max(best, covered(start, end, own_prefix))
 
                 forced = minutes > continuous_cap
                 if may_split and forced:
@@ -297,6 +431,7 @@ def build_duration_space(
                     gap_high = int(maximum_gap) if maximum_gap is not None else latest - earliest
                     gap_low = max(minimum_gap, step)
                     shapes = 0
+                    probes = 0
                     for first in range(
                         minimum_segment, min(continuous_cap, minutes - minimum_segment) + 1, step
                     ):
@@ -306,17 +441,29 @@ def build_duration_space(
                         for gap in range(gap_low, gap_high + 1, step):
                             span = minutes + gap
                             for start in range(earliest, latest - span + 1, step):
+                                probes += 1
+                                if probes % 256 == 0:
+                                    _check_deadline(deadline)
                                 first_end = start + first
                                 second_start = first_end + gap
                                 end = second_start + second
-                                if (start == opens_at) != opens:
+                                if opens and start != opens_at:
                                     continue
-                                if (end == closes_at) != closes:
+                                if closes and end != closes_at:
+                                    continue
+                                if start == opens_at and not employee["canOpen"]:
+                                    continue
+                                if end == closes_at and not employee["canClose"]:
+                                    continue
+                                if not shapes_into_sectors(
+                                    (Segment(start, first_end), Segment(second_start, end))
+                                ):
                                     continue
                                 starts += 1
                                 best = max(
                                     best,
-                                    covered(start, first_end) + covered(second_start, end),
+                                    covered(start, first_end, own_prefix)
+                                    + covered(second_start, end, own_prefix),
                                 )
                                 shapes += 1
                                 if shapes >= SHAPE_PROBE_CAP:
@@ -333,8 +480,11 @@ def build_duration_space(
                         )
                     )
 
-            if found:
-                options[key] = tuple(found)
+            cached_options = tuple(found)
+            if cache is not None:
+                cache[cache_key] = cached_options
+            if cached_options:
+                options[key] = cached_options
             else:
                 dead.append(key)
 
@@ -354,6 +504,9 @@ def solve_for_skeleton(
     origin: str,
     coverage_weight: float = 10.0,
     freedom_weight: float = 1.0,
+    #: Combinaisons de durées dont le placement a PROUVÉ qu'aucun horaire ne les
+    #: réalise. Chacune interdit exactement son ensemble, jamais davantage.
+    forbidden: tuple[tuple[tuple[int, int, int], ...], ...] = (),
 ) -> Allocation | None:
     """One small MILP: choose a duration per cell, from the workable ones only.
 
@@ -391,6 +544,11 @@ def solve_for_skeleton(
         return None
 
     total = len(columns)
+    day_deviation: dict[int, int] = {}
+    for day_index, day in enumerate(days):
+        if day.get("budgetMode", "exact") == "target":
+            day_deviation[day_index] = total + len(day_deviation)
+    total += len(day_deviation)
     rows: list[int] = []
     cols: list[int] = []
     values: list[float] = []
@@ -426,7 +584,32 @@ def solve_for_skeleton(
             for (_employee, index, minutes), column in columns.items()
             if index == day_index
         }
-        add(coefficients, budget / step, budget / step)
+        if day_index not in day_deviation:
+            add(coefficients, budget / step, budget / step)
+        else:
+            dev = day_deviation[day_index]
+            add({**coefficients, dev: -1.0}, -np.inf, budget / step)
+            add({column: -value for column, value in coefficients.items()} | {dev: -1.0}, -np.inf, -budget / step)
+
+    # ── Ce que le placement a déjà réfuté ───────────────────────────────────
+    #
+    # Le moteur essayait des allocations jusqu'à épuisement du budget sans rien
+    # RETENIR de ses échecs : sur une semaine réelle, cinquante-deux vecteurs de
+    # durées ont été proposés et cinquante-deux placements les ont prouvés
+    # irréalisables, sans qu'aucune de ces preuves ne rétrécisse la recherche.
+    #
+    # Une coupe « no-good » corrige cela. Elle interdit EXACTEMENT la
+    # combinaison réfutée — au moins une de ses durées doit changer — et rien de
+    # plus : une coupe plus large retirerait des allocations que personne n'a
+    # réfutées, et pourrait cacher la seule qui marche.
+    for cut in forbidden:
+        columns_of_cut = [
+            columns[(employee_index, day_index, minutes)]
+            for employee_index, day_index, minutes in cut
+            if (employee_index, day_index, minutes) in columns
+        ]
+        if len(columns_of_cut) == len(cut) and columns_of_cut:
+            add({column: 1.0 for column in columns_of_cut}, -np.inf, float(len(cut) - 1))
 
     # ── The bridge from opening to closing ──────────────────────────────────
     #
@@ -472,10 +655,21 @@ def solve_for_skeleton(
             add(coefficients, floor, np.inf)
 
     objective = np.zeros(total)
+    upper_bounds = np.ones(total)
+    integrality = np.ones(total, dtype=np.int8)
+    for day_index, column in day_deviation.items():
+        maximum = sum(
+            max((option.minutes for option in space.options.get((employee_index, day_index), ())), default=0)
+            for employee_index in range(len(employees))
+        )
+        upper_bounds[column] = (maximum + int(days[day_index]["budgetMinutes"])) / step + 1.0
+        integrality[column] = 0
+        objective[column] = 1.0
     peak_demand = max(
         (option.covered_demand for entries in space.options.values() for option in entries),
         default=0,
     )
+
     for key in sorted(space.options):
         for option in space.options[key]:
             column = columns[(key[0], key[1], option.minutes)]
@@ -489,8 +683,8 @@ def solve_for_skeleton(
 
     result = milp(
         objective,
-        integrality=np.ones(total, dtype=np.int8),
-        bounds=Bounds(np.zeros(total), np.ones(total)),
+        integrality=integrality,
+        bounds=Bounds(np.zeros(total), upper_bounds),
         constraints=LinearConstraint(
             coo_matrix((values, (rows, cols)), shape=(len(lower), total)).tocsr(),
             np.array(lower),
