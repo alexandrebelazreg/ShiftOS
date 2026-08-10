@@ -1,0 +1,5184 @@
+{
+  "version": "planning-problem-v3/1",
+  "planningId": "zone-marche-avec-marge",
+  "sectorId": "charcuterie",
+  "sectors": [
+    {
+      "id": "charcuterie",
+      "name": "Charcuterie",
+      "days": [
+        {
+          "date": "2026-08-03",
+          "closed": false,
+          "opensAtMinutes": 420,
+          "closesAtMinutes": 1170,
+          "minimumOpenings": 1,
+          "exactClosings": 1
+        },
+        {
+          "date": "2026-08-04",
+          "closed": false,
+          "opensAtMinutes": 420,
+          "closesAtMinutes": 1170,
+          "minimumOpenings": 1,
+          "exactClosings": 1
+        },
+        {
+          "date": "2026-08-05",
+          "closed": false,
+          "opensAtMinutes": 420,
+          "closesAtMinutes": 1170,
+          "minimumOpenings": 1,
+          "exactClosings": 1
+        },
+        {
+          "date": "2026-08-06",
+          "closed": false,
+          "opensAtMinutes": 420,
+          "closesAtMinutes": 1170,
+          "minimumOpenings": 1,
+          "exactClosings": 1
+        },
+        {
+          "date": "2026-08-07",
+          "closed": false,
+          "opensAtMinutes": 420,
+          "closesAtMinutes": 1170,
+          "minimumOpenings": 1,
+          "exactClosings": 1
+        },
+        {
+          "date": "2026-08-08",
+          "closed": false,
+          "opensAtMinutes": 420,
+          "closesAtMinutes": 1170,
+          "minimumOpenings": 1,
+          "exactClosings": 1
+        }
+      ]
+    },
+    {
+      "id": "fromage",
+      "name": "Fromage",
+      "days": [
+        {
+          "date": "2026-08-03",
+          "closed": false,
+          "opensAtMinutes": 480,
+          "closesAtMinutes": 1140,
+          "minimumOpenings": 1,
+          "exactClosings": 1
+        },
+        {
+          "date": "2026-08-04",
+          "closed": false,
+          "opensAtMinutes": 480,
+          "closesAtMinutes": 1140,
+          "minimumOpenings": 1,
+          "exactClosings": 1
+        },
+        {
+          "date": "2026-08-05",
+          "closed": false,
+          "opensAtMinutes": 480,
+          "closesAtMinutes": 1140,
+          "minimumOpenings": 1,
+          "exactClosings": 1
+        },
+        {
+          "date": "2026-08-06",
+          "closed": false,
+          "opensAtMinutes": 480,
+          "closesAtMinutes": 1140,
+          "minimumOpenings": 1,
+          "exactClosings": 1
+        },
+        {
+          "date": "2026-08-07",
+          "closed": false,
+          "opensAtMinutes": 480,
+          "closesAtMinutes": 1140,
+          "minimumOpenings": 1,
+          "exactClosings": 1
+        },
+        {
+          "date": "2026-08-08",
+          "closed": false,
+          "opensAtMinutes": 480,
+          "closesAtMinutes": 1140,
+          "minimumOpenings": 1,
+          "exactClosings": 1
+        }
+      ]
+    },
+    {
+      "id": "poisson",
+      "name": "Poisson",
+      "days": [
+        {
+          "date": "2026-08-03",
+          "closed": true,
+          "opensAtMinutes": 450,
+          "closesAtMinutes": 780,
+          "minimumOpenings": 0,
+          "exactClosings": 0
+        },
+        {
+          "date": "2026-08-04",
+          "closed": false,
+          "opensAtMinutes": 450,
+          "closesAtMinutes": 780,
+          "minimumOpenings": 1,
+          "exactClosings": 1
+        },
+        {
+          "date": "2026-08-05",
+          "closed": false,
+          "opensAtMinutes": 450,
+          "closesAtMinutes": 780,
+          "minimumOpenings": 1,
+          "exactClosings": 1
+        },
+        {
+          "date": "2026-08-06",
+          "closed": false,
+          "opensAtMinutes": 450,
+          "closesAtMinutes": 780,
+          "minimumOpenings": 1,
+          "exactClosings": 1
+        },
+        {
+          "date": "2026-08-07",
+          "closed": false,
+          "opensAtMinutes": 450,
+          "closesAtMinutes": 780,
+          "minimumOpenings": 1,
+          "exactClosings": 1
+        },
+        {
+          "date": "2026-08-08",
+          "closed": false,
+          "opensAtMinutes": 450,
+          "closesAtMinutes": 780,
+          "minimumOpenings": 1,
+          "exactClosings": 1
+        }
+      ]
+    },
+    {
+      "id": "traiteur",
+      "name": "Traiteur",
+      "days": [
+        {
+          "date": "2026-08-03",
+          "closed": false,
+          "opensAtMinutes": 540,
+          "closesAtMinutes": 1140,
+          "minimumOpenings": 1,
+          "exactClosings": 1
+        },
+        {
+          "date": "2026-08-04",
+          "closed": false,
+          "opensAtMinutes": 540,
+          "closesAtMinutes": 1140,
+          "minimumOpenings": 1,
+          "exactClosings": 1
+        },
+        {
+          "date": "2026-08-05",
+          "closed": false,
+          "opensAtMinutes": 540,
+          "closesAtMinutes": 1140,
+          "minimumOpenings": 1,
+          "exactClosings": 1
+        },
+        {
+          "date": "2026-08-06",
+          "closed": false,
+          "opensAtMinutes": 540,
+          "closesAtMinutes": 1140,
+          "minimumOpenings": 1,
+          "exactClosings": 1
+        },
+        {
+          "date": "2026-08-07",
+          "closed": false,
+          "opensAtMinutes": 540,
+          "closesAtMinutes": 1140,
+          "minimumOpenings": 1,
+          "exactClosings": 1
+        },
+        {
+          "date": "2026-08-08",
+          "closed": false,
+          "opensAtMinutes": 540,
+          "closesAtMinutes": 1140,
+          "minimumOpenings": 1,
+          "exactClosings": 1
+        }
+      ]
+    }
+  ],
+  "period": {
+    "start": "2026-08-03",
+    "end": "2026-08-08"
+  },
+  "timeStepMinutes": 15,
+  "employees": [
+    {
+      "id": "daniel",
+      "firstName": "Daniel",
+      "lastName": "Marché",
+      "contractMinutes": 2295,
+      "workingDays": [
+        "monday",
+        "tuesday",
+        "thursday",
+        "friday",
+        "saturday"
+      ],
+      "fixedRestDays": [
+        "sunday",
+        "wednesday"
+      ],
+      "minimumDailyMinutes": 240,
+      "maximumDailyMinutes": 600,
+      "canOpen": true,
+      "canClose": true,
+      "canSplitShift": true,
+      "maximumOpenings": null,
+      "maximumClosings": null,
+      "prefersOpening": false,
+      "prefersClosing": false,
+      "allowedSectorIds": [
+        "charcuterie",
+        "fromage"
+      ]
+    },
+    {
+      "id": "aurelie",
+      "firstName": "Aurelie",
+      "lastName": "Marché",
+      "contractMinutes": 2295,
+      "workingDays": [
+        "monday",
+        "tuesday",
+        "wednesday",
+        "friday",
+        "saturday"
+      ],
+      "fixedRestDays": [
+        "sunday",
+        "thursday"
+      ],
+      "minimumDailyMinutes": 240,
+      "maximumDailyMinutes": 600,
+      "canOpen": true,
+      "canClose": true,
+      "canSplitShift": false,
+      "maximumOpenings": null,
+      "maximumClosings": null,
+      "prefersOpening": false,
+      "prefersClosing": false,
+      "allowedSectorIds": [
+        "poisson",
+        "charcuterie"
+      ]
+    },
+    {
+      "id": "marc",
+      "firstName": "Marc",
+      "lastName": "Marché",
+      "contractMinutes": 2280,
+      "workingDays": [
+        "monday",
+        "wednesday",
+        "thursday",
+        "friday",
+        "saturday"
+      ],
+      "fixedRestDays": [
+        "sunday",
+        "tuesday"
+      ],
+      "minimumDailyMinutes": 240,
+      "maximumDailyMinutes": 600,
+      "canOpen": true,
+      "canClose": true,
+      "canSplitShift": true,
+      "maximumOpenings": null,
+      "maximumClosings": null,
+      "prefersOpening": false,
+      "prefersClosing": false,
+      "allowedSectorIds": [
+        "fromage",
+        "traiteur"
+      ]
+    },
+    {
+      "id": "sophie",
+      "firstName": "Sophie",
+      "lastName": "Marché",
+      "contractMinutes": 2280,
+      "workingDays": [
+        "tuesday",
+        "wednesday",
+        "thursday",
+        "friday",
+        "saturday"
+      ],
+      "fixedRestDays": [
+        "monday",
+        "sunday"
+      ],
+      "minimumDailyMinutes": 240,
+      "maximumDailyMinutes": 600,
+      "canOpen": true,
+      "canClose": true,
+      "canSplitShift": false,
+      "maximumOpenings": null,
+      "maximumClosings": null,
+      "prefersOpening": false,
+      "prefersClosing": false,
+      "allowedSectorIds": [
+        "traiteur",
+        "charcuterie"
+      ]
+    },
+    {
+      "id": "luca",
+      "firstName": "Luca",
+      "lastName": "Marché",
+      "contractMinutes": 2295,
+      "workingDays": [
+        "monday",
+        "tuesday",
+        "wednesday",
+        "thursday",
+        "saturday"
+      ],
+      "fixedRestDays": [
+        "friday",
+        "sunday"
+      ],
+      "minimumDailyMinutes": 240,
+      "maximumDailyMinutes": 600,
+      "canOpen": true,
+      "canClose": true,
+      "canSplitShift": false,
+      "maximumOpenings": null,
+      "maximumClosings": null,
+      "prefersOpening": false,
+      "prefersClosing": false,
+      "allowedSectorIds": [
+        "charcuterie",
+        "poisson"
+      ]
+    },
+    {
+      "id": "ines",
+      "firstName": "Ines",
+      "lastName": "Marché",
+      "contractMinutes": 2295,
+      "workingDays": [
+        "monday",
+        "tuesday",
+        "thursday",
+        "friday",
+        "saturday"
+      ],
+      "fixedRestDays": [
+        "sunday",
+        "wednesday"
+      ],
+      "minimumDailyMinutes": 240,
+      "maximumDailyMinutes": 600,
+      "canOpen": false,
+      "canClose": true,
+      "canSplitShift": false,
+      "maximumOpenings": null,
+      "maximumClosings": null,
+      "prefersOpening": false,
+      "prefersClosing": false,
+      "allowedSectorIds": [
+        "fromage",
+        "traiteur"
+      ]
+    },
+    {
+      "id": "karim",
+      "firstName": "Karim",
+      "lastName": "Marché",
+      "contractMinutes": 2295,
+      "workingDays": [
+        "monday",
+        "tuesday",
+        "wednesday",
+        "thursday",
+        "friday"
+      ],
+      "fixedRestDays": [
+        "saturday",
+        "sunday"
+      ],
+      "minimumDailyMinutes": 240,
+      "maximumDailyMinutes": 600,
+      "canOpen": true,
+      "canClose": true,
+      "canSplitShift": true,
+      "maximumOpenings": null,
+      "maximumClosings": null,
+      "prefersOpening": false,
+      "prefersClosing": false,
+      "allowedSectorIds": [
+        "traiteur",
+        "fromage"
+      ]
+    }
+  ],
+  "days": [
+    {
+      "date": "2026-08-03",
+      "weekDay": "monday",
+      "weekKey": "2026-W32",
+      "closed": false,
+      "opensAtMinutes": 420,
+      "closesAtMinutes": 1170,
+      "budgetMinutes": 2265
+    },
+    {
+      "date": "2026-08-04",
+      "weekDay": "tuesday",
+      "weekKey": "2026-W32",
+      "closed": false,
+      "opensAtMinutes": 420,
+      "closesAtMinutes": 1170,
+      "budgetMinutes": 2640
+    },
+    {
+      "date": "2026-08-05",
+      "weekDay": "wednesday",
+      "weekKey": "2026-W32",
+      "closed": false,
+      "opensAtMinutes": 420,
+      "closesAtMinutes": 1170,
+      "budgetMinutes": 2640
+    },
+    {
+      "date": "2026-08-06",
+      "weekDay": "thursday",
+      "weekKey": "2026-W32",
+      "closed": false,
+      "opensAtMinutes": 420,
+      "closesAtMinutes": 1170,
+      "budgetMinutes": 2640
+    },
+    {
+      "date": "2026-08-07",
+      "weekDay": "friday",
+      "weekKey": "2026-W32",
+      "closed": false,
+      "opensAtMinutes": 420,
+      "closesAtMinutes": 1170,
+      "budgetMinutes": 2775
+    },
+    {
+      "date": "2026-08-08",
+      "weekDay": "saturday",
+      "weekKey": "2026-W32",
+      "closed": false,
+      "opensAtMinutes": 420,
+      "closesAtMinutes": 1170,
+      "budgetMinutes": 3075
+    }
+  ],
+  "employeeDays": [
+    {
+      "employeeId": "daniel",
+      "date": "2026-08-03",
+      "available": true,
+      "mandatory": true,
+      "fixedRest": false,
+      "earliestStartMinutes": 420,
+      "latestEndMinutes": 1170,
+      "maximumMinutes": 600
+    },
+    {
+      "employeeId": "daniel",
+      "date": "2026-08-04",
+      "available": true,
+      "mandatory": true,
+      "fixedRest": false,
+      "earliestStartMinutes": 420,
+      "latestEndMinutes": 1170,
+      "maximumMinutes": 600
+    },
+    {
+      "employeeId": "daniel",
+      "date": "2026-08-05",
+      "available": false,
+      "mandatory": false,
+      "fixedRest": true,
+      "earliestStartMinutes": 420,
+      "latestEndMinutes": 1170,
+      "maximumMinutes": 0
+    },
+    {
+      "employeeId": "daniel",
+      "date": "2026-08-06",
+      "available": true,
+      "mandatory": true,
+      "fixedRest": false,
+      "earliestStartMinutes": 420,
+      "latestEndMinutes": 1170,
+      "maximumMinutes": 600
+    },
+    {
+      "employeeId": "daniel",
+      "date": "2026-08-07",
+      "available": true,
+      "mandatory": true,
+      "fixedRest": false,
+      "earliestStartMinutes": 420,
+      "latestEndMinutes": 1170,
+      "maximumMinutes": 600
+    },
+    {
+      "employeeId": "daniel",
+      "date": "2026-08-08",
+      "available": true,
+      "mandatory": true,
+      "fixedRest": false,
+      "earliestStartMinutes": 420,
+      "latestEndMinutes": 1170,
+      "maximumMinutes": 600
+    },
+    {
+      "employeeId": "aurelie",
+      "date": "2026-08-03",
+      "available": true,
+      "mandatory": true,
+      "fixedRest": false,
+      "earliestStartMinutes": 420,
+      "latestEndMinutes": 1170,
+      "maximumMinutes": 600
+    },
+    {
+      "employeeId": "aurelie",
+      "date": "2026-08-04",
+      "available": true,
+      "mandatory": true,
+      "fixedRest": false,
+      "earliestStartMinutes": 420,
+      "latestEndMinutes": 1170,
+      "maximumMinutes": 600
+    },
+    {
+      "employeeId": "aurelie",
+      "date": "2026-08-05",
+      "available": true,
+      "mandatory": true,
+      "fixedRest": false,
+      "earliestStartMinutes": 420,
+      "latestEndMinutes": 1170,
+      "maximumMinutes": 600
+    },
+    {
+      "employeeId": "aurelie",
+      "date": "2026-08-06",
+      "available": false,
+      "mandatory": false,
+      "fixedRest": true,
+      "earliestStartMinutes": 420,
+      "latestEndMinutes": 1170,
+      "maximumMinutes": 0
+    },
+    {
+      "employeeId": "aurelie",
+      "date": "2026-08-07",
+      "available": true,
+      "mandatory": true,
+      "fixedRest": false,
+      "earliestStartMinutes": 420,
+      "latestEndMinutes": 1170,
+      "maximumMinutes": 600
+    },
+    {
+      "employeeId": "aurelie",
+      "date": "2026-08-08",
+      "available": true,
+      "mandatory": true,
+      "fixedRest": false,
+      "earliestStartMinutes": 420,
+      "latestEndMinutes": 1170,
+      "maximumMinutes": 600
+    },
+    {
+      "employeeId": "marc",
+      "date": "2026-08-03",
+      "available": true,
+      "mandatory": true,
+      "fixedRest": false,
+      "earliestStartMinutes": 420,
+      "latestEndMinutes": 1170,
+      "maximumMinutes": 600
+    },
+    {
+      "employeeId": "marc",
+      "date": "2026-08-04",
+      "available": false,
+      "mandatory": false,
+      "fixedRest": true,
+      "earliestStartMinutes": 420,
+      "latestEndMinutes": 1170,
+      "maximumMinutes": 0
+    },
+    {
+      "employeeId": "marc",
+      "date": "2026-08-05",
+      "available": true,
+      "mandatory": true,
+      "fixedRest": false,
+      "earliestStartMinutes": 420,
+      "latestEndMinutes": 1170,
+      "maximumMinutes": 600
+    },
+    {
+      "employeeId": "marc",
+      "date": "2026-08-06",
+      "available": true,
+      "mandatory": true,
+      "fixedRest": false,
+      "earliestStartMinutes": 420,
+      "latestEndMinutes": 1170,
+      "maximumMinutes": 600
+    },
+    {
+      "employeeId": "marc",
+      "date": "2026-08-07",
+      "available": true,
+      "mandatory": true,
+      "fixedRest": false,
+      "earliestStartMinutes": 420,
+      "latestEndMinutes": 1170,
+      "maximumMinutes": 600
+    },
+    {
+      "employeeId": "marc",
+      "date": "2026-08-08",
+      "available": true,
+      "mandatory": true,
+      "fixedRest": false,
+      "earliestStartMinutes": 420,
+      "latestEndMinutes": 1170,
+      "maximumMinutes": 600
+    },
+    {
+      "employeeId": "sophie",
+      "date": "2026-08-03",
+      "available": false,
+      "mandatory": false,
+      "fixedRest": true,
+      "earliestStartMinutes": 420,
+      "latestEndMinutes": 1170,
+      "maximumMinutes": 0
+    },
+    {
+      "employeeId": "sophie",
+      "date": "2026-08-04",
+      "available": true,
+      "mandatory": true,
+      "fixedRest": false,
+      "earliestStartMinutes": 420,
+      "latestEndMinutes": 1170,
+      "maximumMinutes": 600
+    },
+    {
+      "employeeId": "sophie",
+      "date": "2026-08-05",
+      "available": true,
+      "mandatory": true,
+      "fixedRest": false,
+      "earliestStartMinutes": 420,
+      "latestEndMinutes": 1170,
+      "maximumMinutes": 600
+    },
+    {
+      "employeeId": "sophie",
+      "date": "2026-08-06",
+      "available": true,
+      "mandatory": true,
+      "fixedRest": false,
+      "earliestStartMinutes": 420,
+      "latestEndMinutes": 1170,
+      "maximumMinutes": 600
+    },
+    {
+      "employeeId": "sophie",
+      "date": "2026-08-07",
+      "available": true,
+      "mandatory": true,
+      "fixedRest": false,
+      "earliestStartMinutes": 420,
+      "latestEndMinutes": 1170,
+      "maximumMinutes": 600
+    },
+    {
+      "employeeId": "sophie",
+      "date": "2026-08-08",
+      "available": true,
+      "mandatory": true,
+      "fixedRest": false,
+      "earliestStartMinutes": 420,
+      "latestEndMinutes": 1170,
+      "maximumMinutes": 600
+    },
+    {
+      "employeeId": "luca",
+      "date": "2026-08-03",
+      "available": true,
+      "mandatory": true,
+      "fixedRest": false,
+      "earliestStartMinutes": 420,
+      "latestEndMinutes": 1170,
+      "maximumMinutes": 600
+    },
+    {
+      "employeeId": "luca",
+      "date": "2026-08-04",
+      "available": true,
+      "mandatory": true,
+      "fixedRest": false,
+      "earliestStartMinutes": 420,
+      "latestEndMinutes": 1170,
+      "maximumMinutes": 600
+    },
+    {
+      "employeeId": "luca",
+      "date": "2026-08-05",
+      "available": true,
+      "mandatory": true,
+      "fixedRest": false,
+      "earliestStartMinutes": 420,
+      "latestEndMinutes": 1170,
+      "maximumMinutes": 600
+    },
+    {
+      "employeeId": "luca",
+      "date": "2026-08-06",
+      "available": true,
+      "mandatory": true,
+      "fixedRest": false,
+      "earliestStartMinutes": 420,
+      "latestEndMinutes": 1170,
+      "maximumMinutes": 600
+    },
+    {
+      "employeeId": "luca",
+      "date": "2026-08-07",
+      "available": false,
+      "mandatory": false,
+      "fixedRest": true,
+      "earliestStartMinutes": 420,
+      "latestEndMinutes": 1170,
+      "maximumMinutes": 0
+    },
+    {
+      "employeeId": "luca",
+      "date": "2026-08-08",
+      "available": true,
+      "mandatory": true,
+      "fixedRest": false,
+      "earliestStartMinutes": 420,
+      "latestEndMinutes": 1170,
+      "maximumMinutes": 600
+    },
+    {
+      "employeeId": "ines",
+      "date": "2026-08-03",
+      "available": true,
+      "mandatory": true,
+      "fixedRest": false,
+      "earliestStartMinutes": 420,
+      "latestEndMinutes": 1170,
+      "maximumMinutes": 600
+    },
+    {
+      "employeeId": "ines",
+      "date": "2026-08-04",
+      "available": true,
+      "mandatory": true,
+      "fixedRest": false,
+      "earliestStartMinutes": 420,
+      "latestEndMinutes": 1170,
+      "maximumMinutes": 600
+    },
+    {
+      "employeeId": "ines",
+      "date": "2026-08-05",
+      "available": false,
+      "mandatory": false,
+      "fixedRest": true,
+      "earliestStartMinutes": 420,
+      "latestEndMinutes": 1170,
+      "maximumMinutes": 0
+    },
+    {
+      "employeeId": "ines",
+      "date": "2026-08-06",
+      "available": true,
+      "mandatory": true,
+      "fixedRest": false,
+      "earliestStartMinutes": 420,
+      "latestEndMinutes": 1170,
+      "maximumMinutes": 600
+    },
+    {
+      "employeeId": "ines",
+      "date": "2026-08-07",
+      "available": true,
+      "mandatory": true,
+      "fixedRest": false,
+      "earliestStartMinutes": 420,
+      "latestEndMinutes": 1170,
+      "maximumMinutes": 600
+    },
+    {
+      "employeeId": "ines",
+      "date": "2026-08-08",
+      "available": true,
+      "mandatory": true,
+      "fixedRest": false,
+      "earliestStartMinutes": 420,
+      "latestEndMinutes": 1170,
+      "maximumMinutes": 600
+    },
+    {
+      "employeeId": "karim",
+      "date": "2026-08-03",
+      "available": true,
+      "mandatory": true,
+      "fixedRest": false,
+      "earliestStartMinutes": 420,
+      "latestEndMinutes": 1170,
+      "maximumMinutes": 600
+    },
+    {
+      "employeeId": "karim",
+      "date": "2026-08-04",
+      "available": true,
+      "mandatory": true,
+      "fixedRest": false,
+      "earliestStartMinutes": 420,
+      "latestEndMinutes": 1170,
+      "maximumMinutes": 600
+    },
+    {
+      "employeeId": "karim",
+      "date": "2026-08-05",
+      "available": true,
+      "mandatory": true,
+      "fixedRest": false,
+      "earliestStartMinutes": 420,
+      "latestEndMinutes": 1170,
+      "maximumMinutes": 600
+    },
+    {
+      "employeeId": "karim",
+      "date": "2026-08-06",
+      "available": true,
+      "mandatory": true,
+      "fixedRest": false,
+      "earliestStartMinutes": 420,
+      "latestEndMinutes": 1170,
+      "maximumMinutes": 600
+    },
+    {
+      "employeeId": "karim",
+      "date": "2026-08-07",
+      "available": true,
+      "mandatory": true,
+      "fixedRest": false,
+      "earliestStartMinutes": 420,
+      "latestEndMinutes": 1170,
+      "maximumMinutes": 600
+    },
+    {
+      "employeeId": "karim",
+      "date": "2026-08-08",
+      "available": false,
+      "mandatory": false,
+      "fixedRest": true,
+      "earliestStartMinutes": 420,
+      "latestEndMinutes": 1170,
+      "maximumMinutes": 0
+    }
+  ],
+  "demandSlots": [
+    {
+      "id": "req_charcuterie_2026-08-03_0420",
+      "sectorId": "charcuterie",
+      "date": "2026-08-03",
+      "startMinutes": 420,
+      "endMinutes": 450,
+      "requiredEmployees": 1,
+      "maximumEmployees": null
+    },
+    {
+      "id": "req_charcuterie_2026-08-03_0450",
+      "sectorId": "charcuterie",
+      "date": "2026-08-03",
+      "startMinutes": 450,
+      "endMinutes": 480,
+      "requiredEmployees": 1,
+      "maximumEmployees": null
+    },
+    {
+      "id": "req_charcuterie_2026-08-03_0480",
+      "sectorId": "charcuterie",
+      "date": "2026-08-03",
+      "startMinutes": 480,
+      "endMinutes": 510,
+      "requiredEmployees": 1,
+      "hardMinimumEmployees": 1,
+      "maximumEmployees": null
+    },
+    {
+      "id": "req_charcuterie_2026-08-03_0510",
+      "sectorId": "charcuterie",
+      "date": "2026-08-03",
+      "startMinutes": 510,
+      "endMinutes": 540,
+      "requiredEmployees": 1,
+      "hardMinimumEmployees": 1,
+      "maximumEmployees": null
+    },
+    {
+      "id": "req_charcuterie_2026-08-03_0540",
+      "sectorId": "charcuterie",
+      "date": "2026-08-03",
+      "startMinutes": 540,
+      "endMinutes": 570,
+      "requiredEmployees": 1,
+      "hardMinimumEmployees": 1,
+      "maximumEmployees": null
+    },
+    {
+      "id": "req_charcuterie_2026-08-03_0570",
+      "sectorId": "charcuterie",
+      "date": "2026-08-03",
+      "startMinutes": 570,
+      "endMinutes": 600,
+      "requiredEmployees": 1,
+      "hardMinimumEmployees": 1,
+      "maximumEmployees": null
+    },
+    {
+      "id": "req_charcuterie_2026-08-03_0600",
+      "sectorId": "charcuterie",
+      "date": "2026-08-03",
+      "startMinutes": 600,
+      "endMinutes": 630,
+      "requiredEmployees": 1,
+      "hardMinimumEmployees": 1,
+      "maximumEmployees": null
+    },
+    {
+      "id": "req_charcuterie_2026-08-03_0630",
+      "sectorId": "charcuterie",
+      "date": "2026-08-03",
+      "startMinutes": 630,
+      "endMinutes": 660,
+      "requiredEmployees": 1,
+      "hardMinimumEmployees": 1,
+      "maximumEmployees": null
+    },
+    {
+      "id": "req_charcuterie_2026-08-03_0660",
+      "sectorId": "charcuterie",
+      "date": "2026-08-03",
+      "startMinutes": 660,
+      "endMinutes": 690,
+      "requiredEmployees": 1,
+      "hardMinimumEmployees": 1,
+      "maximumEmployees": null
+    },
+    {
+      "id": "req_charcuterie_2026-08-03_0690",
+      "sectorId": "charcuterie",
+      "date": "2026-08-03",
+      "startMinutes": 690,
+      "endMinutes": 720,
+      "requiredEmployees": 1,
+      "hardMinimumEmployees": 1,
+      "maximumEmployees": null
+    },
+    {
+      "id": "req_charcuterie_2026-08-03_0720",
+      "sectorId": "charcuterie",
+      "date": "2026-08-03",
+      "startMinutes": 720,
+      "endMinutes": 750,
+      "requiredEmployees": 1,
+      "hardMinimumEmployees": 1,
+      "maximumEmployees": null
+    },
+    {
+      "id": "req_charcuterie_2026-08-03_0750",
+      "sectorId": "charcuterie",
+      "date": "2026-08-03",
+      "startMinutes": 750,
+      "endMinutes": 780,
+      "requiredEmployees": 1,
+      "hardMinimumEmployees": 1,
+      "maximumEmployees": null
+    },
+    {
+      "id": "req_charcuterie_2026-08-03_0780",
+      "sectorId": "charcuterie",
+      "date": "2026-08-03",
+      "startMinutes": 780,
+      "endMinutes": 810,
+      "requiredEmployees": 1,
+      "hardMinimumEmployees": 1,
+      "maximumEmployees": null
+    },
+    {
+      "id": "req_charcuterie_2026-08-03_0810",
+      "sectorId": "charcuterie",
+      "date": "2026-08-03",
+      "startMinutes": 810,
+      "endMinutes": 840,
+      "requiredEmployees": 1,
+      "hardMinimumEmployees": 1,
+      "maximumEmployees": null
+    },
+    {
+      "id": "req_charcuterie_2026-08-03_0840",
+      "sectorId": "charcuterie",
+      "date": "2026-08-03",
+      "startMinutes": 840,
+      "endMinutes": 870,
+      "requiredEmployees": 1,
+      "hardMinimumEmployees": 1,
+      "maximumEmployees": null
+    },
+    {
+      "id": "req_charcuterie_2026-08-03_0870",
+      "sectorId": "charcuterie",
+      "date": "2026-08-03",
+      "startMinutes": 870,
+      "endMinutes": 900,
+      "requiredEmployees": 1,
+      "hardMinimumEmployees": 1,
+      "maximumEmployees": null
+    },
+    {
+      "id": "req_charcuterie_2026-08-03_0900",
+      "sectorId": "charcuterie",
+      "date": "2026-08-03",
+      "startMinutes": 900,
+      "endMinutes": 930,
+      "requiredEmployees": 1,
+      "hardMinimumEmployees": 1,
+      "maximumEmployees": null
+    },
+    {
+      "id": "req_charcuterie_2026-08-03_0930",
+      "sectorId": "charcuterie",
+      "date": "2026-08-03",
+      "startMinutes": 930,
+      "endMinutes": 960,
+      "requiredEmployees": 1,
+      "hardMinimumEmployees": 1,
+      "maximumEmployees": null
+    },
+    {
+      "id": "req_charcuterie_2026-08-03_0960",
+      "sectorId": "charcuterie",
+      "date": "2026-08-03",
+      "startMinutes": 960,
+      "endMinutes": 990,
+      "requiredEmployees": 1,
+      "hardMinimumEmployees": 1,
+      "maximumEmployees": null
+    },
+    {
+      "id": "req_charcuterie_2026-08-03_0990",
+      "sectorId": "charcuterie",
+      "date": "2026-08-03",
+      "startMinutes": 990,
+      "endMinutes": 1020,
+      "requiredEmployees": 1,
+      "hardMinimumEmployees": 1,
+      "maximumEmployees": null
+    },
+    {
+      "id": "req_charcuterie_2026-08-03_1020",
+      "sectorId": "charcuterie",
+      "date": "2026-08-03",
+      "startMinutes": 1020,
+      "endMinutes": 1050,
+      "requiredEmployees": 1,
+      "hardMinimumEmployees": 1,
+      "maximumEmployees": null
+    },
+    {
+      "id": "req_charcuterie_2026-08-03_1050",
+      "sectorId": "charcuterie",
+      "date": "2026-08-03",
+      "startMinutes": 1050,
+      "endMinutes": 1080,
+      "requiredEmployees": 1,
+      "hardMinimumEmployees": 1,
+      "maximumEmployees": null
+    },
+    {
+      "id": "req_charcuterie_2026-08-03_1080",
+      "sectorId": "charcuterie",
+      "date": "2026-08-03",
+      "startMinutes": 1080,
+      "endMinutes": 1110,
+      "requiredEmployees": 1,
+      "hardMinimumEmployees": 1,
+      "maximumEmployees": null
+    },
+    {
+      "id": "req_charcuterie_2026-08-03_1110",
+      "sectorId": "charcuterie",
+      "date": "2026-08-03",
+      "startMinutes": 1110,
+      "endMinutes": 1140,
+      "requiredEmployees": 1,
+      "hardMinimumEmployees": 1,
+      "maximumEmployees": null
+    },
+    {
+      "id": "req_charcuterie_2026-08-03_1140",
+      "sectorId": "charcuterie",
+      "date": "2026-08-03",
+      "startMinutes": 1140,
+      "endMinutes": 1170,
+      "requiredEmployees": 1,
+      "maximumEmployees": null
+    },
+    {
+      "id": "req_fromage_2026-08-03_0480",
+      "sectorId": "fromage",
+      "date": "2026-08-03",
+      "startMinutes": 480,
+      "endMinutes": 510,
+      "requiredEmployees": 1,
+      "maximumEmployees": null
+    },
+    {
+      "id": "req_fromage_2026-08-03_0510",
+      "sectorId": "fromage",
+      "date": "2026-08-03",
+      "startMinutes": 510,
+      "endMinutes": 540,
+      "requiredEmployees": 1,
+      "maximumEmployees": null
+    },
+    {
+      "id": "req_fromage_2026-08-03_0540",
+      "sectorId": "fromage",
+      "date": "2026-08-03",
+      "startMinutes": 540,
+      "endMinutes": 570,
+      "requiredEmployees": 1,
+      "maximumEmployees": null
+    },
+    {
+      "id": "req_fromage_2026-08-03_0570",
+      "sectorId": "fromage",
+      "date": "2026-08-03",
+      "startMinutes": 570,
+      "endMinutes": 600,
+      "requiredEmployees": 1,
+      "maximumEmployees": null
+    },
+    {
+      "id": "req_fromage_2026-08-03_0600",
+      "sectorId": "fromage",
+      "date": "2026-08-03",
+      "startMinutes": 600,
+      "endMinutes": 630,
+      "requiredEmployees": 1,
+      "maximumEmployees": null
+    },
+    {
+      "id": "req_fromage_2026-08-03_0630",
+      "sectorId": "fromage",
+      "date": "2026-08-03",
+      "startMinutes": 630,
+      "endMinutes": 660,
+      "requiredEmployees": 1,
+      "maximumEmployees": null
+    },
+    {
+      "id": "req_fromage_2026-08-03_0660",
+      "sectorId": "fromage",
+      "date": "2026-08-03",
+      "startMinutes": 660,
+      "endMinutes": 690,
+      "requiredEmployees": 1,
+      "maximumEmployees": null
+    },
+    {
+      "id": "req_fromage_2026-08-03_0690",
+      "sectorId": "fromage",
+      "date": "2026-08-03",
+      "startMinutes": 690,
+      "endMinutes": 720,
+      "requiredEmployees": 1,
+      "maximumEmployees": null
+    },
+    {
+      "id": "req_fromage_2026-08-03_0720",
+      "sectorId": "fromage",
+      "date": "2026-08-03",
+      "startMinutes": 720,
+      "endMinutes": 750,
+      "requiredEmployees": 1,
+      "maximumEmployees": null
+    },
+    {
+      "id": "req_fromage_2026-08-03_0750",
+      "sectorId": "fromage",
+      "date": "2026-08-03",
+      "startMinutes": 750,
+      "endMinutes": 780,
+      "requiredEmployees": 1,
+      "maximumEmployees": null
+    },
+    {
+      "id": "req_fromage_2026-08-03_0780",
+      "sectorId": "fromage",
+      "date": "2026-08-03",
+      "startMinutes": 780,
+      "endMinutes": 810,
+      "requiredEmployees": 1,
+      "maximumEmployees": null
+    },
+    {
+      "id": "req_fromage_2026-08-03_0810",
+      "sectorId": "fromage",
+      "date": "2026-08-03",
+      "startMinutes": 810,
+      "endMinutes": 840,
+      "requiredEmployees": 1,
+      "maximumEmployees": null
+    },
+    {
+      "id": "req_fromage_2026-08-03_0840",
+      "sectorId": "fromage",
+      "date": "2026-08-03",
+      "startMinutes": 840,
+      "endMinutes": 870,
+      "requiredEmployees": 1,
+      "maximumEmployees": null
+    },
+    {
+      "id": "req_fromage_2026-08-03_0870",
+      "sectorId": "fromage",
+      "date": "2026-08-03",
+      "startMinutes": 870,
+      "endMinutes": 900,
+      "requiredEmployees": 1,
+      "maximumEmployees": null
+    },
+    {
+      "id": "req_fromage_2026-08-03_0900",
+      "sectorId": "fromage",
+      "date": "2026-08-03",
+      "startMinutes": 900,
+      "endMinutes": 930,
+      "requiredEmployees": 1,
+      "maximumEmployees": null
+    },
+    {
+      "id": "req_fromage_2026-08-03_0930",
+      "sectorId": "fromage",
+      "date": "2026-08-03",
+      "startMinutes": 930,
+      "endMinutes": 960,
+      "requiredEmployees": 1,
+      "maximumEmployees": null
+    },
+    {
+      "id": "req_fromage_2026-08-03_0960",
+      "sectorId": "fromage",
+      "date": "2026-08-03",
+      "startMinutes": 960,
+      "endMinutes": 990,
+      "requiredEmployees": 1,
+      "maximumEmployees": null
+    },
+    {
+      "id": "req_fromage_2026-08-03_0990",
+      "sectorId": "fromage",
+      "date": "2026-08-03",
+      "startMinutes": 990,
+      "endMinutes": 1020,
+      "requiredEmployees": 1,
+      "maximumEmployees": null
+    },
+    {
+      "id": "req_fromage_2026-08-03_1020",
+      "sectorId": "fromage",
+      "date": "2026-08-03",
+      "startMinutes": 1020,
+      "endMinutes": 1050,
+      "requiredEmployees": 1,
+      "maximumEmployees": null
+    },
+    {
+      "id": "req_fromage_2026-08-03_1050",
+      "sectorId": "fromage",
+      "date": "2026-08-03",
+      "startMinutes": 1050,
+      "endMinutes": 1080,
+      "requiredEmployees": 1,
+      "maximumEmployees": null
+    },
+    {
+      "id": "req_fromage_2026-08-03_1080",
+      "sectorId": "fromage",
+      "date": "2026-08-03",
+      "startMinutes": 1080,
+      "endMinutes": 1110,
+      "requiredEmployees": 1,
+      "maximumEmployees": null
+    },
+    {
+      "id": "req_fromage_2026-08-03_1110",
+      "sectorId": "fromage",
+      "date": "2026-08-03",
+      "startMinutes": 1110,
+      "endMinutes": 1140,
+      "requiredEmployees": 1,
+      "maximumEmployees": null
+    },
+    {
+      "id": "req_traiteur_2026-08-03_0540",
+      "sectorId": "traiteur",
+      "date": "2026-08-03",
+      "startMinutes": 540,
+      "endMinutes": 570,
+      "requiredEmployees": 1,
+      "maximumEmployees": null
+    },
+    {
+      "id": "req_traiteur_2026-08-03_0570",
+      "sectorId": "traiteur",
+      "date": "2026-08-03",
+      "startMinutes": 570,
+      "endMinutes": 600,
+      "requiredEmployees": 1,
+      "maximumEmployees": null
+    },
+    {
+      "id": "req_traiteur_2026-08-03_0600",
+      "sectorId": "traiteur",
+      "date": "2026-08-03",
+      "startMinutes": 600,
+      "endMinutes": 630,
+      "requiredEmployees": 1,
+      "maximumEmployees": null
+    },
+    {
+      "id": "req_traiteur_2026-08-03_0630",
+      "sectorId": "traiteur",
+      "date": "2026-08-03",
+      "startMinutes": 630,
+      "endMinutes": 660,
+      "requiredEmployees": 1,
+      "maximumEmployees": null
+    },
+    {
+      "id": "req_traiteur_2026-08-03_0660",
+      "sectorId": "traiteur",
+      "date": "2026-08-03",
+      "startMinutes": 660,
+      "endMinutes": 690,
+      "requiredEmployees": 1,
+      "maximumEmployees": null
+    },
+    {
+      "id": "req_traiteur_2026-08-03_0690",
+      "sectorId": "traiteur",
+      "date": "2026-08-03",
+      "startMinutes": 690,
+      "endMinutes": 720,
+      "requiredEmployees": 1,
+      "maximumEmployees": null
+    },
+    {
+      "id": "req_traiteur_2026-08-03_0720",
+      "sectorId": "traiteur",
+      "date": "2026-08-03",
+      "startMinutes": 720,
+      "endMinutes": 750,
+      "requiredEmployees": 1,
+      "maximumEmployees": null
+    },
+    {
+      "id": "req_traiteur_2026-08-03_0750",
+      "sectorId": "traiteur",
+      "date": "2026-08-03",
+      "startMinutes": 750,
+      "endMinutes": 780,
+      "requiredEmployees": 1,
+      "maximumEmployees": null
+    },
+    {
+      "id": "req_traiteur_2026-08-03_0780",
+      "sectorId": "traiteur",
+      "date": "2026-08-03",
+      "startMinutes": 780,
+      "endMinutes": 810,
+      "requiredEmployees": 1,
+      "maximumEmployees": null
+    },
+    {
+      "id": "req_traiteur_2026-08-03_0810",
+      "sectorId": "traiteur",
+      "date": "2026-08-03",
+      "startMinutes": 810,
+      "endMinutes": 840,
+      "requiredEmployees": 1,
+      "maximumEmployees": null
+    },
+    {
+      "id": "req_traiteur_2026-08-03_0840",
+      "sectorId": "traiteur",
+      "date": "2026-08-03",
+      "startMinutes": 840,
+      "endMinutes": 870,
+      "requiredEmployees": 1,
+      "maximumEmployees": null
+    },
+    {
+      "id": "req_traiteur_2026-08-03_0870",
+      "sectorId": "traiteur",
+      "date": "2026-08-03",
+      "startMinutes": 870,
+      "endMinutes": 900,
+      "requiredEmployees": 1,
+      "maximumEmployees": null
+    },
+    {
+      "id": "req_traiteur_2026-08-03_0900",
+      "sectorId": "traiteur",
+      "date": "2026-08-03",
+      "startMinutes": 900,
+      "endMinutes": 930,
+      "requiredEmployees": 1,
+      "maximumEmployees": null
+    },
+    {
+      "id": "req_traiteur_2026-08-03_0930",
+      "sectorId": "traiteur",
+      "date": "2026-08-03",
+      "startMinutes": 930,
+      "endMinutes": 960,
+      "requiredEmployees": 1,
+      "maximumEmployees": null
+    },
+    {
+      "id": "req_traiteur_2026-08-03_0960",
+      "sectorId": "traiteur",
+      "date": "2026-08-03",
+      "startMinutes": 960,
+      "endMinutes": 990,
+      "requiredEmployees": 1,
+      "maximumEmployees": null
+    },
+    {
+      "id": "req_traiteur_2026-08-03_0990",
+      "sectorId": "traiteur",
+      "date": "2026-08-03",
+      "startMinutes": 990,
+      "endMinutes": 1020,
+      "requiredEmployees": 1,
+      "maximumEmployees": null
+    },
+    {
+      "id": "req_traiteur_2026-08-03_1020",
+      "sectorId": "traiteur",
+      "date": "2026-08-03",
+      "startMinutes": 1020,
+      "endMinutes": 1050,
+      "requiredEmployees": 1,
+      "maximumEmployees": null
+    },
+    {
+      "id": "req_traiteur_2026-08-03_1050",
+      "sectorId": "traiteur",
+      "date": "2026-08-03",
+      "startMinutes": 1050,
+      "endMinutes": 1080,
+      "requiredEmployees": 1,
+      "maximumEmployees": null
+    },
+    {
+      "id": "req_traiteur_2026-08-03_1080",
+      "sectorId": "traiteur",
+      "date": "2026-08-03",
+      "startMinutes": 1080,
+      "endMinutes": 1110,
+      "requiredEmployees": 1,
+      "maximumEmployees": null
+    },
+    {
+      "id": "req_traiteur_2026-08-03_1110",
+      "sectorId": "traiteur",
+      "date": "2026-08-03",
+      "startMinutes": 1110,
+      "endMinutes": 1140,
+      "requiredEmployees": 1,
+      "maximumEmployees": null
+    },
+    {
+      "id": "req_charcuterie_2026-08-04_0420",
+      "sectorId": "charcuterie",
+      "date": "2026-08-04",
+      "startMinutes": 420,
+      "endMinutes": 450,
+      "requiredEmployees": 1,
+      "maximumEmployees": null
+    },
+    {
+      "id": "req_charcuterie_2026-08-04_0450",
+      "sectorId": "charcuterie",
+      "date": "2026-08-04",
+      "startMinutes": 450,
+      "endMinutes": 480,
+      "requiredEmployees": 1,
+      "maximumEmployees": null
+    },
+    {
+      "id": "req_charcuterie_2026-08-04_0480",
+      "sectorId": "charcuterie",
+      "date": "2026-08-04",
+      "startMinutes": 480,
+      "endMinutes": 510,
+      "requiredEmployees": 1,
+      "hardMinimumEmployees": 1,
+      "maximumEmployees": null
+    },
+    {
+      "id": "req_charcuterie_2026-08-04_0510",
+      "sectorId": "charcuterie",
+      "date": "2026-08-04",
+      "startMinutes": 510,
+      "endMinutes": 540,
+      "requiredEmployees": 1,
+      "hardMinimumEmployees": 1,
+      "maximumEmployees": null
+    },
+    {
+      "id": "req_charcuterie_2026-08-04_0540",
+      "sectorId": "charcuterie",
+      "date": "2026-08-04",
+      "startMinutes": 540,
+      "endMinutes": 570,
+      "requiredEmployees": 1,
+      "hardMinimumEmployees": 1,
+      "maximumEmployees": null
+    },
+    {
+      "id": "req_charcuterie_2026-08-04_0570",
+      "sectorId": "charcuterie",
+      "date": "2026-08-04",
+      "startMinutes": 570,
+      "endMinutes": 600,
+      "requiredEmployees": 1,
+      "hardMinimumEmployees": 1,
+      "maximumEmployees": null
+    },
+    {
+      "id": "req_charcuterie_2026-08-04_0600",
+      "sectorId": "charcuterie",
+      "date": "2026-08-04",
+      "startMinutes": 600,
+      "endMinutes": 630,
+      "requiredEmployees": 1,
+      "hardMinimumEmployees": 1,
+      "maximumEmployees": null
+    },
+    {
+      "id": "req_charcuterie_2026-08-04_0630",
+      "sectorId": "charcuterie",
+      "date": "2026-08-04",
+      "startMinutes": 630,
+      "endMinutes": 660,
+      "requiredEmployees": 1,
+      "hardMinimumEmployees": 1,
+      "maximumEmployees": null
+    },
+    {
+      "id": "req_charcuterie_2026-08-04_0660",
+      "sectorId": "charcuterie",
+      "date": "2026-08-04",
+      "startMinutes": 660,
+      "endMinutes": 690,
+      "requiredEmployees": 1,
+      "hardMinimumEmployees": 1,
+      "maximumEmployees": null
+    },
+    {
+      "id": "req_charcuterie_2026-08-04_0690",
+      "sectorId": "charcuterie",
+      "date": "2026-08-04",
+      "startMinutes": 690,
+      "endMinutes": 720,
+      "requiredEmployees": 1,
+      "hardMinimumEmployees": 1,
+      "maximumEmployees": null
+    },
+    {
+      "id": "req_charcuterie_2026-08-04_0720",
+      "sectorId": "charcuterie",
+      "date": "2026-08-04",
+      "startMinutes": 720,
+      "endMinutes": 750,
+      "requiredEmployees": 1,
+      "hardMinimumEmployees": 1,
+      "maximumEmployees": null
+    },
+    {
+      "id": "req_charcuterie_2026-08-04_0750",
+      "sectorId": "charcuterie",
+      "date": "2026-08-04",
+      "startMinutes": 750,
+      "endMinutes": 780,
+      "requiredEmployees": 1,
+      "hardMinimumEmployees": 1,
+      "maximumEmployees": null
+    },
+    {
+      "id": "req_charcuterie_2026-08-04_0780",
+      "sectorId": "charcuterie",
+      "date": "2026-08-04",
+      "startMinutes": 780,
+      "endMinutes": 810,
+      "requiredEmployees": 1,
+      "hardMinimumEmployees": 1,
+      "maximumEmployees": null
+    },
+    {
+      "id": "req_charcuterie_2026-08-04_0810",
+      "sectorId": "charcuterie",
+      "date": "2026-08-04",
+      "startMinutes": 810,
+      "endMinutes": 840,
+      "requiredEmployees": 1,
+      "hardMinimumEmployees": 1,
+      "maximumEmployees": null
+    },
+    {
+      "id": "req_charcuterie_2026-08-04_0840",
+      "sectorId": "charcuterie",
+      "date": "2026-08-04",
+      "startMinutes": 840,
+      "endMinutes": 870,
+      "requiredEmployees": 1,
+      "hardMinimumEmployees": 1,
+      "maximumEmployees": null
+    },
+    {
+      "id": "req_charcuterie_2026-08-04_0870",
+      "sectorId": "charcuterie",
+      "date": "2026-08-04",
+      "startMinutes": 870,
+      "endMinutes": 900,
+      "requiredEmployees": 1,
+      "hardMinimumEmployees": 1,
+      "maximumEmployees": null
+    },
+    {
+      "id": "req_charcuterie_2026-08-04_0900",
+      "sectorId": "charcuterie",
+      "date": "2026-08-04",
+      "startMinutes": 900,
+      "endMinutes": 930,
+      "requiredEmployees": 1,
+      "hardMinimumEmployees": 1,
+      "maximumEmployees": null
+    },
+    {
+      "id": "req_charcuterie_2026-08-04_0930",
+      "sectorId": "charcuterie",
+      "date": "2026-08-04",
+      "startMinutes": 930,
+      "endMinutes": 960,
+      "requiredEmployees": 1,
+      "hardMinimumEmployees": 1,
+      "maximumEmployees": null
+    },
+    {
+      "id": "req_charcuterie_2026-08-04_0960",
+      "sectorId": "charcuterie",
+      "date": "2026-08-04",
+      "startMinutes": 960,
+      "endMinutes": 990,
+      "requiredEmployees": 1,
+      "hardMinimumEmployees": 1,
+      "maximumEmployees": null
+    },
+    {
+      "id": "req_charcuterie_2026-08-04_0990",
+      "sectorId": "charcuterie",
+      "date": "2026-08-04",
+      "startMinutes": 990,
+      "endMinutes": 1020,
+      "requiredEmployees": 1,
+      "hardMinimumEmployees": 1,
+      "maximumEmployees": null
+    },
+    {
+      "id": "req_charcuterie_2026-08-04_1020",
+      "sectorId": "charcuterie",
+      "date": "2026-08-04",
+      "startMinutes": 1020,
+      "endMinutes": 1050,
+      "requiredEmployees": 1,
+      "hardMinimumEmployees": 1,
+      "maximumEmployees": null
+    },
+    {
+      "id": "req_charcuterie_2026-08-04_1050",
+      "sectorId": "charcuterie",
+      "date": "2026-08-04",
+      "startMinutes": 1050,
+      "endMinutes": 1080,
+      "requiredEmployees": 1,
+      "hardMinimumEmployees": 1,
+      "maximumEmployees": null
+    },
+    {
+      "id": "req_charcuterie_2026-08-04_1080",
+      "sectorId": "charcuterie",
+      "date": "2026-08-04",
+      "startMinutes": 1080,
+      "endMinutes": 1110,
+      "requiredEmployees": 1,
+      "hardMinimumEmployees": 1,
+      "maximumEmployees": null
+    },
+    {
+      "id": "req_charcuterie_2026-08-04_1110",
+      "sectorId": "charcuterie",
+      "date": "2026-08-04",
+      "startMinutes": 1110,
+      "endMinutes": 1140,
+      "requiredEmployees": 1,
+      "hardMinimumEmployees": 1,
+      "maximumEmployees": null
+    },
+    {
+      "id": "req_charcuterie_2026-08-04_1140",
+      "sectorId": "charcuterie",
+      "date": "2026-08-04",
+      "startMinutes": 1140,
+      "endMinutes": 1170,
+      "requiredEmployees": 1,
+      "maximumEmployees": null
+    },
+    {
+      "id": "req_fromage_2026-08-04_0480",
+      "sectorId": "fromage",
+      "date": "2026-08-04",
+      "startMinutes": 480,
+      "endMinutes": 510,
+      "requiredEmployees": 1,
+      "maximumEmployees": null
+    },
+    {
+      "id": "req_fromage_2026-08-04_0510",
+      "sectorId": "fromage",
+      "date": "2026-08-04",
+      "startMinutes": 510,
+      "endMinutes": 540,
+      "requiredEmployees": 1,
+      "maximumEmployees": null
+    },
+    {
+      "id": "req_fromage_2026-08-04_0540",
+      "sectorId": "fromage",
+      "date": "2026-08-04",
+      "startMinutes": 540,
+      "endMinutes": 570,
+      "requiredEmployees": 1,
+      "maximumEmployees": null
+    },
+    {
+      "id": "req_fromage_2026-08-04_0570",
+      "sectorId": "fromage",
+      "date": "2026-08-04",
+      "startMinutes": 570,
+      "endMinutes": 600,
+      "requiredEmployees": 1,
+      "maximumEmployees": null
+    },
+    {
+      "id": "req_fromage_2026-08-04_0600",
+      "sectorId": "fromage",
+      "date": "2026-08-04",
+      "startMinutes": 600,
+      "endMinutes": 630,
+      "requiredEmployees": 1,
+      "maximumEmployees": null
+    },
+    {
+      "id": "req_fromage_2026-08-04_0630",
+      "sectorId": "fromage",
+      "date": "2026-08-04",
+      "startMinutes": 630,
+      "endMinutes": 660,
+      "requiredEmployees": 1,
+      "maximumEmployees": null
+    },
+    {
+      "id": "req_fromage_2026-08-04_0660",
+      "sectorId": "fromage",
+      "date": "2026-08-04",
+      "startMinutes": 660,
+      "endMinutes": 690,
+      "requiredEmployees": 1,
+      "maximumEmployees": null
+    },
+    {
+      "id": "req_fromage_2026-08-04_0690",
+      "sectorId": "fromage",
+      "date": "2026-08-04",
+      "startMinutes": 690,
+      "endMinutes": 720,
+      "requiredEmployees": 1,
+      "maximumEmployees": null
+    },
+    {
+      "id": "req_fromage_2026-08-04_0720",
+      "sectorId": "fromage",
+      "date": "2026-08-04",
+      "startMinutes": 720,
+      "endMinutes": 750,
+      "requiredEmployees": 1,
+      "maximumEmployees": null
+    },
+    {
+      "id": "req_fromage_2026-08-04_0750",
+      "sectorId": "fromage",
+      "date": "2026-08-04",
+      "startMinutes": 750,
+      "endMinutes": 780,
+      "requiredEmployees": 1,
+      "maximumEmployees": null
+    },
+    {
+      "id": "req_fromage_2026-08-04_0780",
+      "sectorId": "fromage",
+      "date": "2026-08-04",
+      "startMinutes": 780,
+      "endMinutes": 810,
+      "requiredEmployees": 1,
+      "maximumEmployees": null
+    },
+    {
+      "id": "req_fromage_2026-08-04_0810",
+      "sectorId": "fromage",
+      "date": "2026-08-04",
+      "startMinutes": 810,
+      "endMinutes": 840,
+      "requiredEmployees": 1,
+      "maximumEmployees": null
+    },
+    {
+      "id": "req_fromage_2026-08-04_0840",
+      "sectorId": "fromage",
+      "date": "2026-08-04",
+      "startMinutes": 840,
+      "endMinutes": 870,
+      "requiredEmployees": 1,
+      "maximumEmployees": null
+    },
+    {
+      "id": "req_fromage_2026-08-04_0870",
+      "sectorId": "fromage",
+      "date": "2026-08-04",
+      "startMinutes": 870,
+      "endMinutes": 900,
+      "requiredEmployees": 1,
+      "maximumEmployees": null
+    },
+    {
+      "id": "req_fromage_2026-08-04_0900",
+      "sectorId": "fromage",
+      "date": "2026-08-04",
+      "startMinutes": 900,
+      "endMinutes": 930,
+      "requiredEmployees": 1,
+      "maximumEmployees": null
+    },
+    {
+      "id": "req_fromage_2026-08-04_0930",
+      "sectorId": "fromage",
+      "date": "2026-08-04",
+      "startMinutes": 930,
+      "endMinutes": 960,
+      "requiredEmployees": 1,
+      "maximumEmployees": null
+    },
+    {
+      "id": "req_fromage_2026-08-04_0960",
+      "sectorId": "fromage",
+      "date": "2026-08-04",
+      "startMinutes": 960,
+      "endMinutes": 990,
+      "requiredEmployees": 1,
+      "maximumEmployees": null
+    },
+    {
+      "id": "req_fromage_2026-08-04_0990",
+      "sectorId": "fromage",
+      "date": "2026-08-04",
+      "startMinutes": 990,
+      "endMinutes": 1020,
+      "requiredEmployees": 1,
+      "maximumEmployees": null
+    },
+    {
+      "id": "req_fromage_2026-08-04_1020",
+      "sectorId": "fromage",
+      "date": "2026-08-04",
+      "startMinutes": 1020,
+      "endMinutes": 1050,
+      "requiredEmployees": 1,
+      "maximumEmployees": null
+    },
+    {
+      "id": "req_fromage_2026-08-04_1050",
+      "sectorId": "fromage",
+      "date": "2026-08-04",
+      "startMinutes": 1050,
+      "endMinutes": 1080,
+      "requiredEmployees": 1,
+      "maximumEmployees": null
+    },
+    {
+      "id": "req_fromage_2026-08-04_1080",
+      "sectorId": "fromage",
+      "date": "2026-08-04",
+      "startMinutes": 1080,
+      "endMinutes": 1110,
+      "requiredEmployees": 1,
+      "maximumEmployees": null
+    },
+    {
+      "id": "req_fromage_2026-08-04_1110",
+      "sectorId": "fromage",
+      "date": "2026-08-04",
+      "startMinutes": 1110,
+      "endMinutes": 1140,
+      "requiredEmployees": 1,
+      "maximumEmployees": null
+    },
+    {
+      "id": "req_poisson_2026-08-04_0450",
+      "sectorId": "poisson",
+      "date": "2026-08-04",
+      "startMinutes": 450,
+      "endMinutes": 480,
+      "requiredEmployees": 1,
+      "maximumEmployees": null
+    },
+    {
+      "id": "req_poisson_2026-08-04_0480",
+      "sectorId": "poisson",
+      "date": "2026-08-04",
+      "startMinutes": 480,
+      "endMinutes": 510,
+      "requiredEmployees": 1,
+      "maximumEmployees": null
+    },
+    {
+      "id": "req_poisson_2026-08-04_0510",
+      "sectorId": "poisson",
+      "date": "2026-08-04",
+      "startMinutes": 510,
+      "endMinutes": 540,
+      "requiredEmployees": 1,
+      "maximumEmployees": null
+    },
+    {
+      "id": "req_poisson_2026-08-04_0540",
+      "sectorId": "poisson",
+      "date": "2026-08-04",
+      "startMinutes": 540,
+      "endMinutes": 570,
+      "requiredEmployees": 1,
+      "maximumEmployees": null
+    },
+    {
+      "id": "req_poisson_2026-08-04_0570",
+      "sectorId": "poisson",
+      "date": "2026-08-04",
+      "startMinutes": 570,
+      "endMinutes": 600,
+      "requiredEmployees": 1,
+      "maximumEmployees": null
+    },
+    {
+      "id": "req_poisson_2026-08-04_0600",
+      "sectorId": "poisson",
+      "date": "2026-08-04",
+      "startMinutes": 600,
+      "endMinutes": 630,
+      "requiredEmployees": 1,
+      "maximumEmployees": null
+    },
+    {
+      "id": "req_poisson_2026-08-04_0630",
+      "sectorId": "poisson",
+      "date": "2026-08-04",
+      "startMinutes": 630,
+      "endMinutes": 660,
+      "requiredEmployees": 1,
+      "maximumEmployees": null
+    },
+    {
+      "id": "req_poisson_2026-08-04_0660",
+      "sectorId": "poisson",
+      "date": "2026-08-04",
+      "startMinutes": 660,
+      "endMinutes": 690,
+      "requiredEmployees": 1,
+      "maximumEmployees": null
+    },
+    {
+      "id": "req_poisson_2026-08-04_0690",
+      "sectorId": "poisson",
+      "date": "2026-08-04",
+      "startMinutes": 690,
+      "endMinutes": 720,
+      "requiredEmployees": 1,
+      "maximumEmployees": null
+    },
+    {
+      "id": "req_poisson_2026-08-04_0720",
+      "sectorId": "poisson",
+      "date": "2026-08-04",
+      "startMinutes": 720,
+      "endMinutes": 750,
+      "requiredEmployees": 1,
+      "maximumEmployees": null
+    },
+    {
+      "id": "req_poisson_2026-08-04_0750",
+      "sectorId": "poisson",
+      "date": "2026-08-04",
+      "startMinutes": 750,
+      "endMinutes": 780,
+      "requiredEmployees": 1,
+      "maximumEmployees": null
+    },
+    {
+      "id": "req_traiteur_2026-08-04_0540",
+      "sectorId": "traiteur",
+      "date": "2026-08-04",
+      "startMinutes": 540,
+      "endMinutes": 570,
+      "requiredEmployees": 1,
+      "maximumEmployees": null
+    },
+    {
+      "id": "req_traiteur_2026-08-04_0570",
+      "sectorId": "traiteur",
+      "date": "2026-08-04",
+      "startMinutes": 570,
+      "endMinutes": 600,
+      "requiredEmployees": 1,
+      "maximumEmployees": null
+    },
+    {
+      "id": "req_traiteur_2026-08-04_0600",
+      "sectorId": "traiteur",
+      "date": "2026-08-04",
+      "startMinutes": 600,
+      "endMinutes": 630,
+      "requiredEmployees": 1,
+      "maximumEmployees": null
+    },
+    {
+      "id": "req_traiteur_2026-08-04_0630",
+      "sectorId": "traiteur",
+      "date": "2026-08-04",
+      "startMinutes": 630,
+      "endMinutes": 660,
+      "requiredEmployees": 1,
+      "maximumEmployees": null
+    },
+    {
+      "id": "req_traiteur_2026-08-04_0660",
+      "sectorId": "traiteur",
+      "date": "2026-08-04",
+      "startMinutes": 660,
+      "endMinutes": 690,
+      "requiredEmployees": 1,
+      "maximumEmployees": null
+    },
+    {
+      "id": "req_traiteur_2026-08-04_0690",
+      "sectorId": "traiteur",
+      "date": "2026-08-04",
+      "startMinutes": 690,
+      "endMinutes": 720,
+      "requiredEmployees": 1,
+      "maximumEmployees": null
+    },
+    {
+      "id": "req_traiteur_2026-08-04_0720",
+      "sectorId": "traiteur",
+      "date": "2026-08-04",
+      "startMinutes": 720,
+      "endMinutes": 750,
+      "requiredEmployees": 1,
+      "maximumEmployees": null
+    },
+    {
+      "id": "req_traiteur_2026-08-04_0750",
+      "sectorId": "traiteur",
+      "date": "2026-08-04",
+      "startMinutes": 750,
+      "endMinutes": 780,
+      "requiredEmployees": 1,
+      "maximumEmployees": null
+    },
+    {
+      "id": "req_traiteur_2026-08-04_0780",
+      "sectorId": "traiteur",
+      "date": "2026-08-04",
+      "startMinutes": 780,
+      "endMinutes": 810,
+      "requiredEmployees": 1,
+      "maximumEmployees": null
+    },
+    {
+      "id": "req_traiteur_2026-08-04_0810",
+      "sectorId": "traiteur",
+      "date": "2026-08-04",
+      "startMinutes": 810,
+      "endMinutes": 840,
+      "requiredEmployees": 1,
+      "maximumEmployees": null
+    },
+    {
+      "id": "req_traiteur_2026-08-04_0840",
+      "sectorId": "traiteur",
+      "date": "2026-08-04",
+      "startMinutes": 840,
+      "endMinutes": 870,
+      "requiredEmployees": 1,
+      "maximumEmployees": null
+    },
+    {
+      "id": "req_traiteur_2026-08-04_0870",
+      "sectorId": "traiteur",
+      "date": "2026-08-04",
+      "startMinutes": 870,
+      "endMinutes": 900,
+      "requiredEmployees": 1,
+      "maximumEmployees": null
+    },
+    {
+      "id": "req_traiteur_2026-08-04_0900",
+      "sectorId": "traiteur",
+      "date": "2026-08-04",
+      "startMinutes": 900,
+      "endMinutes": 930,
+      "requiredEmployees": 1,
+      "maximumEmployees": null
+    },
+    {
+      "id": "req_traiteur_2026-08-04_0930",
+      "sectorId": "traiteur",
+      "date": "2026-08-04",
+      "startMinutes": 930,
+      "endMinutes": 960,
+      "requiredEmployees": 1,
+      "maximumEmployees": null
+    },
+    {
+      "id": "req_traiteur_2026-08-04_0960",
+      "sectorId": "traiteur",
+      "date": "2026-08-04",
+      "startMinutes": 960,
+      "endMinutes": 990,
+      "requiredEmployees": 1,
+      "maximumEmployees": null
+    },
+    {
+      "id": "req_traiteur_2026-08-04_0990",
+      "sectorId": "traiteur",
+      "date": "2026-08-04",
+      "startMinutes": 990,
+      "endMinutes": 1020,
+      "requiredEmployees": 1,
+      "maximumEmployees": null
+    },
+    {
+      "id": "req_traiteur_2026-08-04_1020",
+      "sectorId": "traiteur",
+      "date": "2026-08-04",
+      "startMinutes": 1020,
+      "endMinutes": 1050,
+      "requiredEmployees": 1,
+      "maximumEmployees": null
+    },
+    {
+      "id": "req_traiteur_2026-08-04_1050",
+      "sectorId": "traiteur",
+      "date": "2026-08-04",
+      "startMinutes": 1050,
+      "endMinutes": 1080,
+      "requiredEmployees": 1,
+      "maximumEmployees": null
+    },
+    {
+      "id": "req_traiteur_2026-08-04_1080",
+      "sectorId": "traiteur",
+      "date": "2026-08-04",
+      "startMinutes": 1080,
+      "endMinutes": 1110,
+      "requiredEmployees": 1,
+      "maximumEmployees": null
+    },
+    {
+      "id": "req_traiteur_2026-08-04_1110",
+      "sectorId": "traiteur",
+      "date": "2026-08-04",
+      "startMinutes": 1110,
+      "endMinutes": 1140,
+      "requiredEmployees": 1,
+      "maximumEmployees": null
+    },
+    {
+      "id": "req_charcuterie_2026-08-05_0420",
+      "sectorId": "charcuterie",
+      "date": "2026-08-05",
+      "startMinutes": 420,
+      "endMinutes": 450,
+      "requiredEmployees": 1,
+      "maximumEmployees": null
+    },
+    {
+      "id": "req_charcuterie_2026-08-05_0450",
+      "sectorId": "charcuterie",
+      "date": "2026-08-05",
+      "startMinutes": 450,
+      "endMinutes": 480,
+      "requiredEmployees": 1,
+      "maximumEmployees": null
+    },
+    {
+      "id": "req_charcuterie_2026-08-05_0480",
+      "sectorId": "charcuterie",
+      "date": "2026-08-05",
+      "startMinutes": 480,
+      "endMinutes": 510,
+      "requiredEmployees": 1,
+      "hardMinimumEmployees": 1,
+      "maximumEmployees": null
+    },
+    {
+      "id": "req_charcuterie_2026-08-05_0510",
+      "sectorId": "charcuterie",
+      "date": "2026-08-05",
+      "startMinutes": 510,
+      "endMinutes": 540,
+      "requiredEmployees": 1,
+      "hardMinimumEmployees": 1,
+      "maximumEmployees": null
+    },
+    {
+      "id": "req_charcuterie_2026-08-05_0540",
+      "sectorId": "charcuterie",
+      "date": "2026-08-05",
+      "startMinutes": 540,
+      "endMinutes": 570,
+      "requiredEmployees": 1,
+      "hardMinimumEmployees": 1,
+      "maximumEmployees": null
+    },
+    {
+      "id": "req_charcuterie_2026-08-05_0570",
+      "sectorId": "charcuterie",
+      "date": "2026-08-05",
+      "startMinutes": 570,
+      "endMinutes": 600,
+      "requiredEmployees": 1,
+      "hardMinimumEmployees": 1,
+      "maximumEmployees": null
+    },
+    {
+      "id": "req_charcuterie_2026-08-05_0600",
+      "sectorId": "charcuterie",
+      "date": "2026-08-05",
+      "startMinutes": 600,
+      "endMinutes": 630,
+      "requiredEmployees": 1,
+      "hardMinimumEmployees": 1,
+      "maximumEmployees": null
+    },
+    {
+      "id": "req_charcuterie_2026-08-05_0630",
+      "sectorId": "charcuterie",
+      "date": "2026-08-05",
+      "startMinutes": 630,
+      "endMinutes": 660,
+      "requiredEmployees": 1,
+      "hardMinimumEmployees": 1,
+      "maximumEmployees": null
+    },
+    {
+      "id": "req_charcuterie_2026-08-05_0660",
+      "sectorId": "charcuterie",
+      "date": "2026-08-05",
+      "startMinutes": 660,
+      "endMinutes": 690,
+      "requiredEmployees": 1,
+      "hardMinimumEmployees": 1,
+      "maximumEmployees": null
+    },
+    {
+      "id": "req_charcuterie_2026-08-05_0690",
+      "sectorId": "charcuterie",
+      "date": "2026-08-05",
+      "startMinutes": 690,
+      "endMinutes": 720,
+      "requiredEmployees": 1,
+      "hardMinimumEmployees": 1,
+      "maximumEmployees": null
+    },
+    {
+      "id": "req_charcuterie_2026-08-05_0720",
+      "sectorId": "charcuterie",
+      "date": "2026-08-05",
+      "startMinutes": 720,
+      "endMinutes": 750,
+      "requiredEmployees": 1,
+      "hardMinimumEmployees": 1,
+      "maximumEmployees": null
+    },
+    {
+      "id": "req_charcuterie_2026-08-05_0750",
+      "sectorId": "charcuterie",
+      "date": "2026-08-05",
+      "startMinutes": 750,
+      "endMinutes": 780,
+      "requiredEmployees": 1,
+      "hardMinimumEmployees": 1,
+      "maximumEmployees": null
+    },
+    {
+      "id": "req_charcuterie_2026-08-05_0780",
+      "sectorId": "charcuterie",
+      "date": "2026-08-05",
+      "startMinutes": 780,
+      "endMinutes": 810,
+      "requiredEmployees": 1,
+      "hardMinimumEmployees": 1,
+      "maximumEmployees": null
+    },
+    {
+      "id": "req_charcuterie_2026-08-05_0810",
+      "sectorId": "charcuterie",
+      "date": "2026-08-05",
+      "startMinutes": 810,
+      "endMinutes": 840,
+      "requiredEmployees": 1,
+      "hardMinimumEmployees": 1,
+      "maximumEmployees": null
+    },
+    {
+      "id": "req_charcuterie_2026-08-05_0840",
+      "sectorId": "charcuterie",
+      "date": "2026-08-05",
+      "startMinutes": 840,
+      "endMinutes": 870,
+      "requiredEmployees": 1,
+      "hardMinimumEmployees": 1,
+      "maximumEmployees": null
+    },
+    {
+      "id": "req_charcuterie_2026-08-05_0870",
+      "sectorId": "charcuterie",
+      "date": "2026-08-05",
+      "startMinutes": 870,
+      "endMinutes": 900,
+      "requiredEmployees": 1,
+      "hardMinimumEmployees": 1,
+      "maximumEmployees": null
+    },
+    {
+      "id": "req_charcuterie_2026-08-05_0900",
+      "sectorId": "charcuterie",
+      "date": "2026-08-05",
+      "startMinutes": 900,
+      "endMinutes": 930,
+      "requiredEmployees": 1,
+      "hardMinimumEmployees": 1,
+      "maximumEmployees": null
+    },
+    {
+      "id": "req_charcuterie_2026-08-05_0930",
+      "sectorId": "charcuterie",
+      "date": "2026-08-05",
+      "startMinutes": 930,
+      "endMinutes": 960,
+      "requiredEmployees": 1,
+      "hardMinimumEmployees": 1,
+      "maximumEmployees": null
+    },
+    {
+      "id": "req_charcuterie_2026-08-05_0960",
+      "sectorId": "charcuterie",
+      "date": "2026-08-05",
+      "startMinutes": 960,
+      "endMinutes": 990,
+      "requiredEmployees": 1,
+      "hardMinimumEmployees": 1,
+      "maximumEmployees": null
+    },
+    {
+      "id": "req_charcuterie_2026-08-05_0990",
+      "sectorId": "charcuterie",
+      "date": "2026-08-05",
+      "startMinutes": 990,
+      "endMinutes": 1020,
+      "requiredEmployees": 1,
+      "hardMinimumEmployees": 1,
+      "maximumEmployees": null
+    },
+    {
+      "id": "req_charcuterie_2026-08-05_1020",
+      "sectorId": "charcuterie",
+      "date": "2026-08-05",
+      "startMinutes": 1020,
+      "endMinutes": 1050,
+      "requiredEmployees": 1,
+      "hardMinimumEmployees": 1,
+      "maximumEmployees": null
+    },
+    {
+      "id": "req_charcuterie_2026-08-05_1050",
+      "sectorId": "charcuterie",
+      "date": "2026-08-05",
+      "startMinutes": 1050,
+      "endMinutes": 1080,
+      "requiredEmployees": 1,
+      "hardMinimumEmployees": 1,
+      "maximumEmployees": null
+    },
+    {
+      "id": "req_charcuterie_2026-08-05_1080",
+      "sectorId": "charcuterie",
+      "date": "2026-08-05",
+      "startMinutes": 1080,
+      "endMinutes": 1110,
+      "requiredEmployees": 1,
+      "hardMinimumEmployees": 1,
+      "maximumEmployees": null
+    },
+    {
+      "id": "req_charcuterie_2026-08-05_1110",
+      "sectorId": "charcuterie",
+      "date": "2026-08-05",
+      "startMinutes": 1110,
+      "endMinutes": 1140,
+      "requiredEmployees": 1,
+      "hardMinimumEmployees": 1,
+      "maximumEmployees": null
+    },
+    {
+      "id": "req_charcuterie_2026-08-05_1140",
+      "sectorId": "charcuterie",
+      "date": "2026-08-05",
+      "startMinutes": 1140,
+      "endMinutes": 1170,
+      "requiredEmployees": 1,
+      "maximumEmployees": null
+    },
+    {
+      "id": "req_fromage_2026-08-05_0480",
+      "sectorId": "fromage",
+      "date": "2026-08-05",
+      "startMinutes": 480,
+      "endMinutes": 510,
+      "requiredEmployees": 1,
+      "maximumEmployees": null
+    },
+    {
+      "id": "req_fromage_2026-08-05_0510",
+      "sectorId": "fromage",
+      "date": "2026-08-05",
+      "startMinutes": 510,
+      "endMinutes": 540,
+      "requiredEmployees": 1,
+      "maximumEmployees": null
+    },
+    {
+      "id": "req_fromage_2026-08-05_0540",
+      "sectorId": "fromage",
+      "date": "2026-08-05",
+      "startMinutes": 540,
+      "endMinutes": 570,
+      "requiredEmployees": 1,
+      "maximumEmployees": null
+    },
+    {
+      "id": "req_fromage_2026-08-05_0570",
+      "sectorId": "fromage",
+      "date": "2026-08-05",
+      "startMinutes": 570,
+      "endMinutes": 600,
+      "requiredEmployees": 1,
+      "maximumEmployees": null
+    },
+    {
+      "id": "req_fromage_2026-08-05_0600",
+      "sectorId": "fromage",
+      "date": "2026-08-05",
+      "startMinutes": 600,
+      "endMinutes": 630,
+      "requiredEmployees": 1,
+      "maximumEmployees": null
+    },
+    {
+      "id": "req_fromage_2026-08-05_0630",
+      "sectorId": "fromage",
+      "date": "2026-08-05",
+      "startMinutes": 630,
+      "endMinutes": 660,
+      "requiredEmployees": 1,
+      "maximumEmployees": null
+    },
+    {
+      "id": "req_fromage_2026-08-05_0660",
+      "sectorId": "fromage",
+      "date": "2026-08-05",
+      "startMinutes": 660,
+      "endMinutes": 690,
+      "requiredEmployees": 1,
+      "maximumEmployees": null
+    },
+    {
+      "id": "req_fromage_2026-08-05_0690",
+      "sectorId": "fromage",
+      "date": "2026-08-05",
+      "startMinutes": 690,
+      "endMinutes": 720,
+      "requiredEmployees": 1,
+      "maximumEmployees": null
+    },
+    {
+      "id": "req_fromage_2026-08-05_0720",
+      "sectorId": "fromage",
+      "date": "2026-08-05",
+      "startMinutes": 720,
+      "endMinutes": 750,
+      "requiredEmployees": 1,
+      "maximumEmployees": null
+    },
+    {
+      "id": "req_fromage_2026-08-05_0750",
+      "sectorId": "fromage",
+      "date": "2026-08-05",
+      "startMinutes": 750,
+      "endMinutes": 780,
+      "requiredEmployees": 1,
+      "maximumEmployees": null
+    },
+    {
+      "id": "req_fromage_2026-08-05_0780",
+      "sectorId": "fromage",
+      "date": "2026-08-05",
+      "startMinutes": 780,
+      "endMinutes": 810,
+      "requiredEmployees": 1,
+      "maximumEmployees": null
+    },
+    {
+      "id": "req_fromage_2026-08-05_0810",
+      "sectorId": "fromage",
+      "date": "2026-08-05",
+      "startMinutes": 810,
+      "endMinutes": 840,
+      "requiredEmployees": 1,
+      "maximumEmployees": null
+    },
+    {
+      "id": "req_fromage_2026-08-05_0840",
+      "sectorId": "fromage",
+      "date": "2026-08-05",
+      "startMinutes": 840,
+      "endMinutes": 870,
+      "requiredEmployees": 1,
+      "maximumEmployees": null
+    },
+    {
+      "id": "req_fromage_2026-08-05_0870",
+      "sectorId": "fromage",
+      "date": "2026-08-05",
+      "startMinutes": 870,
+      "endMinutes": 900,
+      "requiredEmployees": 1,
+      "maximumEmployees": null
+    },
+    {
+      "id": "req_fromage_2026-08-05_0900",
+      "sectorId": "fromage",
+      "date": "2026-08-05",
+      "startMinutes": 900,
+      "endMinutes": 930,
+      "requiredEmployees": 1,
+      "maximumEmployees": null
+    },
+    {
+      "id": "req_fromage_2026-08-05_0930",
+      "sectorId": "fromage",
+      "date": "2026-08-05",
+      "startMinutes": 930,
+      "endMinutes": 960,
+      "requiredEmployees": 1,
+      "maximumEmployees": null
+    },
+    {
+      "id": "req_fromage_2026-08-05_0960",
+      "sectorId": "fromage",
+      "date": "2026-08-05",
+      "startMinutes": 960,
+      "endMinutes": 990,
+      "requiredEmployees": 1,
+      "maximumEmployees": null
+    },
+    {
+      "id": "req_fromage_2026-08-05_0990",
+      "sectorId": "fromage",
+      "date": "2026-08-05",
+      "startMinutes": 990,
+      "endMinutes": 1020,
+      "requiredEmployees": 1,
+      "maximumEmployees": null
+    },
+    {
+      "id": "req_fromage_2026-08-05_1020",
+      "sectorId": "fromage",
+      "date": "2026-08-05",
+      "startMinutes": 1020,
+      "endMinutes": 1050,
+      "requiredEmployees": 1,
+      "maximumEmployees": null
+    },
+    {
+      "id": "req_fromage_2026-08-05_1050",
+      "sectorId": "fromage",
+      "date": "2026-08-05",
+      "startMinutes": 1050,
+      "endMinutes": 1080,
+      "requiredEmployees": 1,
+      "maximumEmployees": null
+    },
+    {
+      "id": "req_fromage_2026-08-05_1080",
+      "sectorId": "fromage",
+      "date": "2026-08-05",
+      "startMinutes": 1080,
+      "endMinutes": 1110,
+      "requiredEmployees": 1,
+      "maximumEmployees": null
+    },
+    {
+      "id": "req_fromage_2026-08-05_1110",
+      "sectorId": "fromage",
+      "date": "2026-08-05",
+      "startMinutes": 1110,
+      "endMinutes": 1140,
+      "requiredEmployees": 1,
+      "maximumEmployees": null
+    },
+    {
+      "id": "req_poisson_2026-08-05_0450",
+      "sectorId": "poisson",
+      "date": "2026-08-05",
+      "startMinutes": 450,
+      "endMinutes": 480,
+      "requiredEmployees": 1,
+      "maximumEmployees": null
+    },
+    {
+      "id": "req_poisson_2026-08-05_0480",
+      "sectorId": "poisson",
+      "date": "2026-08-05",
+      "startMinutes": 480,
+      "endMinutes": 510,
+      "requiredEmployees": 1,
+      "maximumEmployees": null
+    },
+    {
+      "id": "req_poisson_2026-08-05_0510",
+      "sectorId": "poisson",
+      "date": "2026-08-05",
+      "startMinutes": 510,
+      "endMinutes": 540,
+      "requiredEmployees": 1,
+      "maximumEmployees": null
+    },
+    {
+      "id": "req_poisson_2026-08-05_0540",
+      "sectorId": "poisson",
+      "date": "2026-08-05",
+      "startMinutes": 540,
+      "endMinutes": 570,
+      "requiredEmployees": 1,
+      "maximumEmployees": null
+    },
+    {
+      "id": "req_poisson_2026-08-05_0570",
+      "sectorId": "poisson",
+      "date": "2026-08-05",
+      "startMinutes": 570,
+      "endMinutes": 600,
+      "requiredEmployees": 1,
+      "maximumEmployees": null
+    },
+    {
+      "id": "req_poisson_2026-08-05_0600",
+      "sectorId": "poisson",
+      "date": "2026-08-05",
+      "startMinutes": 600,
+      "endMinutes": 630,
+      "requiredEmployees": 1,
+      "maximumEmployees": null
+    },
+    {
+      "id": "req_poisson_2026-08-05_0630",
+      "sectorId": "poisson",
+      "date": "2026-08-05",
+      "startMinutes": 630,
+      "endMinutes": 660,
+      "requiredEmployees": 1,
+      "maximumEmployees": null
+    },
+    {
+      "id": "req_poisson_2026-08-05_0660",
+      "sectorId": "poisson",
+      "date": "2026-08-05",
+      "startMinutes": 660,
+      "endMinutes": 690,
+      "requiredEmployees": 1,
+      "maximumEmployees": null
+    },
+    {
+      "id": "req_poisson_2026-08-05_0690",
+      "sectorId": "poisson",
+      "date": "2026-08-05",
+      "startMinutes": 690,
+      "endMinutes": 720,
+      "requiredEmployees": 1,
+      "maximumEmployees": null
+    },
+    {
+      "id": "req_poisson_2026-08-05_0720",
+      "sectorId": "poisson",
+      "date": "2026-08-05",
+      "startMinutes": 720,
+      "endMinutes": 750,
+      "requiredEmployees": 1,
+      "maximumEmployees": null
+    },
+    {
+      "id": "req_poisson_2026-08-05_0750",
+      "sectorId": "poisson",
+      "date": "2026-08-05",
+      "startMinutes": 750,
+      "endMinutes": 780,
+      "requiredEmployees": 1,
+      "maximumEmployees": null
+    },
+    {
+      "id": "req_traiteur_2026-08-05_0540",
+      "sectorId": "traiteur",
+      "date": "2026-08-05",
+      "startMinutes": 540,
+      "endMinutes": 570,
+      "requiredEmployees": 1,
+      "maximumEmployees": null
+    },
+    {
+      "id": "req_traiteur_2026-08-05_0570",
+      "sectorId": "traiteur",
+      "date": "2026-08-05",
+      "startMinutes": 570,
+      "endMinutes": 600,
+      "requiredEmployees": 1,
+      "maximumEmployees": null
+    },
+    {
+      "id": "req_traiteur_2026-08-05_0600",
+      "sectorId": "traiteur",
+      "date": "2026-08-05",
+      "startMinutes": 600,
+      "endMinutes": 630,
+      "requiredEmployees": 1,
+      "maximumEmployees": null
+    },
+    {
+      "id": "req_traiteur_2026-08-05_0630",
+      "sectorId": "traiteur",
+      "date": "2026-08-05",
+      "startMinutes": 630,
+      "endMinutes": 660,
+      "requiredEmployees": 1,
+      "maximumEmployees": null
+    },
+    {
+      "id": "req_traiteur_2026-08-05_0660",
+      "sectorId": "traiteur",
+      "date": "2026-08-05",
+      "startMinutes": 660,
+      "endMinutes": 690,
+      "requiredEmployees": 1,
+      "maximumEmployees": null
+    },
+    {
+      "id": "req_traiteur_2026-08-05_0690",
+      "sectorId": "traiteur",
+      "date": "2026-08-05",
+      "startMinutes": 690,
+      "endMinutes": 720,
+      "requiredEmployees": 1,
+      "maximumEmployees": null
+    },
+    {
+      "id": "req_traiteur_2026-08-05_0720",
+      "sectorId": "traiteur",
+      "date": "2026-08-05",
+      "startMinutes": 720,
+      "endMinutes": 750,
+      "requiredEmployees": 1,
+      "maximumEmployees": null
+    },
+    {
+      "id": "req_traiteur_2026-08-05_0750",
+      "sectorId": "traiteur",
+      "date": "2026-08-05",
+      "startMinutes": 750,
+      "endMinutes": 780,
+      "requiredEmployees": 1,
+      "maximumEmployees": null
+    },
+    {
+      "id": "req_traiteur_2026-08-05_0780",
+      "sectorId": "traiteur",
+      "date": "2026-08-05",
+      "startMinutes": 780,
+      "endMinutes": 810,
+      "requiredEmployees": 1,
+      "maximumEmployees": null
+    },
+    {
+      "id": "req_traiteur_2026-08-05_0810",
+      "sectorId": "traiteur",
+      "date": "2026-08-05",
+      "startMinutes": 810,
+      "endMinutes": 840,
+      "requiredEmployees": 1,
+      "maximumEmployees": null
+    },
+    {
+      "id": "req_traiteur_2026-08-05_0840",
+      "sectorId": "traiteur",
+      "date": "2026-08-05",
+      "startMinutes": 840,
+      "endMinutes": 870,
+      "requiredEmployees": 1,
+      "maximumEmployees": null
+    },
+    {
+      "id": "req_traiteur_2026-08-05_0870",
+      "sectorId": "traiteur",
+      "date": "2026-08-05",
+      "startMinutes": 870,
+      "endMinutes": 900,
+      "requiredEmployees": 1,
+      "maximumEmployees": null
+    },
+    {
+      "id": "req_traiteur_2026-08-05_0900",
+      "sectorId": "traiteur",
+      "date": "2026-08-05",
+      "startMinutes": 900,
+      "endMinutes": 930,
+      "requiredEmployees": 1,
+      "maximumEmployees": null
+    },
+    {
+      "id": "req_traiteur_2026-08-05_0930",
+      "sectorId": "traiteur",
+      "date": "2026-08-05",
+      "startMinutes": 930,
+      "endMinutes": 960,
+      "requiredEmployees": 1,
+      "maximumEmployees": null
+    },
+    {
+      "id": "req_traiteur_2026-08-05_0960",
+      "sectorId": "traiteur",
+      "date": "2026-08-05",
+      "startMinutes": 960,
+      "endMinutes": 990,
+      "requiredEmployees": 1,
+      "maximumEmployees": null
+    },
+    {
+      "id": "req_traiteur_2026-08-05_0990",
+      "sectorId": "traiteur",
+      "date": "2026-08-05",
+      "startMinutes": 990,
+      "endMinutes": 1020,
+      "requiredEmployees": 1,
+      "maximumEmployees": null
+    },
+    {
+      "id": "req_traiteur_2026-08-05_1020",
+      "sectorId": "traiteur",
+      "date": "2026-08-05",
+      "startMinutes": 1020,
+      "endMinutes": 1050,
+      "requiredEmployees": 1,
+      "maximumEmployees": null
+    },
+    {
+      "id": "req_traiteur_2026-08-05_1050",
+      "sectorId": "traiteur",
+      "date": "2026-08-05",
+      "startMinutes": 1050,
+      "endMinutes": 1080,
+      "requiredEmployees": 1,
+      "maximumEmployees": null
+    },
+    {
+      "id": "req_traiteur_2026-08-05_1080",
+      "sectorId": "traiteur",
+      "date": "2026-08-05",
+      "startMinutes": 1080,
+      "endMinutes": 1110,
+      "requiredEmployees": 1,
+      "maximumEmployees": null
+    },
+    {
+      "id": "req_traiteur_2026-08-05_1110",
+      "sectorId": "traiteur",
+      "date": "2026-08-05",
+      "startMinutes": 1110,
+      "endMinutes": 1140,
+      "requiredEmployees": 1,
+      "maximumEmployees": null
+    },
+    {
+      "id": "req_charcuterie_2026-08-06_0420",
+      "sectorId": "charcuterie",
+      "date": "2026-08-06",
+      "startMinutes": 420,
+      "endMinutes": 450,
+      "requiredEmployees": 1,
+      "maximumEmployees": null
+    },
+    {
+      "id": "req_charcuterie_2026-08-06_0450",
+      "sectorId": "charcuterie",
+      "date": "2026-08-06",
+      "startMinutes": 450,
+      "endMinutes": 480,
+      "requiredEmployees": 1,
+      "maximumEmployees": null
+    },
+    {
+      "id": "req_charcuterie_2026-08-06_0480",
+      "sectorId": "charcuterie",
+      "date": "2026-08-06",
+      "startMinutes": 480,
+      "endMinutes": 510,
+      "requiredEmployees": 1,
+      "hardMinimumEmployees": 1,
+      "maximumEmployees": null
+    },
+    {
+      "id": "req_charcuterie_2026-08-06_0510",
+      "sectorId": "charcuterie",
+      "date": "2026-08-06",
+      "startMinutes": 510,
+      "endMinutes": 540,
+      "requiredEmployees": 1,
+      "hardMinimumEmployees": 1,
+      "maximumEmployees": null
+    },
+    {
+      "id": "req_charcuterie_2026-08-06_0540",
+      "sectorId": "charcuterie",
+      "date": "2026-08-06",
+      "startMinutes": 540,
+      "endMinutes": 570,
+      "requiredEmployees": 1,
+      "hardMinimumEmployees": 1,
+      "maximumEmployees": null
+    },
+    {
+      "id": "req_charcuterie_2026-08-06_0570",
+      "sectorId": "charcuterie",
+      "date": "2026-08-06",
+      "startMinutes": 570,
+      "endMinutes": 600,
+      "requiredEmployees": 1,
+      "hardMinimumEmployees": 1,
+      "maximumEmployees": null
+    },
+    {
+      "id": "req_charcuterie_2026-08-06_0600",
+      "sectorId": "charcuterie",
+      "date": "2026-08-06",
+      "startMinutes": 600,
+      "endMinutes": 630,
+      "requiredEmployees": 1,
+      "hardMinimumEmployees": 1,
+      "maximumEmployees": null
+    },
+    {
+      "id": "req_charcuterie_2026-08-06_0630",
+      "sectorId": "charcuterie",
+      "date": "2026-08-06",
+      "startMinutes": 630,
+      "endMinutes": 660,
+      "requiredEmployees": 1,
+      "hardMinimumEmployees": 1,
+      "maximumEmployees": null
+    },
+    {
+      "id": "req_charcuterie_2026-08-06_0660",
+      "sectorId": "charcuterie",
+      "date": "2026-08-06",
+      "startMinutes": 660,
+      "endMinutes": 690,
+      "requiredEmployees": 1,
+      "hardMinimumEmployees": 1,
+      "maximumEmployees": null
+    },
+    {
+      "id": "req_charcuterie_2026-08-06_0690",
+      "sectorId": "charcuterie",
+      "date": "2026-08-06",
+      "startMinutes": 690,
+      "endMinutes": 720,
+      "requiredEmployees": 1,
+      "hardMinimumEmployees": 1,
+      "maximumEmployees": null
+    },
+    {
+      "id": "req_charcuterie_2026-08-06_0720",
+      "sectorId": "charcuterie",
+      "date": "2026-08-06",
+      "startMinutes": 720,
+      "endMinutes": 750,
+      "requiredEmployees": 1,
+      "hardMinimumEmployees": 1,
+      "maximumEmployees": null
+    },
+    {
+      "id": "req_charcuterie_2026-08-06_0750",
+      "sectorId": "charcuterie",
+      "date": "2026-08-06",
+      "startMinutes": 750,
+      "endMinutes": 780,
+      "requiredEmployees": 1,
+      "hardMinimumEmployees": 1,
+      "maximumEmployees": null
+    },
+    {
+      "id": "req_charcuterie_2026-08-06_0780",
+      "sectorId": "charcuterie",
+      "date": "2026-08-06",
+      "startMinutes": 780,
+      "endMinutes": 810,
+      "requiredEmployees": 1,
+      "hardMinimumEmployees": 1,
+      "maximumEmployees": null
+    },
+    {
+      "id": "req_charcuterie_2026-08-06_0810",
+      "sectorId": "charcuterie",
+      "date": "2026-08-06",
+      "startMinutes": 810,
+      "endMinutes": 840,
+      "requiredEmployees": 1,
+      "hardMinimumEmployees": 1,
+      "maximumEmployees": null
+    },
+    {
+      "id": "req_charcuterie_2026-08-06_0840",
+      "sectorId": "charcuterie",
+      "date": "2026-08-06",
+      "startMinutes": 840,
+      "endMinutes": 870,
+      "requiredEmployees": 1,
+      "hardMinimumEmployees": 1,
+      "maximumEmployees": null
+    },
+    {
+      "id": "req_charcuterie_2026-08-06_0870",
+      "sectorId": "charcuterie",
+      "date": "2026-08-06",
+      "startMinutes": 870,
+      "endMinutes": 900,
+      "requiredEmployees": 1,
+      "hardMinimumEmployees": 1,
+      "maximumEmployees": null
+    },
+    {
+      "id": "req_charcuterie_2026-08-06_0900",
+      "sectorId": "charcuterie",
+      "date": "2026-08-06",
+      "startMinutes": 900,
+      "endMinutes": 930,
+      "requiredEmployees": 1,
+      "hardMinimumEmployees": 1,
+      "maximumEmployees": null
+    },
+    {
+      "id": "req_charcuterie_2026-08-06_0930",
+      "sectorId": "charcuterie",
+      "date": "2026-08-06",
+      "startMinutes": 930,
+      "endMinutes": 960,
+      "requiredEmployees": 1,
+      "hardMinimumEmployees": 1,
+      "maximumEmployees": null
+    },
+    {
+      "id": "req_charcuterie_2026-08-06_0960",
+      "sectorId": "charcuterie",
+      "date": "2026-08-06",
+      "startMinutes": 960,
+      "endMinutes": 990,
+      "requiredEmployees": 1,
+      "hardMinimumEmployees": 1,
+      "maximumEmployees": null
+    },
+    {
+      "id": "req_charcuterie_2026-08-06_0990",
+      "sectorId": "charcuterie",
+      "date": "2026-08-06",
+      "startMinutes": 990,
+      "endMinutes": 1020,
+      "requiredEmployees": 1,
+      "hardMinimumEmployees": 1,
+      "maximumEmployees": null
+    },
+    {
+      "id": "req_charcuterie_2026-08-06_1020",
+      "sectorId": "charcuterie",
+      "date": "2026-08-06",
+      "startMinutes": 1020,
+      "endMinutes": 1050,
+      "requiredEmployees": 1,
+      "hardMinimumEmployees": 1,
+      "maximumEmployees": null
+    },
+    {
+      "id": "req_charcuterie_2026-08-06_1050",
+      "sectorId": "charcuterie",
+      "date": "2026-08-06",
+      "startMinutes": 1050,
+      "endMinutes": 1080,
+      "requiredEmployees": 1,
+      "hardMinimumEmployees": 1,
+      "maximumEmployees": null
+    },
+    {
+      "id": "req_charcuterie_2026-08-06_1080",
+      "sectorId": "charcuterie",
+      "date": "2026-08-06",
+      "startMinutes": 1080,
+      "endMinutes": 1110,
+      "requiredEmployees": 1,
+      "hardMinimumEmployees": 1,
+      "maximumEmployees": null
+    },
+    {
+      "id": "req_charcuterie_2026-08-06_1110",
+      "sectorId": "charcuterie",
+      "date": "2026-08-06",
+      "startMinutes": 1110,
+      "endMinutes": 1140,
+      "requiredEmployees": 1,
+      "hardMinimumEmployees": 1,
+      "maximumEmployees": null
+    },
+    {
+      "id": "req_charcuterie_2026-08-06_1140",
+      "sectorId": "charcuterie",
+      "date": "2026-08-06",
+      "startMinutes": 1140,
+      "endMinutes": 1170,
+      "requiredEmployees": 1,
+      "maximumEmployees": null
+    },
+    {
+      "id": "req_fromage_2026-08-06_0480",
+      "sectorId": "fromage",
+      "date": "2026-08-06",
+      "startMinutes": 480,
+      "endMinutes": 510,
+      "requiredEmployees": 1,
+      "maximumEmployees": null
+    },
+    {
+      "id": "req_fromage_2026-08-06_0510",
+      "sectorId": "fromage",
+      "date": "2026-08-06",
+      "startMinutes": 510,
+      "endMinutes": 540,
+      "requiredEmployees": 1,
+      "maximumEmployees": null
+    },
+    {
+      "id": "req_fromage_2026-08-06_0540",
+      "sectorId": "fromage",
+      "date": "2026-08-06",
+      "startMinutes": 540,
+      "endMinutes": 570,
+      "requiredEmployees": 1,
+      "maximumEmployees": null
+    },
+    {
+      "id": "req_fromage_2026-08-06_0570",
+      "sectorId": "fromage",
+      "date": "2026-08-06",
+      "startMinutes": 570,
+      "endMinutes": 600,
+      "requiredEmployees": 1,
+      "maximumEmployees": null
+    },
+    {
+      "id": "req_fromage_2026-08-06_0600",
+      "sectorId": "fromage",
+      "date": "2026-08-06",
+      "startMinutes": 600,
+      "endMinutes": 630,
+      "requiredEmployees": 1,
+      "maximumEmployees": null
+    },
+    {
+      "id": "req_fromage_2026-08-06_0630",
+      "sectorId": "fromage",
+      "date": "2026-08-06",
+      "startMinutes": 630,
+      "endMinutes": 660,
+      "requiredEmployees": 1,
+      "maximumEmployees": null
+    },
+    {
+      "id": "req_fromage_2026-08-06_0660",
+      "sectorId": "fromage",
+      "date": "2026-08-06",
+      "startMinutes": 660,
+      "endMinutes": 690,
+      "requiredEmployees": 1,
+      "maximumEmployees": null
+    },
+    {
+      "id": "req_fromage_2026-08-06_0690",
+      "sectorId": "fromage",
+      "date": "2026-08-06",
+      "startMinutes": 690,
+      "endMinutes": 720,
+      "requiredEmployees": 1,
+      "maximumEmployees": null
+    },
+    {
+      "id": "req_fromage_2026-08-06_0720",
+      "sectorId": "fromage",
+      "date": "2026-08-06",
+      "startMinutes": 720,
+      "endMinutes": 750,
+      "requiredEmployees": 1,
+      "maximumEmployees": null
+    },
+    {
+      "id": "req_fromage_2026-08-06_0750",
+      "sectorId": "fromage",
+      "date": "2026-08-06",
+      "startMinutes": 750,
+      "endMinutes": 780,
+      "requiredEmployees": 1,
+      "maximumEmployees": null
+    },
+    {
+      "id": "req_fromage_2026-08-06_0780",
+      "sectorId": "fromage",
+      "date": "2026-08-06",
+      "startMinutes": 780,
+      "endMinutes": 810,
+      "requiredEmployees": 1,
+      "maximumEmployees": null
+    },
+    {
+      "id": "req_fromage_2026-08-06_0810",
+      "sectorId": "fromage",
+      "date": "2026-08-06",
+      "startMinutes": 810,
+      "endMinutes": 840,
+      "requiredEmployees": 1,
+      "maximumEmployees": null
+    },
+    {
+      "id": "req_fromage_2026-08-06_0840",
+      "sectorId": "fromage",
+      "date": "2026-08-06",
+      "startMinutes": 840,
+      "endMinutes": 870,
+      "requiredEmployees": 1,
+      "maximumEmployees": null
+    },
+    {
+      "id": "req_fromage_2026-08-06_0870",
+      "sectorId": "fromage",
+      "date": "2026-08-06",
+      "startMinutes": 870,
+      "endMinutes": 900,
+      "requiredEmployees": 1,
+      "maximumEmployees": null
+    },
+    {
+      "id": "req_fromage_2026-08-06_0900",
+      "sectorId": "fromage",
+      "date": "2026-08-06",
+      "startMinutes": 900,
+      "endMinutes": 930,
+      "requiredEmployees": 1,
+      "maximumEmployees": null
+    },
+    {
+      "id": "req_fromage_2026-08-06_0930",
+      "sectorId": "fromage",
+      "date": "2026-08-06",
+      "startMinutes": 930,
+      "endMinutes": 960,
+      "requiredEmployees": 1,
+      "maximumEmployees": null
+    },
+    {
+      "id": "req_fromage_2026-08-06_0960",
+      "sectorId": "fromage",
+      "date": "2026-08-06",
+      "startMinutes": 960,
+      "endMinutes": 990,
+      "requiredEmployees": 1,
+      "maximumEmployees": null
+    },
+    {
+      "id": "req_fromage_2026-08-06_0990",
+      "sectorId": "fromage",
+      "date": "2026-08-06",
+      "startMinutes": 990,
+      "endMinutes": 1020,
+      "requiredEmployees": 1,
+      "maximumEmployees": null
+    },
+    {
+      "id": "req_fromage_2026-08-06_1020",
+      "sectorId": "fromage",
+      "date": "2026-08-06",
+      "startMinutes": 1020,
+      "endMinutes": 1050,
+      "requiredEmployees": 1,
+      "maximumEmployees": null
+    },
+    {
+      "id": "req_fromage_2026-08-06_1050",
+      "sectorId": "fromage",
+      "date": "2026-08-06",
+      "startMinutes": 1050,
+      "endMinutes": 1080,
+      "requiredEmployees": 1,
+      "maximumEmployees": null
+    },
+    {
+      "id": "req_fromage_2026-08-06_1080",
+      "sectorId": "fromage",
+      "date": "2026-08-06",
+      "startMinutes": 1080,
+      "endMinutes": 1110,
+      "requiredEmployees": 1,
+      "maximumEmployees": null
+    },
+    {
+      "id": "req_fromage_2026-08-06_1110",
+      "sectorId": "fromage",
+      "date": "2026-08-06",
+      "startMinutes": 1110,
+      "endMinutes": 1140,
+      "requiredEmployees": 1,
+      "maximumEmployees": null
+    },
+    {
+      "id": "req_poisson_2026-08-06_0450",
+      "sectorId": "poisson",
+      "date": "2026-08-06",
+      "startMinutes": 450,
+      "endMinutes": 480,
+      "requiredEmployees": 1,
+      "maximumEmployees": null
+    },
+    {
+      "id": "req_poisson_2026-08-06_0480",
+      "sectorId": "poisson",
+      "date": "2026-08-06",
+      "startMinutes": 480,
+      "endMinutes": 510,
+      "requiredEmployees": 1,
+      "maximumEmployees": null
+    },
+    {
+      "id": "req_poisson_2026-08-06_0510",
+      "sectorId": "poisson",
+      "date": "2026-08-06",
+      "startMinutes": 510,
+      "endMinutes": 540,
+      "requiredEmployees": 1,
+      "maximumEmployees": null
+    },
+    {
+      "id": "req_poisson_2026-08-06_0540",
+      "sectorId": "poisson",
+      "date": "2026-08-06",
+      "startMinutes": 540,
+      "endMinutes": 570,
+      "requiredEmployees": 1,
+      "maximumEmployees": null
+    },
+    {
+      "id": "req_poisson_2026-08-06_0570",
+      "sectorId": "poisson",
+      "date": "2026-08-06",
+      "startMinutes": 570,
+      "endMinutes": 600,
+      "requiredEmployees": 1,
+      "maximumEmployees": null
+    },
+    {
+      "id": "req_poisson_2026-08-06_0600",
+      "sectorId": "poisson",
+      "date": "2026-08-06",
+      "startMinutes": 600,
+      "endMinutes": 630,
+      "requiredEmployees": 1,
+      "maximumEmployees": null
+    },
+    {
+      "id": "req_poisson_2026-08-06_0630",
+      "sectorId": "poisson",
+      "date": "2026-08-06",
+      "startMinutes": 630,
+      "endMinutes": 660,
+      "requiredEmployees": 1,
+      "maximumEmployees": null
+    },
+    {
+      "id": "req_poisson_2026-08-06_0660",
+      "sectorId": "poisson",
+      "date": "2026-08-06",
+      "startMinutes": 660,
+      "endMinutes": 690,
+      "requiredEmployees": 1,
+      "maximumEmployees": null
+    },
+    {
+      "id": "req_poisson_2026-08-06_0690",
+      "sectorId": "poisson",
+      "date": "2026-08-06",
+      "startMinutes": 690,
+      "endMinutes": 720,
+      "requiredEmployees": 1,
+      "maximumEmployees": null
+    },
+    {
+      "id": "req_poisson_2026-08-06_0720",
+      "sectorId": "poisson",
+      "date": "2026-08-06",
+      "startMinutes": 720,
+      "endMinutes": 750,
+      "requiredEmployees": 1,
+      "maximumEmployees": null
+    },
+    {
+      "id": "req_poisson_2026-08-06_0750",
+      "sectorId": "poisson",
+      "date": "2026-08-06",
+      "startMinutes": 750,
+      "endMinutes": 780,
+      "requiredEmployees": 1,
+      "maximumEmployees": null
+    },
+    {
+      "id": "req_traiteur_2026-08-06_0540",
+      "sectorId": "traiteur",
+      "date": "2026-08-06",
+      "startMinutes": 540,
+      "endMinutes": 570,
+      "requiredEmployees": 1,
+      "maximumEmployees": null
+    },
+    {
+      "id": "req_traiteur_2026-08-06_0570",
+      "sectorId": "traiteur",
+      "date": "2026-08-06",
+      "startMinutes": 570,
+      "endMinutes": 600,
+      "requiredEmployees": 1,
+      "maximumEmployees": null
+    },
+    {
+      "id": "req_traiteur_2026-08-06_0600",
+      "sectorId": "traiteur",
+      "date": "2026-08-06",
+      "startMinutes": 600,
+      "endMinutes": 630,
+      "requiredEmployees": 1,
+      "maximumEmployees": null
+    },
+    {
+      "id": "req_traiteur_2026-08-06_0630",
+      "sectorId": "traiteur",
+      "date": "2026-08-06",
+      "startMinutes": 630,
+      "endMinutes": 660,
+      "requiredEmployees": 1,
+      "maximumEmployees": null
+    },
+    {
+      "id": "req_traiteur_2026-08-06_0660",
+      "sectorId": "traiteur",
+      "date": "2026-08-06",
+      "startMinutes": 660,
+      "endMinutes": 690,
+      "requiredEmployees": 1,
+      "maximumEmployees": null
+    },
+    {
+      "id": "req_traiteur_2026-08-06_0690",
+      "sectorId": "traiteur",
+      "date": "2026-08-06",
+      "startMinutes": 690,
+      "endMinutes": 720,
+      "requiredEmployees": 1,
+      "maximumEmployees": null
+    },
+    {
+      "id": "req_traiteur_2026-08-06_0720",
+      "sectorId": "traiteur",
+      "date": "2026-08-06",
+      "startMinutes": 720,
+      "endMinutes": 750,
+      "requiredEmployees": 1,
+      "maximumEmployees": null
+    },
+    {
+      "id": "req_traiteur_2026-08-06_0750",
+      "sectorId": "traiteur",
+      "date": "2026-08-06",
+      "startMinutes": 750,
+      "endMinutes": 780,
+      "requiredEmployees": 1,
+      "maximumEmployees": null
+    },
+    {
+      "id": "req_traiteur_2026-08-06_0780",
+      "sectorId": "traiteur",
+      "date": "2026-08-06",
+      "startMinutes": 780,
+      "endMinutes": 810,
+      "requiredEmployees": 1,
+      "maximumEmployees": null
+    },
+    {
+      "id": "req_traiteur_2026-08-06_0810",
+      "sectorId": "traiteur",
+      "date": "2026-08-06",
+      "startMinutes": 810,
+      "endMinutes": 840,
+      "requiredEmployees": 1,
+      "maximumEmployees": null
+    },
+    {
+      "id": "req_traiteur_2026-08-06_0840",
+      "sectorId": "traiteur",
+      "date": "2026-08-06",
+      "startMinutes": 840,
+      "endMinutes": 870,
+      "requiredEmployees": 1,
+      "maximumEmployees": null
+    },
+    {
+      "id": "req_traiteur_2026-08-06_0870",
+      "sectorId": "traiteur",
+      "date": "2026-08-06",
+      "startMinutes": 870,
+      "endMinutes": 900,
+      "requiredEmployees": 1,
+      "maximumEmployees": null
+    },
+    {
+      "id": "req_traiteur_2026-08-06_0900",
+      "sectorId": "traiteur",
+      "date": "2026-08-06",
+      "startMinutes": 900,
+      "endMinutes": 930,
+      "requiredEmployees": 1,
+      "maximumEmployees": null
+    },
+    {
+      "id": "req_traiteur_2026-08-06_0930",
+      "sectorId": "traiteur",
+      "date": "2026-08-06",
+      "startMinutes": 930,
+      "endMinutes": 960,
+      "requiredEmployees": 1,
+      "maximumEmployees": null
+    },
+    {
+      "id": "req_traiteur_2026-08-06_0960",
+      "sectorId": "traiteur",
+      "date": "2026-08-06",
+      "startMinutes": 960,
+      "endMinutes": 990,
+      "requiredEmployees": 1,
+      "maximumEmployees": null
+    },
+    {
+      "id": "req_traiteur_2026-08-06_0990",
+      "sectorId": "traiteur",
+      "date": "2026-08-06",
+      "startMinutes": 990,
+      "endMinutes": 1020,
+      "requiredEmployees": 1,
+      "maximumEmployees": null
+    },
+    {
+      "id": "req_traiteur_2026-08-06_1020",
+      "sectorId": "traiteur",
+      "date": "2026-08-06",
+      "startMinutes": 1020,
+      "endMinutes": 1050,
+      "requiredEmployees": 1,
+      "maximumEmployees": null
+    },
+    {
+      "id": "req_traiteur_2026-08-06_1050",
+      "sectorId": "traiteur",
+      "date": "2026-08-06",
+      "startMinutes": 1050,
+      "endMinutes": 1080,
+      "requiredEmployees": 1,
+      "maximumEmployees": null
+    },
+    {
+      "id": "req_traiteur_2026-08-06_1080",
+      "sectorId": "traiteur",
+      "date": "2026-08-06",
+      "startMinutes": 1080,
+      "endMinutes": 1110,
+      "requiredEmployees": 1,
+      "maximumEmployees": null
+    },
+    {
+      "id": "req_traiteur_2026-08-06_1110",
+      "sectorId": "traiteur",
+      "date": "2026-08-06",
+      "startMinutes": 1110,
+      "endMinutes": 1140,
+      "requiredEmployees": 1,
+      "maximumEmployees": null
+    },
+    {
+      "id": "req_charcuterie_2026-08-07_0420",
+      "sectorId": "charcuterie",
+      "date": "2026-08-07",
+      "startMinutes": 420,
+      "endMinutes": 450,
+      "requiredEmployees": 1,
+      "maximumEmployees": null
+    },
+    {
+      "id": "req_charcuterie_2026-08-07_0450",
+      "sectorId": "charcuterie",
+      "date": "2026-08-07",
+      "startMinutes": 450,
+      "endMinutes": 480,
+      "requiredEmployees": 1,
+      "maximumEmployees": null
+    },
+    {
+      "id": "req_charcuterie_2026-08-07_0480",
+      "sectorId": "charcuterie",
+      "date": "2026-08-07",
+      "startMinutes": 480,
+      "endMinutes": 510,
+      "requiredEmployees": 1,
+      "hardMinimumEmployees": 1,
+      "maximumEmployees": null
+    },
+    {
+      "id": "req_charcuterie_2026-08-07_0510",
+      "sectorId": "charcuterie",
+      "date": "2026-08-07",
+      "startMinutes": 510,
+      "endMinutes": 540,
+      "requiredEmployees": 1,
+      "hardMinimumEmployees": 1,
+      "maximumEmployees": null
+    },
+    {
+      "id": "req_charcuterie_2026-08-07_0540",
+      "sectorId": "charcuterie",
+      "date": "2026-08-07",
+      "startMinutes": 540,
+      "endMinutes": 570,
+      "requiredEmployees": 1,
+      "hardMinimumEmployees": 1,
+      "maximumEmployees": null
+    },
+    {
+      "id": "req_charcuterie_2026-08-07_0570",
+      "sectorId": "charcuterie",
+      "date": "2026-08-07",
+      "startMinutes": 570,
+      "endMinutes": 600,
+      "requiredEmployees": 1,
+      "hardMinimumEmployees": 1,
+      "maximumEmployees": null
+    },
+    {
+      "id": "req_charcuterie_2026-08-07_0600",
+      "sectorId": "charcuterie",
+      "date": "2026-08-07",
+      "startMinutes": 600,
+      "endMinutes": 630,
+      "requiredEmployees": 2,
+      "hardMinimumEmployees": 1,
+      "maximumEmployees": null
+    },
+    {
+      "id": "req_charcuterie_2026-08-07_0630",
+      "sectorId": "charcuterie",
+      "date": "2026-08-07",
+      "startMinutes": 630,
+      "endMinutes": 660,
+      "requiredEmployees": 2,
+      "hardMinimumEmployees": 1,
+      "maximumEmployees": null
+    },
+    {
+      "id": "req_charcuterie_2026-08-07_0660",
+      "sectorId": "charcuterie",
+      "date": "2026-08-07",
+      "startMinutes": 660,
+      "endMinutes": 690,
+      "requiredEmployees": 2,
+      "hardMinimumEmployees": 1,
+      "maximumEmployees": null
+    },
+    {
+      "id": "req_charcuterie_2026-08-07_0690",
+      "sectorId": "charcuterie",
+      "date": "2026-08-07",
+      "startMinutes": 690,
+      "endMinutes": 720,
+      "requiredEmployees": 2,
+      "hardMinimumEmployees": 1,
+      "maximumEmployees": null
+    },
+    {
+      "id": "req_charcuterie_2026-08-07_0720",
+      "sectorId": "charcuterie",
+      "date": "2026-08-07",
+      "startMinutes": 720,
+      "endMinutes": 750,
+      "requiredEmployees": 1,
+      "hardMinimumEmployees": 1,
+      "maximumEmployees": null
+    },
+    {
+      "id": "req_charcuterie_2026-08-07_0750",
+      "sectorId": "charcuterie",
+      "date": "2026-08-07",
+      "startMinutes": 750,
+      "endMinutes": 780,
+      "requiredEmployees": 1,
+      "hardMinimumEmployees": 1,
+      "maximumEmployees": null
+    },
+    {
+      "id": "req_charcuterie_2026-08-07_0780",
+      "sectorId": "charcuterie",
+      "date": "2026-08-07",
+      "startMinutes": 780,
+      "endMinutes": 810,
+      "requiredEmployees": 1,
+      "hardMinimumEmployees": 1,
+      "maximumEmployees": null
+    },
+    {
+      "id": "req_charcuterie_2026-08-07_0810",
+      "sectorId": "charcuterie",
+      "date": "2026-08-07",
+      "startMinutes": 810,
+      "endMinutes": 840,
+      "requiredEmployees": 1,
+      "hardMinimumEmployees": 1,
+      "maximumEmployees": null
+    },
+    {
+      "id": "req_charcuterie_2026-08-07_0840",
+      "sectorId": "charcuterie",
+      "date": "2026-08-07",
+      "startMinutes": 840,
+      "endMinutes": 870,
+      "requiredEmployees": 1,
+      "hardMinimumEmployees": 1,
+      "maximumEmployees": null
+    },
+    {
+      "id": "req_charcuterie_2026-08-07_0870",
+      "sectorId": "charcuterie",
+      "date": "2026-08-07",
+      "startMinutes": 870,
+      "endMinutes": 900,
+      "requiredEmployees": 1,
+      "hardMinimumEmployees": 1,
+      "maximumEmployees": null
+    },
+    {
+      "id": "req_charcuterie_2026-08-07_0900",
+      "sectorId": "charcuterie",
+      "date": "2026-08-07",
+      "startMinutes": 900,
+      "endMinutes": 930,
+      "requiredEmployees": 1,
+      "hardMinimumEmployees": 1,
+      "maximumEmployees": null
+    },
+    {
+      "id": "req_charcuterie_2026-08-07_0930",
+      "sectorId": "charcuterie",
+      "date": "2026-08-07",
+      "startMinutes": 930,
+      "endMinutes": 960,
+      "requiredEmployees": 1,
+      "hardMinimumEmployees": 1,
+      "maximumEmployees": null
+    },
+    {
+      "id": "req_charcuterie_2026-08-07_0960",
+      "sectorId": "charcuterie",
+      "date": "2026-08-07",
+      "startMinutes": 960,
+      "endMinutes": 990,
+      "requiredEmployees": 1,
+      "hardMinimumEmployees": 1,
+      "maximumEmployees": null
+    },
+    {
+      "id": "req_charcuterie_2026-08-07_0990",
+      "sectorId": "charcuterie",
+      "date": "2026-08-07",
+      "startMinutes": 990,
+      "endMinutes": 1020,
+      "requiredEmployees": 1,
+      "hardMinimumEmployees": 1,
+      "maximumEmployees": null
+    },
+    {
+      "id": "req_charcuterie_2026-08-07_1020",
+      "sectorId": "charcuterie",
+      "date": "2026-08-07",
+      "startMinutes": 1020,
+      "endMinutes": 1050,
+      "requiredEmployees": 1,
+      "hardMinimumEmployees": 1,
+      "maximumEmployees": null
+    },
+    {
+      "id": "req_charcuterie_2026-08-07_1050",
+      "sectorId": "charcuterie",
+      "date": "2026-08-07",
+      "startMinutes": 1050,
+      "endMinutes": 1080,
+      "requiredEmployees": 1,
+      "hardMinimumEmployees": 1,
+      "maximumEmployees": null
+    },
+    {
+      "id": "req_charcuterie_2026-08-07_1080",
+      "sectorId": "charcuterie",
+      "date": "2026-08-07",
+      "startMinutes": 1080,
+      "endMinutes": 1110,
+      "requiredEmployees": 1,
+      "hardMinimumEmployees": 1,
+      "maximumEmployees": null
+    },
+    {
+      "id": "req_charcuterie_2026-08-07_1110",
+      "sectorId": "charcuterie",
+      "date": "2026-08-07",
+      "startMinutes": 1110,
+      "endMinutes": 1140,
+      "requiredEmployees": 1,
+      "hardMinimumEmployees": 1,
+      "maximumEmployees": null
+    },
+    {
+      "id": "req_charcuterie_2026-08-07_1140",
+      "sectorId": "charcuterie",
+      "date": "2026-08-07",
+      "startMinutes": 1140,
+      "endMinutes": 1170,
+      "requiredEmployees": 1,
+      "maximumEmployees": null
+    },
+    {
+      "id": "req_fromage_2026-08-07_0480",
+      "sectorId": "fromage",
+      "date": "2026-08-07",
+      "startMinutes": 480,
+      "endMinutes": 510,
+      "requiredEmployees": 1,
+      "maximumEmployees": null
+    },
+    {
+      "id": "req_fromage_2026-08-07_0510",
+      "sectorId": "fromage",
+      "date": "2026-08-07",
+      "startMinutes": 510,
+      "endMinutes": 540,
+      "requiredEmployees": 1,
+      "maximumEmployees": null
+    },
+    {
+      "id": "req_fromage_2026-08-07_0540",
+      "sectorId": "fromage",
+      "date": "2026-08-07",
+      "startMinutes": 540,
+      "endMinutes": 570,
+      "requiredEmployees": 1,
+      "maximumEmployees": null
+    },
+    {
+      "id": "req_fromage_2026-08-07_0570",
+      "sectorId": "fromage",
+      "date": "2026-08-07",
+      "startMinutes": 570,
+      "endMinutes": 600,
+      "requiredEmployees": 1,
+      "maximumEmployees": null
+    },
+    {
+      "id": "req_fromage_2026-08-07_0600",
+      "sectorId": "fromage",
+      "date": "2026-08-07",
+      "startMinutes": 600,
+      "endMinutes": 630,
+      "requiredEmployees": 1,
+      "maximumEmployees": null
+    },
+    {
+      "id": "req_fromage_2026-08-07_0630",
+      "sectorId": "fromage",
+      "date": "2026-08-07",
+      "startMinutes": 630,
+      "endMinutes": 660,
+      "requiredEmployees": 1,
+      "maximumEmployees": null
+    },
+    {
+      "id": "req_fromage_2026-08-07_0660",
+      "sectorId": "fromage",
+      "date": "2026-08-07",
+      "startMinutes": 660,
+      "endMinutes": 690,
+      "requiredEmployees": 1,
+      "maximumEmployees": null
+    },
+    {
+      "id": "req_fromage_2026-08-07_0690",
+      "sectorId": "fromage",
+      "date": "2026-08-07",
+      "startMinutes": 690,
+      "endMinutes": 720,
+      "requiredEmployees": 1,
+      "maximumEmployees": null
+    },
+    {
+      "id": "req_fromage_2026-08-07_0720",
+      "sectorId": "fromage",
+      "date": "2026-08-07",
+      "startMinutes": 720,
+      "endMinutes": 750,
+      "requiredEmployees": 1,
+      "maximumEmployees": null
+    },
+    {
+      "id": "req_fromage_2026-08-07_0750",
+      "sectorId": "fromage",
+      "date": "2026-08-07",
+      "startMinutes": 750,
+      "endMinutes": 780,
+      "requiredEmployees": 1,
+      "maximumEmployees": null
+    },
+    {
+      "id": "req_fromage_2026-08-07_0780",
+      "sectorId": "fromage",
+      "date": "2026-08-07",
+      "startMinutes": 780,
+      "endMinutes": 810,
+      "requiredEmployees": 1,
+      "maximumEmployees": null
+    },
+    {
+      "id": "req_fromage_2026-08-07_0810",
+      "sectorId": "fromage",
+      "date": "2026-08-07",
+      "startMinutes": 810,
+      "endMinutes": 840,
+      "requiredEmployees": 1,
+      "maximumEmployees": null
+    },
+    {
+      "id": "req_fromage_2026-08-07_0840",
+      "sectorId": "fromage",
+      "date": "2026-08-07",
+      "startMinutes": 840,
+      "endMinutes": 870,
+      "requiredEmployees": 1,
+      "maximumEmployees": null
+    },
+    {
+      "id": "req_fromage_2026-08-07_0870",
+      "sectorId": "fromage",
+      "date": "2026-08-07",
+      "startMinutes": 870,
+      "endMinutes": 900,
+      "requiredEmployees": 1,
+      "maximumEmployees": null
+    },
+    {
+      "id": "req_fromage_2026-08-07_0900",
+      "sectorId": "fromage",
+      "date": "2026-08-07",
+      "startMinutes": 900,
+      "endMinutes": 930,
+      "requiredEmployees": 1,
+      "maximumEmployees": null
+    },
+    {
+      "id": "req_fromage_2026-08-07_0930",
+      "sectorId": "fromage",
+      "date": "2026-08-07",
+      "startMinutes": 930,
+      "endMinutes": 960,
+      "requiredEmployees": 1,
+      "maximumEmployees": null
+    },
+    {
+      "id": "req_fromage_2026-08-07_0960",
+      "sectorId": "fromage",
+      "date": "2026-08-07",
+      "startMinutes": 960,
+      "endMinutes": 990,
+      "requiredEmployees": 1,
+      "maximumEmployees": null
+    },
+    {
+      "id": "req_fromage_2026-08-07_0990",
+      "sectorId": "fromage",
+      "date": "2026-08-07",
+      "startMinutes": 990,
+      "endMinutes": 1020,
+      "requiredEmployees": 1,
+      "maximumEmployees": null
+    },
+    {
+      "id": "req_fromage_2026-08-07_1020",
+      "sectorId": "fromage",
+      "date": "2026-08-07",
+      "startMinutes": 1020,
+      "endMinutes": 1050,
+      "requiredEmployees": 1,
+      "maximumEmployees": null
+    },
+    {
+      "id": "req_fromage_2026-08-07_1050",
+      "sectorId": "fromage",
+      "date": "2026-08-07",
+      "startMinutes": 1050,
+      "endMinutes": 1080,
+      "requiredEmployees": 1,
+      "maximumEmployees": null
+    },
+    {
+      "id": "req_fromage_2026-08-07_1080",
+      "sectorId": "fromage",
+      "date": "2026-08-07",
+      "startMinutes": 1080,
+      "endMinutes": 1110,
+      "requiredEmployees": 1,
+      "maximumEmployees": null
+    },
+    {
+      "id": "req_fromage_2026-08-07_1110",
+      "sectorId": "fromage",
+      "date": "2026-08-07",
+      "startMinutes": 1110,
+      "endMinutes": 1140,
+      "requiredEmployees": 1,
+      "maximumEmployees": null
+    },
+    {
+      "id": "req_poisson_2026-08-07_0450",
+      "sectorId": "poisson",
+      "date": "2026-08-07",
+      "startMinutes": 450,
+      "endMinutes": 480,
+      "requiredEmployees": 1,
+      "maximumEmployees": null
+    },
+    {
+      "id": "req_poisson_2026-08-07_0480",
+      "sectorId": "poisson",
+      "date": "2026-08-07",
+      "startMinutes": 480,
+      "endMinutes": 510,
+      "requiredEmployees": 1,
+      "maximumEmployees": null
+    },
+    {
+      "id": "req_poisson_2026-08-07_0510",
+      "sectorId": "poisson",
+      "date": "2026-08-07",
+      "startMinutes": 510,
+      "endMinutes": 540,
+      "requiredEmployees": 1,
+      "maximumEmployees": null
+    },
+    {
+      "id": "req_poisson_2026-08-07_0540",
+      "sectorId": "poisson",
+      "date": "2026-08-07",
+      "startMinutes": 540,
+      "endMinutes": 570,
+      "requiredEmployees": 1,
+      "maximumEmployees": null
+    },
+    {
+      "id": "req_poisson_2026-08-07_0570",
+      "sectorId": "poisson",
+      "date": "2026-08-07",
+      "startMinutes": 570,
+      "endMinutes": 600,
+      "requiredEmployees": 1,
+      "maximumEmployees": null
+    },
+    {
+      "id": "req_poisson_2026-08-07_0600",
+      "sectorId": "poisson",
+      "date": "2026-08-07",
+      "startMinutes": 600,
+      "endMinutes": 630,
+      "requiredEmployees": 1,
+      "maximumEmployees": null
+    },
+    {
+      "id": "req_poisson_2026-08-07_0630",
+      "sectorId": "poisson",
+      "date": "2026-08-07",
+      "startMinutes": 630,
+      "endMinutes": 660,
+      "requiredEmployees": 1,
+      "maximumEmployees": null
+    },
+    {
+      "id": "req_poisson_2026-08-07_0660",
+      "sectorId": "poisson",
+      "date": "2026-08-07",
+      "startMinutes": 660,
+      "endMinutes": 690,
+      "requiredEmployees": 1,
+      "maximumEmployees": null
+    },
+    {
+      "id": "req_poisson_2026-08-07_0690",
+      "sectorId": "poisson",
+      "date": "2026-08-07",
+      "startMinutes": 690,
+      "endMinutes": 720,
+      "requiredEmployees": 1,
+      "maximumEmployees": null
+    },
+    {
+      "id": "req_poisson_2026-08-07_0720",
+      "sectorId": "poisson",
+      "date": "2026-08-07",
+      "startMinutes": 720,
+      "endMinutes": 750,
+      "requiredEmployees": 1,
+      "maximumEmployees": null
+    },
+    {
+      "id": "req_poisson_2026-08-07_0750",
+      "sectorId": "poisson",
+      "date": "2026-08-07",
+      "startMinutes": 750,
+      "endMinutes": 780,
+      "requiredEmployees": 1,
+      "maximumEmployees": null
+    },
+    {
+      "id": "req_traiteur_2026-08-07_0540",
+      "sectorId": "traiteur",
+      "date": "2026-08-07",
+      "startMinutes": 540,
+      "endMinutes": 570,
+      "requiredEmployees": 1,
+      "maximumEmployees": null
+    },
+    {
+      "id": "req_traiteur_2026-08-07_0570",
+      "sectorId": "traiteur",
+      "date": "2026-08-07",
+      "startMinutes": 570,
+      "endMinutes": 600,
+      "requiredEmployees": 1,
+      "maximumEmployees": null
+    },
+    {
+      "id": "req_traiteur_2026-08-07_0600",
+      "sectorId": "traiteur",
+      "date": "2026-08-07",
+      "startMinutes": 600,
+      "endMinutes": 630,
+      "requiredEmployees": 1,
+      "maximumEmployees": null
+    },
+    {
+      "id": "req_traiteur_2026-08-07_0630",
+      "sectorId": "traiteur",
+      "date": "2026-08-07",
+      "startMinutes": 630,
+      "endMinutes": 660,
+      "requiredEmployees": 1,
+      "maximumEmployees": null
+    },
+    {
+      "id": "req_traiteur_2026-08-07_0660",
+      "sectorId": "traiteur",
+      "date": "2026-08-07",
+      "startMinutes": 660,
+      "endMinutes": 690,
+      "requiredEmployees": 1,
+      "maximumEmployees": null
+    },
+    {
+      "id": "req_traiteur_2026-08-07_0690",
+      "sectorId": "traiteur",
+      "date": "2026-08-07",
+      "startMinutes": 690,
+      "endMinutes": 720,
+      "requiredEmployees": 1,
+      "maximumEmployees": null
+    },
+    {
+      "id": "req_traiteur_2026-08-07_0720",
+      "sectorId": "traiteur",
+      "date": "2026-08-07",
+      "startMinutes": 720,
+      "endMinutes": 750,
+      "requiredEmployees": 1,
+      "maximumEmployees": null
+    },
+    {
+      "id": "req_traiteur_2026-08-07_0750",
+      "sectorId": "traiteur",
+      "date": "2026-08-07",
+      "startMinutes": 750,
+      "endMinutes": 780,
+      "requiredEmployees": 1,
+      "maximumEmployees": null
+    },
+    {
+      "id": "req_traiteur_2026-08-07_0780",
+      "sectorId": "traiteur",
+      "date": "2026-08-07",
+      "startMinutes": 780,
+      "endMinutes": 810,
+      "requiredEmployees": 1,
+      "maximumEmployees": null
+    },
+    {
+      "id": "req_traiteur_2026-08-07_0810",
+      "sectorId": "traiteur",
+      "date": "2026-08-07",
+      "startMinutes": 810,
+      "endMinutes": 840,
+      "requiredEmployees": 1,
+      "maximumEmployees": null
+    },
+    {
+      "id": "req_traiteur_2026-08-07_0840",
+      "sectorId": "traiteur",
+      "date": "2026-08-07",
+      "startMinutes": 840,
+      "endMinutes": 870,
+      "requiredEmployees": 1,
+      "maximumEmployees": null
+    },
+    {
+      "id": "req_traiteur_2026-08-07_0870",
+      "sectorId": "traiteur",
+      "date": "2026-08-07",
+      "startMinutes": 870,
+      "endMinutes": 900,
+      "requiredEmployees": 1,
+      "maximumEmployees": null
+    },
+    {
+      "id": "req_traiteur_2026-08-07_0900",
+      "sectorId": "traiteur",
+      "date": "2026-08-07",
+      "startMinutes": 900,
+      "endMinutes": 930,
+      "requiredEmployees": 1,
+      "maximumEmployees": null
+    },
+    {
+      "id": "req_traiteur_2026-08-07_0930",
+      "sectorId": "traiteur",
+      "date": "2026-08-07",
+      "startMinutes": 930,
+      "endMinutes": 960,
+      "requiredEmployees": 1,
+      "maximumEmployees": null
+    },
+    {
+      "id": "req_traiteur_2026-08-07_0960",
+      "sectorId": "traiteur",
+      "date": "2026-08-07",
+      "startMinutes": 960,
+      "endMinutes": 990,
+      "requiredEmployees": 1,
+      "maximumEmployees": null
+    },
+    {
+      "id": "req_traiteur_2026-08-07_0990",
+      "sectorId": "traiteur",
+      "date": "2026-08-07",
+      "startMinutes": 990,
+      "endMinutes": 1020,
+      "requiredEmployees": 1,
+      "maximumEmployees": null
+    },
+    {
+      "id": "req_traiteur_2026-08-07_1020",
+      "sectorId": "traiteur",
+      "date": "2026-08-07",
+      "startMinutes": 1020,
+      "endMinutes": 1050,
+      "requiredEmployees": 1,
+      "maximumEmployees": null
+    },
+    {
+      "id": "req_traiteur_2026-08-07_1050",
+      "sectorId": "traiteur",
+      "date": "2026-08-07",
+      "startMinutes": 1050,
+      "endMinutes": 1080,
+      "requiredEmployees": 1,
+      "maximumEmployees": null
+    },
+    {
+      "id": "req_traiteur_2026-08-07_1080",
+      "sectorId": "traiteur",
+      "date": "2026-08-07",
+      "startMinutes": 1080,
+      "endMinutes": 1110,
+      "requiredEmployees": 1,
+      "maximumEmployees": null
+    },
+    {
+      "id": "req_traiteur_2026-08-07_1110",
+      "sectorId": "traiteur",
+      "date": "2026-08-07",
+      "startMinutes": 1110,
+      "endMinutes": 1140,
+      "requiredEmployees": 1,
+      "maximumEmployees": null
+    },
+    {
+      "id": "req_charcuterie_2026-08-08_0420",
+      "sectorId": "charcuterie",
+      "date": "2026-08-08",
+      "startMinutes": 420,
+      "endMinutes": 450,
+      "requiredEmployees": 1,
+      "maximumEmployees": null
+    },
+    {
+      "id": "req_charcuterie_2026-08-08_0450",
+      "sectorId": "charcuterie",
+      "date": "2026-08-08",
+      "startMinutes": 450,
+      "endMinutes": 480,
+      "requiredEmployees": 1,
+      "maximumEmployees": null
+    },
+    {
+      "id": "req_charcuterie_2026-08-08_0480",
+      "sectorId": "charcuterie",
+      "date": "2026-08-08",
+      "startMinutes": 480,
+      "endMinutes": 510,
+      "requiredEmployees": 1,
+      "hardMinimumEmployees": 1,
+      "maximumEmployees": null
+    },
+    {
+      "id": "req_charcuterie_2026-08-08_0510",
+      "sectorId": "charcuterie",
+      "date": "2026-08-08",
+      "startMinutes": 510,
+      "endMinutes": 540,
+      "requiredEmployees": 1,
+      "hardMinimumEmployees": 1,
+      "maximumEmployees": null
+    },
+    {
+      "id": "req_charcuterie_2026-08-08_0540",
+      "sectorId": "charcuterie",
+      "date": "2026-08-08",
+      "startMinutes": 540,
+      "endMinutes": 570,
+      "requiredEmployees": 1,
+      "hardMinimumEmployees": 1,
+      "maximumEmployees": null
+    },
+    {
+      "id": "req_charcuterie_2026-08-08_0570",
+      "sectorId": "charcuterie",
+      "date": "2026-08-08",
+      "startMinutes": 570,
+      "endMinutes": 600,
+      "requiredEmployees": 1,
+      "hardMinimumEmployees": 1,
+      "maximumEmployees": null
+    },
+    {
+      "id": "req_charcuterie_2026-08-08_0600",
+      "sectorId": "charcuterie",
+      "date": "2026-08-08",
+      "startMinutes": 600,
+      "endMinutes": 630,
+      "requiredEmployees": 2,
+      "hardMinimumEmployees": 1,
+      "maximumEmployees": null
+    },
+    {
+      "id": "req_charcuterie_2026-08-08_0630",
+      "sectorId": "charcuterie",
+      "date": "2026-08-08",
+      "startMinutes": 630,
+      "endMinutes": 660,
+      "requiredEmployees": 2,
+      "hardMinimumEmployees": 1,
+      "maximumEmployees": null
+    },
+    {
+      "id": "req_charcuterie_2026-08-08_0660",
+      "sectorId": "charcuterie",
+      "date": "2026-08-08",
+      "startMinutes": 660,
+      "endMinutes": 690,
+      "requiredEmployees": 2,
+      "hardMinimumEmployees": 1,
+      "maximumEmployees": null
+    },
+    {
+      "id": "req_charcuterie_2026-08-08_0690",
+      "sectorId": "charcuterie",
+      "date": "2026-08-08",
+      "startMinutes": 690,
+      "endMinutes": 720,
+      "requiredEmployees": 2,
+      "hardMinimumEmployees": 1,
+      "maximumEmployees": null
+    },
+    {
+      "id": "req_charcuterie_2026-08-08_0720",
+      "sectorId": "charcuterie",
+      "date": "2026-08-08",
+      "startMinutes": 720,
+      "endMinutes": 750,
+      "requiredEmployees": 1,
+      "hardMinimumEmployees": 1,
+      "maximumEmployees": null
+    },
+    {
+      "id": "req_charcuterie_2026-08-08_0750",
+      "sectorId": "charcuterie",
+      "date": "2026-08-08",
+      "startMinutes": 750,
+      "endMinutes": 780,
+      "requiredEmployees": 1,
+      "hardMinimumEmployees": 1,
+      "maximumEmployees": null
+    },
+    {
+      "id": "req_charcuterie_2026-08-08_0780",
+      "sectorId": "charcuterie",
+      "date": "2026-08-08",
+      "startMinutes": 780,
+      "endMinutes": 810,
+      "requiredEmployees": 1,
+      "hardMinimumEmployees": 1,
+      "maximumEmployees": null
+    },
+    {
+      "id": "req_charcuterie_2026-08-08_0810",
+      "sectorId": "charcuterie",
+      "date": "2026-08-08",
+      "startMinutes": 810,
+      "endMinutes": 840,
+      "requiredEmployees": 1,
+      "hardMinimumEmployees": 1,
+      "maximumEmployees": null
+    },
+    {
+      "id": "req_charcuterie_2026-08-08_0840",
+      "sectorId": "charcuterie",
+      "date": "2026-08-08",
+      "startMinutes": 840,
+      "endMinutes": 870,
+      "requiredEmployees": 1,
+      "hardMinimumEmployees": 1,
+      "maximumEmployees": null
+    },
+    {
+      "id": "req_charcuterie_2026-08-08_0870",
+      "sectorId": "charcuterie",
+      "date": "2026-08-08",
+      "startMinutes": 870,
+      "endMinutes": 900,
+      "requiredEmployees": 1,
+      "hardMinimumEmployees": 1,
+      "maximumEmployees": null
+    },
+    {
+      "id": "req_charcuterie_2026-08-08_0900",
+      "sectorId": "charcuterie",
+      "date": "2026-08-08",
+      "startMinutes": 900,
+      "endMinutes": 930,
+      "requiredEmployees": 1,
+      "hardMinimumEmployees": 1,
+      "maximumEmployees": null
+    },
+    {
+      "id": "req_charcuterie_2026-08-08_0930",
+      "sectorId": "charcuterie",
+      "date": "2026-08-08",
+      "startMinutes": 930,
+      "endMinutes": 960,
+      "requiredEmployees": 1,
+      "hardMinimumEmployees": 1,
+      "maximumEmployees": null
+    },
+    {
+      "id": "req_charcuterie_2026-08-08_0960",
+      "sectorId": "charcuterie",
+      "date": "2026-08-08",
+      "startMinutes": 960,
+      "endMinutes": 990,
+      "requiredEmployees": 1,
+      "hardMinimumEmployees": 1,
+      "maximumEmployees": null
+    },
+    {
+      "id": "req_charcuterie_2026-08-08_0990",
+      "sectorId": "charcuterie",
+      "date": "2026-08-08",
+      "startMinutes": 990,
+      "endMinutes": 1020,
+      "requiredEmployees": 2,
+      "hardMinimumEmployees": 1,
+      "maximumEmployees": null
+    },
+    {
+      "id": "req_charcuterie_2026-08-08_1020",
+      "sectorId": "charcuterie",
+      "date": "2026-08-08",
+      "startMinutes": 1020,
+      "endMinutes": 1050,
+      "requiredEmployees": 2,
+      "hardMinimumEmployees": 1,
+      "maximumEmployees": null
+    },
+    {
+      "id": "req_charcuterie_2026-08-08_1050",
+      "sectorId": "charcuterie",
+      "date": "2026-08-08",
+      "startMinutes": 1050,
+      "endMinutes": 1080,
+      "requiredEmployees": 2,
+      "hardMinimumEmployees": 1,
+      "maximumEmployees": null
+    },
+    {
+      "id": "req_charcuterie_2026-08-08_1080",
+      "sectorId": "charcuterie",
+      "date": "2026-08-08",
+      "startMinutes": 1080,
+      "endMinutes": 1110,
+      "requiredEmployees": 2,
+      "hardMinimumEmployees": 1,
+      "maximumEmployees": null
+    },
+    {
+      "id": "req_charcuterie_2026-08-08_1110",
+      "sectorId": "charcuterie",
+      "date": "2026-08-08",
+      "startMinutes": 1110,
+      "endMinutes": 1140,
+      "requiredEmployees": 1,
+      "hardMinimumEmployees": 1,
+      "maximumEmployees": null
+    },
+    {
+      "id": "req_charcuterie_2026-08-08_1140",
+      "sectorId": "charcuterie",
+      "date": "2026-08-08",
+      "startMinutes": 1140,
+      "endMinutes": 1170,
+      "requiredEmployees": 1,
+      "maximumEmployees": null
+    },
+    {
+      "id": "req_fromage_2026-08-08_0480",
+      "sectorId": "fromage",
+      "date": "2026-08-08",
+      "startMinutes": 480,
+      "endMinutes": 510,
+      "requiredEmployees": 1,
+      "maximumEmployees": null
+    },
+    {
+      "id": "req_fromage_2026-08-08_0510",
+      "sectorId": "fromage",
+      "date": "2026-08-08",
+      "startMinutes": 510,
+      "endMinutes": 540,
+      "requiredEmployees": 1,
+      "maximumEmployees": null
+    },
+    {
+      "id": "req_fromage_2026-08-08_0540",
+      "sectorId": "fromage",
+      "date": "2026-08-08",
+      "startMinutes": 540,
+      "endMinutes": 570,
+      "requiredEmployees": 1,
+      "maximumEmployees": null
+    },
+    {
+      "id": "req_fromage_2026-08-08_0570",
+      "sectorId": "fromage",
+      "date": "2026-08-08",
+      "startMinutes": 570,
+      "endMinutes": 600,
+      "requiredEmployees": 1,
+      "maximumEmployees": null
+    },
+    {
+      "id": "req_fromage_2026-08-08_0600",
+      "sectorId": "fromage",
+      "date": "2026-08-08",
+      "startMinutes": 600,
+      "endMinutes": 630,
+      "requiredEmployees": 1,
+      "maximumEmployees": null
+    },
+    {
+      "id": "req_fromage_2026-08-08_0630",
+      "sectorId": "fromage",
+      "date": "2026-08-08",
+      "startMinutes": 630,
+      "endMinutes": 660,
+      "requiredEmployees": 1,
+      "maximumEmployees": null
+    },
+    {
+      "id": "req_fromage_2026-08-08_0660",
+      "sectorId": "fromage",
+      "date": "2026-08-08",
+      "startMinutes": 660,
+      "endMinutes": 690,
+      "requiredEmployees": 1,
+      "maximumEmployees": null
+    },
+    {
+      "id": "req_fromage_2026-08-08_0690",
+      "sectorId": "fromage",
+      "date": "2026-08-08",
+      "startMinutes": 690,
+      "endMinutes": 720,
+      "requiredEmployees": 1,
+      "maximumEmployees": null
+    },
+    {
+      "id": "req_fromage_2026-08-08_0720",
+      "sectorId": "fromage",
+      "date": "2026-08-08",
+      "startMinutes": 720,
+      "endMinutes": 750,
+      "requiredEmployees": 1,
+      "maximumEmployees": null
+    },
+    {
+      "id": "req_fromage_2026-08-08_0750",
+      "sectorId": "fromage",
+      "date": "2026-08-08",
+      "startMinutes": 750,
+      "endMinutes": 780,
+      "requiredEmployees": 1,
+      "maximumEmployees": null
+    },
+    {
+      "id": "req_fromage_2026-08-08_0780",
+      "sectorId": "fromage",
+      "date": "2026-08-08",
+      "startMinutes": 780,
+      "endMinutes": 810,
+      "requiredEmployees": 1,
+      "maximumEmployees": null
+    },
+    {
+      "id": "req_fromage_2026-08-08_0810",
+      "sectorId": "fromage",
+      "date": "2026-08-08",
+      "startMinutes": 810,
+      "endMinutes": 840,
+      "requiredEmployees": 1,
+      "maximumEmployees": null
+    },
+    {
+      "id": "req_fromage_2026-08-08_0840",
+      "sectorId": "fromage",
+      "date": "2026-08-08",
+      "startMinutes": 840,
+      "endMinutes": 870,
+      "requiredEmployees": 1,
+      "maximumEmployees": null
+    },
+    {
+      "id": "req_fromage_2026-08-08_0870",
+      "sectorId": "fromage",
+      "date": "2026-08-08",
+      "startMinutes": 870,
+      "endMinutes": 900,
+      "requiredEmployees": 1,
+      "maximumEmployees": null
+    },
+    {
+      "id": "req_fromage_2026-08-08_0900",
+      "sectorId": "fromage",
+      "date": "2026-08-08",
+      "startMinutes": 900,
+      "endMinutes": 930,
+      "requiredEmployees": 1,
+      "maximumEmployees": null
+    },
+    {
+      "id": "req_fromage_2026-08-08_0930",
+      "sectorId": "fromage",
+      "date": "2026-08-08",
+      "startMinutes": 930,
+      "endMinutes": 960,
+      "requiredEmployees": 1,
+      "maximumEmployees": null
+    },
+    {
+      "id": "req_fromage_2026-08-08_0960",
+      "sectorId": "fromage",
+      "date": "2026-08-08",
+      "startMinutes": 960,
+      "endMinutes": 990,
+      "requiredEmployees": 1,
+      "maximumEmployees": null
+    },
+    {
+      "id": "req_fromage_2026-08-08_0990",
+      "sectorId": "fromage",
+      "date": "2026-08-08",
+      "startMinutes": 990,
+      "endMinutes": 1020,
+      "requiredEmployees": 1,
+      "maximumEmployees": null
+    },
+    {
+      "id": "req_fromage_2026-08-08_1020",
+      "sectorId": "fromage",
+      "date": "2026-08-08",
+      "startMinutes": 1020,
+      "endMinutes": 1050,
+      "requiredEmployees": 1,
+      "maximumEmployees": null
+    },
+    {
+      "id": "req_fromage_2026-08-08_1050",
+      "sectorId": "fromage",
+      "date": "2026-08-08",
+      "startMinutes": 1050,
+      "endMinutes": 1080,
+      "requiredEmployees": 1,
+      "maximumEmployees": null
+    },
+    {
+      "id": "req_fromage_2026-08-08_1080",
+      "sectorId": "fromage",
+      "date": "2026-08-08",
+      "startMinutes": 1080,
+      "endMinutes": 1110,
+      "requiredEmployees": 1,
+      "maximumEmployees": null
+    },
+    {
+      "id": "req_fromage_2026-08-08_1110",
+      "sectorId": "fromage",
+      "date": "2026-08-08",
+      "startMinutes": 1110,
+      "endMinutes": 1140,
+      "requiredEmployees": 1,
+      "maximumEmployees": null
+    },
+    {
+      "id": "req_poisson_2026-08-08_0450",
+      "sectorId": "poisson",
+      "date": "2026-08-08",
+      "startMinutes": 450,
+      "endMinutes": 480,
+      "requiredEmployees": 1,
+      "maximumEmployees": null
+    },
+    {
+      "id": "req_poisson_2026-08-08_0480",
+      "sectorId": "poisson",
+      "date": "2026-08-08",
+      "startMinutes": 480,
+      "endMinutes": 510,
+      "requiredEmployees": 1,
+      "maximumEmployees": null
+    },
+    {
+      "id": "req_poisson_2026-08-08_0510",
+      "sectorId": "poisson",
+      "date": "2026-08-08",
+      "startMinutes": 510,
+      "endMinutes": 540,
+      "requiredEmployees": 1,
+      "maximumEmployees": null
+    },
+    {
+      "id": "req_poisson_2026-08-08_0540",
+      "sectorId": "poisson",
+      "date": "2026-08-08",
+      "startMinutes": 540,
+      "endMinutes": 570,
+      "requiredEmployees": 1,
+      "maximumEmployees": null
+    },
+    {
+      "id": "req_poisson_2026-08-08_0570",
+      "sectorId": "poisson",
+      "date": "2026-08-08",
+      "startMinutes": 570,
+      "endMinutes": 600,
+      "requiredEmployees": 1,
+      "maximumEmployees": null
+    },
+    {
+      "id": "req_poisson_2026-08-08_0600",
+      "sectorId": "poisson",
+      "date": "2026-08-08",
+      "startMinutes": 600,
+      "endMinutes": 630,
+      "requiredEmployees": 1,
+      "maximumEmployees": null
+    },
+    {
+      "id": "req_poisson_2026-08-08_0630",
+      "sectorId": "poisson",
+      "date": "2026-08-08",
+      "startMinutes": 630,
+      "endMinutes": 660,
+      "requiredEmployees": 1,
+      "maximumEmployees": null
+    },
+    {
+      "id": "req_poisson_2026-08-08_0660",
+      "sectorId": "poisson",
+      "date": "2026-08-08",
+      "startMinutes": 660,
+      "endMinutes": 690,
+      "requiredEmployees": 1,
+      "maximumEmployees": null
+    },
+    {
+      "id": "req_poisson_2026-08-08_0690",
+      "sectorId": "poisson",
+      "date": "2026-08-08",
+      "startMinutes": 690,
+      "endMinutes": 720,
+      "requiredEmployees": 1,
+      "maximumEmployees": null
+    },
+    {
+      "id": "req_poisson_2026-08-08_0720",
+      "sectorId": "poisson",
+      "date": "2026-08-08",
+      "startMinutes": 720,
+      "endMinutes": 750,
+      "requiredEmployees": 1,
+      "maximumEmployees": null
+    },
+    {
+      "id": "req_poisson_2026-08-08_0750",
+      "sectorId": "poisson",
+      "date": "2026-08-08",
+      "startMinutes": 750,
+      "endMinutes": 780,
+      "requiredEmployees": 1,
+      "maximumEmployees": null
+    },
+    {
+      "id": "req_traiteur_2026-08-08_0540",
+      "sectorId": "traiteur",
+      "date": "2026-08-08",
+      "startMinutes": 540,
+      "endMinutes": 570,
+      "requiredEmployees": 1,
+      "maximumEmployees": null
+    },
+    {
+      "id": "req_traiteur_2026-08-08_0570",
+      "sectorId": "traiteur",
+      "date": "2026-08-08",
+      "startMinutes": 570,
+      "endMinutes": 600,
+      "requiredEmployees": 1,
+      "maximumEmployees": null
+    },
+    {
+      "id": "req_traiteur_2026-08-08_0600",
+      "sectorId": "traiteur",
+      "date": "2026-08-08",
+      "startMinutes": 600,
+      "endMinutes": 630,
+      "requiredEmployees": 1,
+      "maximumEmployees": null
+    },
+    {
+      "id": "req_traiteur_2026-08-08_0630",
+      "sectorId": "traiteur",
+      "date": "2026-08-08",
+      "startMinutes": 630,
+      "endMinutes": 660,
+      "requiredEmployees": 1,
+      "maximumEmployees": null
+    },
+    {
+      "id": "req_traiteur_2026-08-08_0660",
+      "sectorId": "traiteur",
+      "date": "2026-08-08",
+      "startMinutes": 660,
+      "endMinutes": 690,
+      "requiredEmployees": 2,
+      "maximumEmployees": null
+    },
+    {
+      "id": "req_traiteur_2026-08-08_0690",
+      "sectorId": "traiteur",
+      "date": "2026-08-08",
+      "startMinutes": 690,
+      "endMinutes": 720,
+      "requiredEmployees": 2,
+      "maximumEmployees": null
+    },
+    {
+      "id": "req_traiteur_2026-08-08_0720",
+      "sectorId": "traiteur",
+      "date": "2026-08-08",
+      "startMinutes": 720,
+      "endMinutes": 750,
+      "requiredEmployees": 2,
+      "maximumEmployees": null
+    },
+    {
+      "id": "req_traiteur_2026-08-08_0750",
+      "sectorId": "traiteur",
+      "date": "2026-08-08",
+      "startMinutes": 750,
+      "endMinutes": 780,
+      "requiredEmployees": 2,
+      "maximumEmployees": null
+    },
+    {
+      "id": "req_traiteur_2026-08-08_0780",
+      "sectorId": "traiteur",
+      "date": "2026-08-08",
+      "startMinutes": 780,
+      "endMinutes": 810,
+      "requiredEmployees": 2,
+      "maximumEmployees": null
+    },
+    {
+      "id": "req_traiteur_2026-08-08_0810",
+      "sectorId": "traiteur",
+      "date": "2026-08-08",
+      "startMinutes": 810,
+      "endMinutes": 840,
+      "requiredEmployees": 1,
+      "maximumEmployees": null
+    },
+    {
+      "id": "req_traiteur_2026-08-08_0840",
+      "sectorId": "traiteur",
+      "date": "2026-08-08",
+      "startMinutes": 840,
+      "endMinutes": 870,
+      "requiredEmployees": 1,
+      "maximumEmployees": null
+    },
+    {
+      "id": "req_traiteur_2026-08-08_0870",
+      "sectorId": "traiteur",
+      "date": "2026-08-08",
+      "startMinutes": 870,
+      "endMinutes": 900,
+      "requiredEmployees": 1,
+      "maximumEmployees": null
+    },
+    {
+      "id": "req_traiteur_2026-08-08_0900",
+      "sectorId": "traiteur",
+      "date": "2026-08-08",
+      "startMinutes": 900,
+      "endMinutes": 930,
+      "requiredEmployees": 1,
+      "maximumEmployees": null
+    },
+    {
+      "id": "req_traiteur_2026-08-08_0930",
+      "sectorId": "traiteur",
+      "date": "2026-08-08",
+      "startMinutes": 930,
+      "endMinutes": 960,
+      "requiredEmployees": 1,
+      "maximumEmployees": null
+    },
+    {
+      "id": "req_traiteur_2026-08-08_0960",
+      "sectorId": "traiteur",
+      "date": "2026-08-08",
+      "startMinutes": 960,
+      "endMinutes": 990,
+      "requiredEmployees": 1,
+      "maximumEmployees": null
+    },
+    {
+      "id": "req_traiteur_2026-08-08_0990",
+      "sectorId": "traiteur",
+      "date": "2026-08-08",
+      "startMinutes": 990,
+      "endMinutes": 1020,
+      "requiredEmployees": 1,
+      "maximumEmployees": null
+    },
+    {
+      "id": "req_traiteur_2026-08-08_1020",
+      "sectorId": "traiteur",
+      "date": "2026-08-08",
+      "startMinutes": 1020,
+      "endMinutes": 1050,
+      "requiredEmployees": 1,
+      "maximumEmployees": null
+    },
+    {
+      "id": "req_traiteur_2026-08-08_1050",
+      "sectorId": "traiteur",
+      "date": "2026-08-08",
+      "startMinutes": 1050,
+      "endMinutes": 1080,
+      "requiredEmployees": 1,
+      "maximumEmployees": null
+    },
+    {
+      "id": "req_traiteur_2026-08-08_1080",
+      "sectorId": "traiteur",
+      "date": "2026-08-08",
+      "startMinutes": 1080,
+      "endMinutes": 1110,
+      "requiredEmployees": 1,
+      "maximumEmployees": null
+    },
+    {
+      "id": "req_traiteur_2026-08-08_1110",
+      "sectorId": "traiteur",
+      "date": "2026-08-08",
+      "startMinutes": 1110,
+      "endMinutes": 1140,
+      "requiredEmployees": 1,
+      "maximumEmployees": null
+    }
+  ],
+  "rules": {
+    "minimumShiftMinutes": 240,
+    "maximumShiftMinutes": 600,
+    "minimumRestMinutes": 720,
+    "maximumConsecutiveWorkedDays": 6,
+    "maximumConsecutiveWorkedDaysSource": "derived-fallback",
+    "splitShiftAllowed": true,
+    "maximumSplitMinutes": 90,
+    "minimumSplitMinutes": 45,
+    "maximumContinuousMinutes": 480,
+    "maximumSplitsPerDay": 1,
+    "minimumOpeningsPerDay": 1,
+    "exactClosingsPerDay": 1,
+    "closingFairness": null
+  },
+  "objectives": [
+    "coverage-deficit",
+    "contract-deviation"
+  ]
+}
