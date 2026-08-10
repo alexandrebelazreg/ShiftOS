@@ -30,6 +30,13 @@ export interface ShiftSegment {
   endDayOffset?: number
 }
 
+export interface ShiftSectorAssignment {
+  sectorId: string
+  startTime: TimeString
+  endTime: TimeString
+  endDayOffset?: number
+}
+
 /**
  * Shift — a concrete, schedulable interval on a specific date at a store.
  *
@@ -48,4 +55,6 @@ export interface Shift extends Timestamps {
   source: ShiftSource
   /** One segment for a regular shift, several for a split shift. */
   segments: ShiftSegment[]
+  /** Affectations métier couvrant exactement les minutes travaillées. */
+  sectorAssignments?: ShiftSectorAssignment[]
 }

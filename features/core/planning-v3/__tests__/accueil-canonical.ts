@@ -51,6 +51,8 @@ export const ACCUEIL_CANONICAL_RULES = {
   maximumShiftMinutes: 600,
   minimumSplitMinutes: 45,
   maximumSplitMinutes: 90,
+  /** One coupure a day, never two. */
+  maximumSplitsPerDay: 1,
   minimumRestMinutes: 720,
   minimumOpeningsPerDay: 1,
   exactClosingsPerDay: 1,
@@ -260,6 +262,15 @@ export function accueilCanonicalInput(): PlanningGenerationInput {
           minimumShiftDuration: ACCUEIL_CANONICAL_RULES.minimumShiftMinutes,
           splitShiftAllowed: true,
           maximumSplitDuration: ACCUEIL_CANONICAL_RULES.maximumSplitMinutes,
+          // Declared by the sector since the « Contraintes avancées » block, so
+          // no rule survives only inside this file.
+          maximumDailyDuration: ACCUEIL_CANONICAL_RULES.maximumShiftMinutes,
+          maximumContinuousDuration: ACCUEIL_CANONICAL_RULES.maximumContinuousMinutes,
+          minimumSplitDuration: ACCUEIL_CANONICAL_RULES.minimumSplitMinutes,
+          maximumSplitsPerDay: ACCUEIL_CANONICAL_RULES.maximumSplitsPerDay,
+          minimumOpeningsPerDay: ACCUEIL_CANONICAL_RULES.minimumOpeningsPerDay,
+          requiredClosingsPerDay: ACCUEIL_CANONICAL_RULES.exactClosingsPerDay,
+          minimumRestMinutes: ACCUEIL_CANONICAL_RULES.minimumRestMinutes,
           workEveryNonFixedRestDay: true,
           // The two floors, declared by the SECTOR. The builder decides which
           // slots each one covers; nothing is injected into the built problem.
@@ -291,12 +302,8 @@ export function accueilCanonicalInput(): PlanningGenerationInput {
 }
 
 /**
- * The canonical Accueil problem.
- *
- * Only `maximumContinuousMinutes` is applied after the build, for the same
- * reason as on Drive: no sector field declares it yet, so the builder leaves it
- * null rather than defaulting it to the daily maximum and making "ten hours in
- * one block" legal by omission.
+ * The canonical Accueil problem, built through the REAL production builder with
+ * no override left: every rule is now declared by the sector and translated.
  */
 export function buildAccueilCanonicalProblem(): PlanningProblemV3 {
   const built = buildPlanningProblemV3(accueilCanonicalInput())
@@ -308,14 +315,7 @@ export function buildAccueilCanonicalProblem(): PlanningProblemV3 {
     )
   }
 
-  return {
-    ...built.problem,
-    rules: {
-      ...built.problem.rules,
-      maximumContinuousMinutes: ACCUEIL_CANONICAL_RULES.maximumContinuousMinutes,
-      minimumSplitMinutes: ACCUEIL_CANONICAL_RULES.minimumSplitMinutes,
-    },
-  }
+  return built.problem
 }
 
 export function serialiseAccueilCanonicalProblem(): string {

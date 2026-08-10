@@ -1,6 +1,7 @@
 import type {
   Absence,
   AvailabilityRule,
+  EmployeeId,
   Constraint as EmployeeConstraintRecord,
   Contract,
   Employee,
@@ -43,4 +44,21 @@ export interface PlanningGenerationInput {
   readonly employeeConstraints?: readonly EmployeeConstraintRecord[]
   /** Optional app-supplied business metadata not owned by the Data Bridge. */
   readonly business?: BusinessPlanningContext
+  /**
+   * Closing history, already reduced from persisted plannings by the
+   * application.
+   *
+   * Supplied here rather than read by the builder for the same reason the
+   * solvers never read it either: the core owns no repository. The application
+   * knows what "published" means and where records live; the core only ever
+   * receives integers.
+   */
+  readonly closingHistory?: readonly {
+    readonly sectorId?: string
+    readonly employeeId: EmployeeId
+    readonly closings: number
+    readonly opportunities: number
+    readonly saturdayClosings: number
+    readonly saturdayOpportunities: number
+  }[]
 }

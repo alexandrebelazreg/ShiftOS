@@ -15,6 +15,7 @@ import {
   primaryPlanningAction,
   resolveTargetWeek,
   resolveWeekChangeChoice,
+  type SectorChoice,
   type WeekChangeRequest,
 } from "@/features/planning/board/model/header-controls"
 import type { DragBounds, EditableShift } from "@/features/planning/board/model/shift-edit"
@@ -33,7 +34,7 @@ import {
 } from "@/features/planning/board/model/shift-edit-state"
 import {
   assessDayEdits,
-  dayEmployeeDeltas,
+  weeklyContractDeltas,
   describeLastEdit,
   editsBlockPersistence,
 } from "@/features/planning/board/model/shift-edit-diff"
@@ -78,8 +79,10 @@ interface PlanningBoardProps {
    * else, which is exactly the defect this replaces.
    */
   readonly sectorIds: readonly string[]
+  readonly sectorChoices?: readonly SectorChoice[]
   readonly onToggleSector: (sectorId: string) => void
   readonly onToggleAllSectors: (selectAll: boolean) => void
+  readonly onToggleMarketZone?: (selectAll: boolean) => void
   /** Whether a generation is currently running, to disable the trigger. */
   readonly generating?: boolean
   /** Unsaved editor state, ORed with the board's own local edits/locks. */
@@ -115,8 +118,10 @@ export function PlanningBoard({
   onSaveRequest,
   onGenerate,
   sectorIds,
+  sectorChoices,
   onToggleSector,
   onToggleAllSectors,
+  onToggleMarketZone,
   generating = false,
   dirty = false,
   actions,
@@ -199,14 +204,12 @@ export function PlanningBoard({
     return { openMinutes: day.opensAtMinutes, closeMinutes: day.closesAtMinutes }
   }, [editedInput, board.dayView.date])
 
-  // The three edit read-outs, all measured against the generated `input`:
-  // per-employee badges, the day's coverage verdict, and the footer's last-edit
-  // line. Each is pure and recomputed from the two inputs, never stored.
+  // The three read-outs: the per-employee contract badge, the day's coverage
+  // verdict, and the footer's last-edit line. Each is pure and recomputed,
+  // never stored. Only the badge is weekly — the other two are about the edit.
   const edited = hasEdits(editState)
-  const deltasByEmployee = useMemo(
-    () => dayEmployeeDeltas(input, editedInput, board.dayView.date),
-    [input, editedInput, board.dayView.date]
-  )
+  // The badge is a WEEKLY fact, so it does not depend on the day on screen.
+  const deltasByEmployee = useMemo(() => weeklyContractDeltas(editedInput), [editedInput])
   const verdict = useMemo(
     () => (edited ? assessDayEdits(input, editedInput, board.dayView.date) : null),
     [edited, input, editedInput, board.dayView.date]
@@ -304,6 +307,8 @@ export function PlanningBoard({
         onChangeView={(view) => update({ view })}
         onToggleSector={toggleSector}
         onToggleAllSectors={toggleAllSectors}
+        onToggleMarketZone={onToggleMarketZone}
+        sectorChoices={sectorChoices}
         onSelectDate={(date: IsoDate) => update({ date })}
         onPreviousWeek={() => requestWeekChange({ type: "previous" })}
         onNextWeek={() => requestWeekChange({ type: "next" })}

@@ -11,7 +11,7 @@ import {
 const TIME_RE = /^([01]\d|2[0-3]):[0-5]\d$/
 
 /** Required numeric input: rejects empty strings, coerces the rest to number. */
-const requiredNumber = (message = "Required") =>
+const requiredNumber = (message = "Ce champ est obligatoire") =>
   z.preprocess(
     (v) => (typeof v === "string" && v.trim() === "" ? Number.NaN : v),
     z.coerce.number({ message }).refine((n) => !Number.isNaN(n), { message })
@@ -40,21 +40,21 @@ const dayScheduleSchema = z
       ctx.addIssue({
         code: "custom",
         path: ["opensAt"],
-        message: "Opening hour is required",
+        message: "L’heure d’ouverture est obligatoire",
       })
     }
     if (!closesValid) {
       ctx.addIssue({
         code: "custom",
         path: ["closesAt"],
-        message: "Closing hour is required",
+        message: "L’heure de fermeture est obligatoire",
       })
     }
     if (opensValid && closesValid && value.closesAt <= value.opensAt) {
       ctx.addIssue({
         code: "custom",
         path: ["closesAt"],
-        message: "Closing hour must be after opening hour",
+        message: "L’heure de fermeture doit être postérieure à l’heure d’ouverture",
       })
     }
   })
@@ -62,13 +62,13 @@ const dayScheduleSchema = z
 export const storeSchema = z
   .object({
     // Section 1 — Store information
-    name: z.string().trim().min(1, "Store name is required"),
+    name: z.string().trim().min(1, "Le nom du magasin est obligatoire"),
     brand: z.string().trim().optional(),
-    address: z.string().trim().min(1, "Address is required"),
-    city: z.string().trim().min(1, "City is required"),
-    postalCode: z.string().trim().min(1, "Postal code is required"),
-    country: z.string().trim().min(1, "Country is required"),
-    timezone: z.string().trim().min(1, "Timezone is required"),
+    address: z.string().trim().min(1, "L’adresse est obligatoire"),
+    city: z.string().trim().min(1, "La ville est obligatoire"),
+    postalCode: z.string().trim().min(1, "Le code postal est obligatoire"),
+    country: z.string().trim().min(1, "Le pays est obligatoire"),
+    timezone: z.string().trim().min(1, "Le fuseau horaire est obligatoire"),
 
     // Section 2 — Opening hours
     openingHours: z.array(dayScheduleSchema).length(WEEK_DAYS.length),
@@ -86,9 +86,9 @@ export const storeSchema = z
     maxSplitShiftsPerWeek: optionalNumber,
 
     // Section 5 — General rules
-    minDailyHours: requiredNumber("Minimum daily hours is required"),
-    maxDailyHours: requiredNumber("Maximum daily hours is required"),
-    minRestBetweenShifts: requiredNumber("Minimum rest is required"),
+    minDailyHours: requiredNumber("Le minimum journalier est obligatoire"),
+    maxDailyHours: requiredNumber("Le maximum journalier avec coupure est obligatoire"),
+    minRestBetweenShifts: requiredNumber("Le repos minimum est obligatoire"),
     maxWeeklyHoursOverride: optionalNumber,
   })
   .superRefine((data, ctx) => {
@@ -98,14 +98,14 @@ export const storeSchema = z
         ctx.addIssue({
           code: "custom",
           path: ["minShiftDuration"],
-          message: "Required for dynamic generation",
+          message: "Cette durée est obligatoire pour la génération automatique",
         })
       }
       if (data.maxShiftDuration === undefined) {
         ctx.addIssue({
           code: "custom",
           path: ["maxShiftDuration"],
-          message: "Required for dynamic generation",
+          message: "Le maximum en continu est obligatoire pour la génération automatique",
         })
       }
       if (
@@ -116,7 +116,7 @@ export const storeSchema = z
         ctx.addIssue({
           code: "custom",
           path: ["maxShiftDuration"],
-          message: "Maximum must be greater than or equal to minimum",
+          message: "Le maximum doit être supérieur ou égal au minimum",
         })
       }
       if (
@@ -128,7 +128,7 @@ export const storeSchema = z
         ctx.addIssue({
           code: "custom",
           path: ["timeGranularity"],
-          message: "Select a granularity",
+          message: "Sélectionnez une précision horaire",
         })
       }
     }
@@ -139,14 +139,14 @@ export const storeSchema = z
         ctx.addIssue({
           code: "custom",
           path: ["minSplitDuration"],
-          message: "Required for this policy",
+          message: "La coupure minimale est obligatoire",
         })
       }
       if (data.maxSplitDuration === undefined) {
         ctx.addIssue({
           code: "custom",
           path: ["maxSplitDuration"],
-          message: "Required for this policy",
+          message: "La coupure maximale est obligatoire",
         })
       }
       if (
@@ -157,14 +157,14 @@ export const storeSchema = z
         ctx.addIssue({
           code: "custom",
           path: ["maxSplitDuration"],
-          message: "Maximum must be greater than or equal to minimum",
+          message: "La coupure maximale doit être supérieure ou égale à la coupure minimale",
         })
       }
       if (data.maxSplitShiftsPerWeek === undefined) {
         ctx.addIssue({
           code: "custom",
           path: ["maxSplitShiftsPerWeek"],
-          message: "Required for this policy",
+          message: "Le nombre maximal de journées avec coupure est obligatoire",
         })
       }
     }
@@ -174,7 +174,18 @@ export const storeSchema = z
       ctx.addIssue({
         code: "custom",
         path: ["maxDailyHours"],
-        message: "Maximum must be greater than or equal to minimum",
+        message: "Le maximum journalier avec coupure doit être supérieur ou égal au minimum journalier",
+      })
+    }
+
+    if (
+      data.maxShiftDuration !== undefined &&
+      data.maxDailyHours * 60 < data.maxShiftDuration
+    ) {
+      ctx.addIssue({
+        code: "custom",
+        path: ["maxDailyHours"],
+        message: "Le maximum avec coupure doit être supérieur ou égal au maximum en continu",
       })
     }
   })

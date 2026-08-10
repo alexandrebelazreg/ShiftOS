@@ -63,7 +63,22 @@ export interface PlanningSettings {
   mode: PlanningMode
   granularity: TimeGranularity | null
   minShiftDuration: Minutes | null
+  /**
+   * Durée maximale d'UNE TRAITE, pauses exclues — c'est ce que « shift » dit.
+   *
+   * Le traducteur V3 en faisait un plafond de JOURNÉE, si bien qu'un magasin
+   * réglé « pas plus de 8 h d'affilée » interdisait aussi les journées de 10 h
+   * coupées que la même configuration autorise par ailleurs.
+   */
   maxShiftDuration: Minutes | null
+  /**
+   * Durée maximale d'une JOURNÉE, pauses comprises.
+   *
+   * Absente pour une configuration écrite avant que la distinction traverse ce
+   * pont : `maxShiftDuration` reprend alors son ancien rôle de plafond
+   * journalier, et rien ne bouge pour elle.
+   */
+  maxDailyDuration?: Minutes | null
 }
 
 /**

@@ -2,18 +2,18 @@
 
 import { Controller, useFormContext, useWatch } from "react-hook-form"
 
+import { ControlledStoreInput } from "@/features/store/components/ControlledStoreInput"
 import { FormField } from "@/features/store/components/FormField"
 import { FormSection } from "@/features/store/components/FormSection"
+import { MinutesAsHoursField } from "@/features/store/components/MinutesAsHoursField"
 import { RadioCards } from "@/features/store/components/RadioCards"
 import { SPLIT_SHIFT_POLICY_OPTIONS } from "@/features/store/lib/constants"
 import type { StoreFormValues } from "@/features/store/types/store.types"
 import { SPLIT_SHIFT_DETAIL_POLICIES } from "@/features/core/models"
-import { Input } from "@/components/ui/input"
 
 export function SplitShiftSection() {
   const {
     control,
-    register,
     formState: { errors },
   } = useFormContext<StoreFormValues>()
 
@@ -22,8 +22,10 @@ export function SplitShiftSection() {
 
   return (
     <FormSection
-      title="Politique de coupure"
-      description="Définissez si un employé peut effectuer un service avec coupure sur une journée."
+      id="journees-coupure"
+      step={5}
+      title="Journées avec coupure"
+      description="Une coupure sépare deux plages travaillées dans la même journée. Elle n’est pas comptée comme du temps travaillé."
     >
       <Controller
         control={control}
@@ -34,62 +36,41 @@ export function SplitShiftSection() {
             onChange={field.onChange}
             options={SPLIT_SHIFT_POLICY_OPTIONS}
             invalid={!!errors.splitShiftPolicy}
+            className="md:grid-cols-2"
           />
         )}
       />
 
       {showDetails ? (
-        <div className="grid gap-4 rounded-lg border border-dashed border-border p-4 md:grid-cols-3">
-          <FormField
-            label="Durée minimale de coupure"
-            htmlFor="minSplitDuration"
+        <div className="grid gap-4 rounded-lg border border-dashed border-amber-300 bg-amber-50/50 p-4 md:grid-cols-3 dark:border-amber-800 dark:bg-amber-950/20">
+          <MinutesAsHoursField
+            name="minSplitDuration"
+            label="Coupure minimale"
+            description="Durée minimale entre les deux plages."
             required
-            description="Minutes"
-            error={errors.minSplitDuration?.message}
-          >
-            <Input
-              id="minSplitDuration"
-              type="number"
-              min={0}
-              inputMode="numeric"
-              placeholder="ex. 60"
-              aria-invalid={!!errors.minSplitDuration || undefined}
-              {...register("minSplitDuration")}
-            />
-          </FormField>
+          />
+
+          <MinutesAsHoursField
+            name="maxSplitDuration"
+            label="Coupure maximale"
+            description="Au-delà, la journée n’est pas proposée."
+            required
+          />
 
           <FormField
-            label="Durée maximale de coupure"
-            htmlFor="maxSplitDuration"
-            required
-            description="Minutes"
-            error={errors.maxSplitDuration?.message}
-          >
-            <Input
-              id="maxSplitDuration"
-              type="number"
-              min={0}
-              inputMode="numeric"
-              placeholder="ex. 240"
-              aria-invalid={!!errors.maxSplitDuration || undefined}
-              {...register("maxSplitDuration")}
-            />
-          </FormField>
-
-          <FormField
-            label="Maximum de coupures par employé et par semaine"
+            label="Journées avec coupure par semaine"
             htmlFor="maxSplitShiftsPerWeek"
             required
+            description="Maximum pour un même employé."
             error={errors.maxSplitShiftsPerWeek?.message}
           >
-            <Input
+            <ControlledStoreInput
+              name="maxSplitShiftsPerWeek"
               id="maxSplitShiftsPerWeek"
               type="number"
               min={0}
               inputMode="numeric"
-              placeholder="ex. 3"
               aria-invalid={!!errors.maxSplitShiftsPerWeek || undefined}
-              {...register("maxSplitShiftsPerWeek")}
             />
           </FormField>
         </div>

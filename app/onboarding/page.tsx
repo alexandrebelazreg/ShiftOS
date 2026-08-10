@@ -18,7 +18,7 @@ export default async function OnboardingPage() {
 
   return (
     <main className="min-h-svh bg-muted/30">
-      <div className="mx-auto w-full max-w-3xl px-6 py-10 md:py-16">
+      <div className="mx-auto w-full max-w-5xl px-6 py-10 md:py-16">
         <StepProgress current={1} total={6} labels={["Magasin", "Secteurs", "Employés", "Compétences", "Contraintes", "Premier planning"]} />
 
         <header className="mt-8 mb-8 space-y-2">
@@ -26,7 +26,7 @@ export default async function OnboardingPage() {
             Configurez votre magasin
           </h1>
           <p className="text-muted-foreground">
-            Commençons par les informations nécessaires à votre premier planning.
+            Renseignez l’identité, les horaires et les règles de travail utilisées pour vos plannings.
           </p>
         </header>
 

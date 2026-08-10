@@ -39,7 +39,7 @@ export type GenerationScopeVerdict =
   | { readonly kind: "generate"; readonly scope: GenerationScope }
   | {
       readonly kind: "refused"
-      readonly code: "no-selection" | "multiple-sectors" | "sector-configuration"
+      readonly code: "no-selection" | "sector-configuration"
       /** The headline. One sentence, actionable. */
       readonly message: string
       /** Everything else worth showing underneath it. */
@@ -80,26 +80,6 @@ export function resolveGenerationScope(input: GenerationScopeInput): GenerationS
     }
   }
 
-  if (selected.length > 1) {
-    // Refused honestly, as a missing capability rather than a misconfiguration.
-    // Nothing here asks anyone to change their configuration: the sectors are
-    // fine, the engines simply cannot allocate one weekly budget across several
-    // of them yet.
-    return {
-      kind: "refused",
-      code: "multiple-sectors",
-      message:
-        "La génération simultanée de plusieurs secteurs n’est pas encore disponible. Sélectionnez un seul secteur pour générer son planning.",
-      // Their own problems are still worth showing, below the headline, so a
-      // manager narrowing down to one of them already knows what awaits.
-      details: diagnoseSectorConfiguration({
-        store: input.store,
-        sectors: selected,
-        employees: input.employees,
-      }),
-    }
-  }
-
   const employees = eligibleEmployees(input.employees, selected)
   const problems = diagnoseSectorConfiguration({
     store: input.store,
@@ -110,7 +90,9 @@ export function resolveGenerationScope(input: GenerationScopeInput): GenerationS
     return {
       kind: "refused",
       code: "sector-configuration",
-      message: `Le secteur « ${selected[0].name.trim() || "sans nom"} » ne peut pas être planifié en l’état.`,
+      message: selected.length === 1
+        ? `Le secteur « ${selected[0].name.trim() || "sans nom"} » ne peut pas être planifié en l’état.`
+        : "Les secteurs sélectionnés ne peuvent pas être planifiés en l’état.",
       details: problems,
     }
   }
@@ -124,10 +106,11 @@ export function resolveGenerationScope(input: GenerationScopeInput): GenerationS
 /**
  * The people the selected sectors can actually draw on.
  *
- * Membership is by sector NAME, which is what an employee record stores. An
- * employee belonging to several sectors qualifies as soon as one of them is
- * selected; an employee belonging to none is excluded, because "no sector" is
- * not a sector this request is planning.
+ * Membership is by the FIRST sector name, which is the employee's configured
+ * priority. A secondary skill allows that employee to move between the sectors
+ * of an already selected group; it does not let another group borrow their
+ * whole contract. This is the boundary that keeps a Drive-first employee in
+ * Drive when Zone marché is generated.
  */
 export function eligibleEmployees(
   employees: readonly EmployeeRecord[],
@@ -135,8 +118,15 @@ export function eligibleEmployees(
 ): readonly EmployeeRecord[] {
   const names = new Set(sectors.map((sector) => sector.name))
   return employees.filter(
-    (employee) => employee.status === "active" && employee.sectors?.some((name) => names.has(name))
+    (employee) => employee.status === "active" && names.has(employee.sectors?.[0] ?? "")
   )
+}
+
+/** The configured fresh-market group, in the same stable order as the editor. */
+export function marketZoneSectors(
+  sectors: readonly SectorDemandConfiguration[]
+): readonly SectorDemandConfiguration[] {
+  return selectableSectors(sectors).filter((sector) => sector.marketZone)
 }
 
 /** Every sector a manager may pick from: the active ones, in configured order. */

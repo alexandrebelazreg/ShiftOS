@@ -8,9 +8,11 @@ import type { SectorPresenceFloor } from "@/features/core/planning-generator/typ
 import { computeDailyBudgets } from "@/features/core/planning-v3/problem-builder/daily-budget"
 import {
   PLANNING_OBJECTIVES_V3,
+  PLANNING_MULTI_SECTOR_OBJECTIVES_V3,
   PLANNING_PROBLEM_V3_VERSION,
   type PlanningDayV3,
   type PlanningDemandSlotV3,
+  type PlanningDailyCapSourceV3,
   type PlanningEmployeeDayV3,
   type PlanningEmployeeV3,
   type PlanningProblemV3,
@@ -72,16 +74,7 @@ export function buildPlanningProblemV3(
     }
   }
   if (active.length > 1) {
-    return {
-      ok: false,
-      errors: [
-        {
-          code: "multiple_active_sectors",
-          path: "business.sectors",
-          message: `Planning V3A traite un seul secteur actif à la fois, ${active.length} reçus (${active.map((sector) => sector.id).join(", ")}).`,
-        },
-      ],
-    }
+    return buildMultiSectorProblemV3(input, active)
   }
   const sector = active[0]
 
@@ -139,12 +132,32 @@ export function buildPlanningProblemV3(
     })
   }
 
-  const constraintsByEmployee = new Map<string, { fixedRestDays: WeekDay[]; maxOpenings: number | null; maxClosings: number | null }>()
+  interface EmployeeConstraintBucket {
+    fixedRestDays: WeekDay[]
+    maxOpenings: number | null
+    maxClosings: number | null
+    /** Minutes since midnight. Null means the employee declared no bound. */
+    earliestStart: number | null
+    latestEnd: number | null
+    /** Heures IMPOSÉES, pas seulement bornées. */
+    exactStart: number | null
+    exactEnd: number | null
+    /** Jours où ce salarié doit ouvrir, respectivement fermer. */
+    mustOpenDays: WeekDay[]
+    mustCloseDays: WeekDay[]
+  }
+  const constraintsByEmployee = new Map<string, EmployeeConstraintBucket>()
   for (const employee of roster) {
     constraintsByEmployee.set(String(employee.id), {
       fixedRestDays: [],
       maxOpenings: null,
       maxClosings: null,
+      earliestStart: null,
+      latestEnd: null,
+      exactStart: null,
+      exactEnd: null,
+      mustOpenDays: [],
+      mustCloseDays: [],
     })
   }
   for (const constraint of input.employeeConstraints ?? []) {
@@ -159,6 +172,38 @@ export function buildPlanningProblemV3(
     if (constraint.type === "MAX_CLOSINGS" && typeof constraint.value === "number") {
       bucket.maxClosings = constraint.value
     }
+    if (constraint.type === "EARLIEST_START" && typeof constraint.value === "number") {
+      bucket.earliestStart = constraint.value
+    }
+    if (constraint.type === "LATEST_END" && typeof constraint.value === "number") {
+      bucket.latestEnd = constraint.value
+    }
+    // Une heure imposée est AUSSI une borne : elle rétrécit la fenêtre
+    // exactement comme la borne souple, et fixe en plus le point de départ.
+    if (constraint.type === "EXACT_START" && typeof constraint.value === "number") {
+      bucket.exactStart = constraint.value
+      bucket.earliestStart = constraint.value
+    }
+    if (constraint.type === "EXACT_END" && typeof constraint.value === "number") {
+      bucket.exactEnd = constraint.value
+      bucket.latestEnd = constraint.value
+    }
+    if (constraint.type === "MUST_OPEN" && constraint.day) {
+      bucket.mustOpenDays.push(constraint.day)
+    }
+    if (constraint.type === "MUST_CLOSE" && constraint.day) {
+      bucket.mustCloseDays.push(constraint.day)
+    }
+  }
+  for (const [employeeId, bucket] of constraintsByEmployee) {
+    if (bucket.earliestStart === null || bucket.latestEnd === null) continue
+    if (bucket.earliestStart < bucket.latestEnd) continue
+    fail({
+      code: "individual_window_empty",
+      employeeId: roster.find((employee) => String(employee.id) === employeeId)?.id,
+      path: `employeeConstraints.${employeeId}`,
+      message: `Les bornes horaires individuelles de ${employeeId} sont contradictoires : début ${clock(bucket.earliestStart)} au plus tôt, fin ${clock(bucket.latestEnd)} au plus tard.`,
+    })
   }
 
   const preferences = new Map(
@@ -215,8 +260,12 @@ export function buildPlanningProblemV3(
       canOpen: employee.capabilities.includes("CAN_OPEN"),
       canClose: employee.capabilities.includes("CAN_CLOSE"),
       canSplitShift: employee.capabilities.includes("CAN_SPLIT_SHIFT"),
-      maximumOpenings: bucket?.maxOpenings ?? null,
-      maximumClosings: bucket?.maxClosings ?? null,
+      // An individual cap REPLACES the sector's; an absent one INHERITS it.
+      // `?? ` rather than `Math.min` on purpose: the individual value is the
+      // decision someone made about this person, and a manager who raises
+      // someone's cap above the sector default meant to raise it.
+      maximumOpenings: bucket?.maxOpenings ?? sector.maximumOpeningsPerWeek ?? null,
+      maximumClosings: bucket?.maxClosings ?? sector.maximumClosingsPerWeek ?? null,
       prefersOpening: false,
       prefersClosing: preference?.prefersClosing ?? false,
     })
@@ -224,17 +273,42 @@ export function buildPlanningProblemV3(
 
   // ── Days and exact daily budgets ──────────────────────────────────────────
   const totalContractMinutes = employees.reduce((sum, employee) => sum + employee.contractMinutes, 0)
-  const budgets = computeDailyBudgets(totalContractMinutes, sector.weeklyDistribution, step)
-  if (!budgets.ok) {
-    fail({
-      code: "daily_budget_undefined",
-      path: `business.sectors.${sector.id}.weeklyDistribution`,
-      message: budgets.error,
+  const explicitBudgets = sector.dailyBudgetMinutes
+  let budgetByDay: Map<WeekDay, number>
+  if (explicitBudgets) {
+    const invalidDay = WEEK_DAYS.find((day) => {
+      const value = explicitBudgets[day]
+      return !Number.isInteger(value) || value < 0 || value % step !== 0
     })
+    const explicitTotal = WEEK_DAYS.reduce((sum, day) => sum + (explicitBudgets[day] ?? 0), 0)
+    if (invalidDay) {
+      fail({
+        code: "daily_budget_invalid",
+        path: `business.sectors.${sector.id}.dailyBudgetMinutes.${invalidDay}`,
+        message: `Le budget automatique du ${invalidDay} doit être un entier positif multiple de ${step} minutes.`,
+      })
+    }
+    if (explicitTotal !== totalContractMinutes) {
+      fail({
+        code: "daily_budget_total_mismatch",
+        path: `business.sectors.${sector.id}.dailyBudgetMinutes`,
+        message: `Les budgets automatiques totalisent ${explicitTotal} min, contre ${totalContractMinutes} min attribuées aux salariés du rayon.`,
+      })
+    }
+    budgetByDay = new Map(WEEK_DAYS.map((day) => [day, explicitBudgets[day] ?? 0]))
+  } else {
+    const budgets = computeDailyBudgets(totalContractMinutes, sector.weeklyDistribution, step)
+    if (!budgets.ok) {
+      fail({
+        code: "daily_budget_undefined",
+        path: `business.sectors.${sector.id}.weeklyDistribution`,
+        message: budgets.error,
+      })
+    }
+    budgetByDay = new Map(
+      budgets.ok ? budgets.budgets.map((budget) => [budget.day, budget.budgetMinutes]) : []
+    )
   }
-  const budgetByDay = new Map(
-    budgets.ok ? budgets.budgets.map((budget) => [budget.day, budget.budgetMinutes]) : []
-  )
 
   const days: PlanningDayV3[] = []
   for (const date of dates) {
@@ -242,27 +316,38 @@ export function buildPlanningProblemV3(
     const storeHours = input.store.openingHours.find((item) => item.day === weekDay)
     const sectorHours = sector.hours?.find((item) => item.day === weekDay)
     const storeClosed = !storeHours || storeHours.closed || !storeHours.opensAt || !storeHours.closesAt
-    const sectorClosed = sectorHours ? sectorHours.closed : false
-    const closed = storeClosed || sectorClosed
+    // ── Whose hours decide ─────────────────────────────────────────────────
+    //
+    // The SECTOR's, whenever it states them. A sector is not a subdivision of
+    // the sales floor's timetable: a Drive opens before the shop and an Accueil
+    // stays past its closing, and both are ordinary. This used to intersect the
+    // two windows, which silently clipped every sector that ran wider than the
+    // store and made those hours unplannable — the schedule simply could not
+    // place anyone there, with nothing on screen saying why.
+    //
+    // The store's hours remain the FALLBACK for a sector that declares none.
+    const sectorDeclaresHours = sectorHours !== undefined
+    const closed = sectorDeclaresHours ? sectorHours.closed : storeClosed
 
     let opensAtMinutes: number | null = null
     let closesAtMinutes: number | null = null
-    if (!closed && storeHours?.opensAt && storeHours.closesAt) {
-      const storeOpen = minutesOfDay(storeHours.opensAt)
-      const storeClose = minutesOfDay(storeHours.closesAt)
-      const sectorOpen = sectorHours ? minutesOfDay(sectorHours.opensAt) : storeOpen
-      const sectorClose = sectorHours ? minutesOfDay(sectorHours.closesAt) : storeClose
-      if (storeOpen === null || storeClose === null || sectorOpen === null || sectorClose === null) {
+    if (!closed && (sectorDeclaresHours || (storeHours?.opensAt && storeHours.closesAt))) {
+      const openSource = sectorDeclaresHours ? sectorHours.opensAt : storeHours!.opensAt!
+      const closeSource = sectorDeclaresHours ? sectorHours.closesAt : storeHours!.closesAt!
+      const open = minutesOfDay(openSource)
+      const close = minutesOfDay(closeSource)
+      if (open === null || close === null) {
         fail({
           code: "malformed_hours",
           date,
-          path: `store.openingHours.${weekDay}`,
+          path: sectorDeclaresHours
+            ? `business.sectors.${sector.id}.hours.${weekDay}`
+            : `store.openingHours.${weekDay}`,
           message: `Les horaires du ${date} ne sont pas au format "HH:mm".`,
         })
       } else {
-        // The sector may only operate inside the store's window.
-        opensAtMinutes = Math.max(storeOpen, sectorOpen)
-        closesAtMinutes = Math.min(storeClose, sectorClose)
+        opensAtMinutes = open
+        closesAtMinutes = close
         if (closesAtMinutes <= opensAtMinutes) {
           fail({
             code: "empty_opening_window",
@@ -292,19 +377,32 @@ export function buildPlanningProblemV3(
       opensAtMinutes,
       closesAtMinutes,
       budgetMinutes,
+      ...(sector.dailyBudgetMode ? { budgetMode: sector.dailyBudgetMode } : {}),
     })
   }
 
   // ── Availability, per employee and per date ───────────────────────────────
   //
-  // Individual working-hour bounds, keyed `"employeeId|date"`. Empty for now:
-  // no constraint type in the application carries an hour bound, and inventing
-  // one here would ship an interface no screen can fill. See the intersection
-  // below for what happens the day it is populated.
+  // Individual working-hour bounds, keyed by employee id. Undated because the
+  // constraints that produce them are: « ne commence pas avant 08:00 » is a fact
+  // about the person, not about a Tuesday. The intersection below is what makes
+  // them safe — a bound can only ever NARROW the sector's window, never widen
+  // it, so an employee free from 06:00 in a sector opening at 08:00 still starts
+  // at 08:00.
   const individualWindows: ReadonlyMap<
     string,
     { readonly earliest?: number; readonly latest?: number }
-  > = new Map()
+  > = new Map(
+    [...constraintsByEmployee]
+      .filter(([, bucket]) => bucket.earliestStart !== null || bucket.latestEnd !== null)
+      .map(([employeeId, bucket]) => [
+        employeeId,
+        {
+          ...(bucket.earliestStart === null ? {} : { earliest: bucket.earliestStart }),
+          ...(bucket.latestEnd === null ? {} : { latest: bucket.latestEnd }),
+        },
+      ])
+  )
 
   const absences = input.absences ?? []
   const holidays = new Set((input.holidays ?? []).map((holiday) => holiday.date))
@@ -324,48 +422,69 @@ export function buildPlanningProblemV3(
       const holiday = holidays.has(day.date)
       const available = !day.closed && contracted && !fixedRest && !absent && !holiday
 
-      const windowMinutes =
-        day.opensAtMinutes !== null && day.closesAtMinutes !== null
-          ? day.closesAtMinutes - day.opensAtMinutes
-          : 0
+      // The employee's own window for this day: the sector's hours narrowed by
+      // whatever individual bound the employee declared. Written as an explicit
+      // intersection so a bound can only ever shrink the window. A closed day
+      // has no window to narrow and keeps its empty [0, 0].
+      const individual =
+        day.opensAtMinutes === null || day.closesAtMinutes === null
+          ? undefined
+          : individualWindows.get(String(employee.id))
+      const earliestStartMinutes = Math.max(
+        day.opensAtMinutes ?? 0,
+        individual?.earliest ?? 0
+      )
+      const latestEndMinutes = Math.min(
+        day.closesAtMinutes ?? 0,
+        individual?.latest ?? Number.POSITIVE_INFINITY
+      )
+      if (available && latestEndMinutes <= earliestStartMinutes) {
+        fail({
+          code: "individual_window_outside_opening",
+          employeeId: employee.id,
+          date: day.date,
+          path: `employeeConstraints.${String(employee.id)}`,
+          message: `Le ${day.date}, les bornes horaires de ${employee.firstName} ${employee.lastName} (${clock(earliestStartMinutes)} → ${clock(latestEndMinutes)}) ne laissent aucune plage travaillable dans les horaires du secteur.`,
+        })
+      }
+
+      // Not the sector's window: the employee's. Someone barred from starting
+      // before 10:00 in a 08:00–20:00 sector can work ten hours, not twelve, and
+      // a ceiling read from the sector would let the solver propose a day that
+      // no legal start time can produce.
+      // Mono-secteur : le plafond seul, sans sa provenance.
+      //
+      // Le champ ne sert qu'au diagnostic des rôles par rayon, qui n'existe pas
+      // ici — et l'ajouter changerait les fixtures partagées avec le moteur
+      // Python pour une information que personne ne lit. La production
+      // mono-secteur ne bouge pas pour un confort qu'elle n'a pas.
+      const windowMinutes = Math.max(0, latestEndMinutes - earliestStartMinutes)
       const maximumMinutes = available
         ? Math.min(
             employee.maximumDailyMinutes,
             input.settings.maximumDailyMinutes ?? Number.POSITIVE_INFINITY,
-            input.store.planningSettings.maxShiftDuration ?? Number.POSITIVE_INFINITY,
+            input.store.planningSettings.maxDailyDuration ?? input.store.planningSettings.maxShiftDuration ?? Number.POSITIVE_INFINITY,
             windowMinutes
           )
         : 0
 
+      // Les règles fixes ne s'appliquent qu'aux jours réellement travaillés :
+      // imposer une ouverture un jour de repos serait une contradiction que
+      // personne n'a écrite.
+      const fixed = constraintsByEmployee.get(String(employee.id))
       employeeDays.push({
         employeeId: employee.id,
         date: day.date,
         available,
         mandatory: available && mandatoryEverywhere,
         fixedRest,
-        // ── Extension point: individual working-hour windows ────────────────
-        //
-        // The MODEL already supports narrowing these per employee and per date:
-        // the candidate generators honour them and the validator enforces them
-        // as blocking. What does not exist yet is an application constraint
-        // that PRODUCES a narrower value, so `individualWindows` is empty and
-        // everyone inherits the sector's hours.
-        //
-        // When "ne commence pas avant 08:00" and "ne finit pas après 18:00"
-        // become real constraints, they populate that map and nothing else
-        // changes. The intersection below is written out rather than assumed,
-        // so the day an individual bound arrives it can only ever NARROW the
-        // sector's window, never widen it.
-        earliestStartMinutes: Math.max(
-          day.opensAtMinutes ?? 0,
-          individualWindows.get(`${String(employee.id)}|${day.date}`)?.earliest ?? 0
-        ),
-        latestEndMinutes: Math.min(
-          day.closesAtMinutes ?? 0,
-          individualWindows.get(`${String(employee.id)}|${day.date}`)?.latest ??
-            Number.POSITIVE_INFINITY
-        ),
+        earliestStartMinutes,
+        latestEndMinutes,
         maximumMinutes,
+        ...(available && fixed?.exactStart != null ? { fixedStartMinutes: fixed.exactStart } : {}),
+        ...(available && fixed?.exactEnd != null ? { fixedEndMinutes: fixed.exactEnd } : {}),
+        ...(available && fixed?.mustOpenDays.includes(day.weekDay) ? { mustOpen: true } : {}),
+        ...(available && fixed?.mustCloseDays.includes(day.weekDay) ? { mustClose: true } : {}),
         unavailableReason: available
           ? undefined
           : day.closed
@@ -460,35 +579,74 @@ export function buildPlanningProblemV3(
     })
   }
 
+  // Every advanced rule now has a home in the sector configuration. Each is read
+  // with `??` and falls back to what the store — or, failing that, this builder —
+  // used to supply, so a caller that predates the « Contraintes avancées » block
+  // still poses exactly the problem it used to.
   const rules: PlanningRulesV3 = {
     minimumShiftMinutes: sector.minimumShiftDuration,
-    maximumShiftMinutes:
-      input.store.planningSettings.maxShiftDuration ?? input.settings.maximumDailyMinutes ?? 0,
-    minimumRestMinutes: input.settings.minimumRestMinutes ?? 0,
+    // ── La JOURNÉE, pauses comprises ──────────────────────────────────────
+    //
+    // Le rayon plafonne la journée ; le magasin garde son mot, mais avec le
+    // champ qui parle de la JOURNÉE. `maxShiftDuration` parle d'une traite et
+    // n'a rien à faire ici : l'employer revenait à interdire les journées de
+    // 10 h coupées à un magasin qui écrit « 8 h d'affilée, 10 h avec coupure ».
+    //
+    // Il reste le repli pour une configuration qui ne dit rien de la journée —
+    // c'est le comportement historique, et il ne change donc rien pour elle.
+    maximumShiftMinutes: Math.min(
+      sector.maximumDailyDuration ?? Number.POSITIVE_INFINITY,
+      input.store.planningSettings.maxDailyDuration
+        ?? input.store.planningSettings.maxShiftDuration
+        ?? input.settings.maximumDailyMinutes
+        ?? Number.POSITIVE_INFINITY
+    ),
+    minimumRestMinutes: sector.minimumRestMinutes ?? input.settings.minimumRestMinutes ?? 0,
     // No configuration field exists for this rule yet, so the value is derived
     // and tagged as such rather than left silently null.
     maximumConsecutiveWorkedDays: defaultMaximumConsecutiveWorkedDays(days),
     maximumConsecutiveWorkedDaysSource: "derived-fallback",
     splitShiftAllowed: sector.splitShiftAllowed,
     maximumSplitMinutes: sector.maximumSplitDuration,
-    // The store's split policy is the only place a MINIMUM gap is configured.
-    // Carried through rather than re-derived, and left undefined when the
-    // policy declares none — "not stated" and "zero" are different facts, and
-    // an engine that needs a floor must announce its own assumption.
-    minimumSplitMinutes: input.store.splitShiftPolicy?.minSplitDuration ?? null,
-    // No configuration field caps an UNINTERRUPTED stretch yet. Left undefined
-    // rather than defaulted to the daily maximum: silently equating the two
-    // would make "10 hours in one block" legal by omission.
-    maximumContinuousMinutes: null,
-    maximumSplitsPerDay: null,
-    minimumOpeningsPerDay: 1,
-    exactClosingsPerDay: 1,
+    // The sector states the minimum gap; the store's split policy remains the
+    // fallback for configurations written before the sector carried one.
+    minimumSplitMinutes:
+      sector.minimumSplitDuration ?? input.store.splitShiftPolicy?.minSplitDuration ?? null,
+    // ── LA TRAITE, pauses exclues ─────────────────────────────────────────
+    //
+    // Le plafond du magasin arrive ICI, où il a toujours eu son sens. Il ne
+    // s'ajoute que quand la configuration distingue les deux durées : sans
+    // `maxDailyDuration`, elle n'a jamais exprimé qu'un seul plafond et le
+    // déplacer relâcherait sa journée en douce.
+    maximumContinuousMinutes: minimumOf([
+      sector.maximumContinuousDuration,
+      input.store.planningSettings.maxDailyDuration == null
+        ? undefined
+        : input.store.planningSettings.maxShiftDuration,
+    ]),
+    maximumSplitsPerDay: sector.maximumSplitsPerDay ?? null,
+    minimumOpeningsPerDay: sector.minimumOpeningsPerDay ?? 1,
+    exactClosingsPerDay: sector.requiredClosingsPerDay ?? 1,
+    // Carried, never enforced. `null` when the sector declares no policy, so a
+    // caller written before the block still poses a problem with no opinion on
+    // fairness rather than one that silently opted out.
+    closingFairness: sector.closingFairness ?? null,
   }
-  if (rules.maximumShiftMinutes <= 0) {
+  // `Number.isFinite` and not `<= 0`: intersecting the sector's cap with the
+  // store's uses infinity for "not stated", so a problem where NEITHER states a
+  // ceiling comes out infinite rather than zero, and must still be refused.
+  if (!Number.isFinite(rules.maximumShiftMinutes) || rules.maximumShiftMinutes <= 0) {
     fail({
       code: "maximum_shift_missing",
       path: "store.planningSettings.maxShiftDuration",
       message: "La durée maximale d'un shift est obligatoire en V3.",
+    })
+  }
+  if (rules.maximumContinuousMinutes !== null && rules.maximumContinuousMinutes !== undefined && rules.maximumContinuousMinutes > rules.maximumShiftMinutes) {
+    fail({
+      code: "continuous_exceeds_daily",
+      path: `business.sectors.${sector.id}.maximumContinuousDuration`,
+      message: `Le secteur « ${sector.name} » autorise ${rules.maximumContinuousMinutes} minutes en continu pour une journée plafonnée à ${rules.maximumShiftMinutes} minutes.`,
     })
   }
 
@@ -507,9 +665,557 @@ export function buildPlanningProblemV3(
       employeeDays,
       demandSlots,
       rules,
+      // Only when something will actually balance. A problem that carries
+      // history it will never consult would change identity — and therefore
+      // invalidate every stored answer — for a week whose solution cannot
+      // differ. Restricted to the roster, and sorted, so it stays canonical.
+      ...(closingFairnessActive(rules.closingFairness)
+        ? {
+            closingHistory: (input.closingHistory ?? [])
+              .filter((entry) => employees.some((employee) => employee.id === entry.employeeId))
+              .map((entry) => ({
+                employeeId: entry.employeeId,
+                closings: entry.closings,
+                opportunities: entry.opportunities,
+                saturdayClosings: entry.saturdayClosings,
+                saturdayOpportunities: entry.saturdayOpportunities,
+              }))
+              .sort((left, right) => String(left.employeeId).localeCompare(String(right.employeeId))),
+          }
+        : {}),
       objectives: PLANNING_OBJECTIVES_V3,
     },
   }
+}
+
+/**
+ * Plancher de durée de shift appliqué à une génération commune, en minutes.
+ *
+ * Ce n'est PAS une règle de secteur : aucun rayon ne la déclare, et le mono-
+ * secteur ne l'applique pas. Elle vient du fait qu'une zone commune fait
+ * tourner un salarié entre plusieurs comptoirs et qu'un passage plus court que
+ * quatre heures n'a pas de sens d'exploitation.
+ *
+ * Conséquence à connaître : un comptoir configuré avec un shift minimum de 3 h
+ * se comporte différemment seul et en zone. La valeur est nommée ici pour que
+ * ce soit une décision visible et non une constante enfouie ; la déplacer vers
+ * la configuration magasin est une évolution produit, pas un correctif.
+ */
+/**
+ * De combien un rayon peut fermer plus tard que son horaire nominal, en minutes.
+ *
+ * Le fermeur devait terminer à la minute exacte, ce qui ne lui laissait qu'un
+ * seul horaire possible et bloquait des journées pour rien. Un rayon peut
+ * s'attarder un peu — jamais au-delà de la fermeture du magasin, et jamais pour
+ * fermer plus tôt : la couverture nominale reste due.
+ */
+export const SECTOR_CLOSING_EXTENSION_MINUTES = 45
+
+export const MULTI_SECTOR_MINIMUM_SHIFT_MINUTES = 240
+
+/**
+ * Plafond de travail continu appliqué à une génération commune, en minutes.
+ *
+ * Même statut que ci-dessus, avec une asymétrie supplémentaire à assumer : en
+ * mono-secteur, un rayon qui ne déclare aucun plafond continu n'en reçoit
+ * aucun (`null`), alors qu'ici il en reçoit un de huit heures. Activer un
+ * second comptoir ajoute donc une contrainte que la configuration n'exprime
+ * nulle part. C'est délibérément conservé — resserrer ne peut pas rendre
+ * illégal un planning déjà accepté — mais c'est écrit, pas caché.
+ */
+export const MULTI_SECTOR_MAXIMUM_CONTINUOUS_MINUTES = 480
+
+/**
+ * Construit le problème multi-secteur à partir des traductions mono-secteur.
+ * Cette composition évite deux définitions divergentes des horaires, absences,
+ * planchers et règles avancées. Les contrats sont ensuite dédupliqués : un
+ * salarié partagé n'apporte son volume hebdomadaire qu'une seule fois.
+ */
+function buildMultiSectorProblemV3(
+  input: PlanningGenerationInput,
+  active: readonly NonNullable<NonNullable<PlanningGenerationInput["business"]>["sectors"]>[number][]
+): PlanningProblemBuildResultV3 {
+  const step = input.settings.timeIncrementMinutes ?? input.store.planningSettings.granularity ?? 15
+  const parts: { sector: (typeof active)[number]; problem: PlanningProblemV3 }[] = []
+  const errors: PlanningInfeasibilityV3[] = []
+
+  for (const sector of active) {
+    const built = buildPlanningProblemV3({
+      ...input,
+      business: { ...input.business, sectors: [{ ...sector, active: true }] },
+      // L'historique existant n'est pas encore étiqueté par rayon. Le faire
+      // circuler dans chaque sous-problème le compterait plusieurs fois.
+      closingHistory: (input.closingHistory ?? []).filter((entry) => entry.sectorId === undefined || entry.sectorId === sector.id),
+    })
+    if (!built.ok) errors.push(...built.errors)
+    else parts.push({ sector, problem: built.problem })
+  }
+  if (errors.length > 0) return { ok: false, errors }
+
+  // ── Présence obligatoire : une zone, une réponse ──────────────────────────
+  //
+  // `workEveryNonFixedRestDay` décide si un jour disponible est TRAVAILLÉ ou
+  // seulement travaillable. Le moteur ne sait pas traiter un jour optionnel :
+  // il choisit les durées en supposant que le support de la matrice est fixé
+  // par la seule disponibilité, et refuse la génération entière quand ce n'est
+  // pas le cas.
+  //
+  // Quand les comptoirs répondent différemment, un salarié rattaché au seul
+  // comptoir permissif obtient exactement ce jour optionnel, et la génération
+  // s'arrêtait sur `optional-work-days-not-supported` : un message qui décrit
+  // une limite du solveur sans nommer le comptoir à corriger. La contradiction
+  // se voit ici, dans la configuration, alors disons-la ici.
+  const mandatoryGroups = new Map<boolean, string[]>()
+  for (const sector of active) {
+    const flag = sector.workEveryNonFixedRestDay === true
+    mandatoryGroups.set(flag, [...(mandatoryGroups.get(flag) ?? []), sector.name])
+  }
+  if (mandatoryGroups.size > 1) {
+    return {
+      ok: false,
+      errors: [{
+        code: "incompatible_multi_sector_mandatory_presence",
+        path: "business.sectors",
+        message:
+          `Les rayons sélectionnés ne s'accordent pas sur la présence obligatoire : `
+          + `${(mandatoryGroups.get(true) ?? []).join(", ")} impose de travailler chaque jour non repos, `
+          + `${(mandatoryGroups.get(false) ?? []).join(", ")} ne l'impose pas. `
+          + `Harmonisez « travaille tous les jours hors repos fixe » avant la génération commune. `
+          + `Le planning affiché n'a pas été modifié.`,
+      }],
+    }
+  }
+
+  const employeeById = new Map<string, PlanningEmployeeV3>()
+  for (const { problem } of parts) {
+    for (const employee of problem.employees) {
+      const id = String(employee.id)
+      const allowed = active
+        .filter((sector) => sector.assignedEmployeeIds.some((value) => String(value) === id))
+        .map((sector) => sector.id)
+      const preferred = input.business?.employeePreferences
+        ?.find((entry) => String(entry.employeeId) === id)
+        ?.sectorIds?.filter((sectorId) => allowed.includes(sectorId))
+      const existing = employeeById.get(id)
+      if (
+        existing
+        && (existing.maximumOpenings !== employee.maximumOpenings
+          || existing.maximumClosings !== employee.maximumClosings)
+      ) {
+        return {
+          ok: false,
+          errors: [{
+            code: "incompatible_multi_sector_employee_caps",
+            path: `employees.${id}`,
+            message: `${employee.firstName} ${employee.lastName} reçoit des plafonds d'ouvertures ou fermetures différents selon les rayons. Harmonisez-les avant la génération commune ; aucun plafond Drive n'a été remplacé.`,
+          }],
+        }
+      }
+      employeeById.set(id, {
+        ...employee,
+        allowedSectorIds: [...(preferred ?? []), ...allowed.filter((id) => !preferred?.includes(id))],
+      })
+    }
+  }
+  const employees = [...employeeById.values()].sort((a, b) => String(a.id).localeCompare(String(b.id)))
+  if (employees.length === 0) {
+    return { ok: false, errors: [{ code: "no_assigned_employee", path: "business.sectors", message: "Aucun salarié actif n'est affecté aux rayons sélectionnés." }] }
+  }
+
+  const baseDates = parts[0].problem.days.map((day) => day.date)
+  const sectorModels = parts.map(({ sector, problem }) => ({
+    id: sector.id,
+    name: sector.name,
+    closingFairness: problem.rules.closingFairness,
+    splitRules: {
+      splitShiftAllowed: problem.rules.splitShiftAllowed,
+      minimumSplitMinutes: problem.rules.minimumSplitMinutes ?? null,
+      maximumSplitMinutes: problem.rules.maximumSplitMinutes,
+      maximumSplitsPerDay: problem.rules.maximumSplitsPerDay ?? null,
+    },
+    days: problem.days.map((day) => ({
+      date: day.date,
+      closed: day.closed,
+      opensAtMinutes: day.opensAtMinutes,
+      closesAtMinutes: day.closesAtMinutes,
+      minimumOpenings: problem.rules.minimumOpeningsPerDay,
+      exactClosings: problem.rules.exactClosingsPerDay,
+      latestCloseMinutes: latestCloseFor(input, day),
+    })),
+  }))
+
+  const totalContractMinutes = employees.reduce((sum, employee) => sum + employee.contractMinutes, 0)
+  // ── Le volume du jour suit le BESOIN des comptoirs ────────────────────────
+  //
+  // Il suivait une répartition hebdomadaire en pourcentages, indifférente à ce
+  // que les rayons demandent réellement. Un jour où un comptoir ouvre trois
+  // heures de plus recevait la même part que les autres, et ces trois heures
+  // devaient être volées à une autre journée.
+  //
+  // Ici, ce qu'un jour réclame est la somme des minutes de présence que ses
+  // comptaires exigent — donc trois heures de plus sur un rayon un mardi
+  // remontent le mardi, et rien d'autre. La répartition configurée reste le
+  // repli pour un jour dont aucun comptoir n'exprime de besoin : sans demande,
+  // il n'y a rien à suivre.
+  const weights = new Map<WeekDay, number>(WEEK_DAYS.map((day) => [day, 0]))
+  const dayOfDate = new Map(parts[0].problem.days.map((day) => [day.date, day.weekDay]))
+  for (const { problem } of parts) {
+    for (const slot of problem.demandSlots) {
+      const weekDay = dayOfDate.get(slot.date)
+      if (weekDay === undefined) continue
+      const need = (slot.endMinutes - slot.startMinutes) * slot.requiredEmployees
+      weights.set(weekDay, (weights.get(weekDay) ?? 0) + need)
+    }
+  }
+  if ([...weights.values()].every((value) => value === 0)) {
+    for (const { problem } of parts) {
+      for (const day of problem.days) {
+        // Keep the sector's volume. Normalising every sector independently made
+        // a ten-hour aisle influence the week as much as the full Drive.
+        weights.set(day.weekDay, (weights.get(day.weekDay) ?? 0) + day.budgetMinutes)
+      }
+    }
+  }
+  // Un jour ouvert que la demande ignore doit garder de quoi tenir ses rayons :
+  // lui laisser zéro rendrait sa journée impossible, pas économe.
+  for (const day of parts[0].problem.days) {
+    if (day.closed || (weights.get(day.weekDay) ?? 0) > 0) continue
+    weights.set(day.weekDay, employees.length * MULTI_SECTOR_MINIMUM_SHIFT_MINUTES)
+  }
+  const weightTotal = [...weights.values()].reduce((sum, value) => sum + value, 0)
+  const distribution = Object.fromEntries(
+    WEEK_DAYS.map((day) => [day, weightTotal > 0 ? ((weights.get(day) ?? 0) * 100) / weightTotal : 0])
+  ) as Record<WeekDay, number>
+  // Les pourcentages viennent d'une division : leur somme flotte à 1e-14 près,
+  // et `computeDailyBudgets` exige 100 pile. Le reliquat va au jour le plus
+  // chargé, où il est proportionnellement le plus petit.
+  const heaviest = WEEK_DAYS.reduce((best, day) =>
+    distribution[day] > distribution[best] ? day : best
+  )
+  const drift = 100 - WEEK_DAYS.reduce((sum, day) => sum + distribution[day], 0)
+  if (drift !== 0 && distribution[heaviest] > 0) distribution[heaviest] += drift
+  const combinedBudgets = computeDailyBudgets(totalContractMinutes, distribution, step)
+  if (!combinedBudgets.ok) {
+    return { ok: false, errors: [{ code: "daily_budget_undefined", path: "business.sectors", message: combinedBudgets.error }] }
+  }
+  const budgetByDay = new Map(combinedBudgets.budgets.map((entry) => [entry.day, entry.budgetMinutes]))
+
+  const days: PlanningDayV3[] = baseDates.map((date) => {
+    const candidates = parts.map(({ problem }) => problem.days.find((day) => day.date === date)!).filter((day) => !day.closed)
+    const reference = parts[0].problem.days.find((day) => day.date === date)!
+    return {
+      date,
+      weekDay: reference.weekDay,
+      weekKey: reference.weekKey,
+      closed: candidates.length === 0,
+      opensAtMinutes: candidates.length ? Math.min(...candidates.map((day) => day.opensAtMinutes!)) : null,
+      closesAtMinutes: candidates.length ? Math.max(...candidates.map((day) => day.closesAtMinutes!)) : null,
+      budgetMinutes: candidates.length ? (budgetByDay.get(reference.weekDay) ?? 0) : 0,
+      ...(candidates.some((day) => day.budgetMode === "target")
+        ? { budgetMode: "target" as const }
+        : {}),
+    }
+  })
+
+  const employeeDays: PlanningEmployeeDayV3[] = []
+  for (const employee of employees) {
+    for (const day of days) {
+      const entries = parts
+        .filter(({ sector }) => employee.allowedSectorIds?.includes(sector.id))
+        .map(({ problem }) => problem.employeeDays.find((entry) => entry.employeeId === employee.id && entry.date === day.date))
+        .filter((entry): entry is PlanningEmployeeDayV3 => entry !== undefined)
+      const available = entries.some((entry) => entry.available)
+      const availableEntries = entries.filter((entry) => entry.available)
+      const earliest = available ? Math.min(...availableEntries.map((entry) => entry.earliestStartMinutes)) : 0
+      const latest = available ? Math.max(...availableEntries.map((entry) => entry.latestEndMinutes)) : 0
+      const availableMinutes = available ? mergedIntervalMinutes(
+        availableEntries.map((entry) => [entry.earliestStartMinutes, entry.latestEndMinutes] as const)
+      ) : 0
+      // Le plafond quotidien du salarié : celui des rayons OÙ IL TRAVAILLE.
+      //
+      // Il était global, donc un rayon strict le baissait pour tout le monde.
+      // Sur une zone réelle : Poisson ouvre 07:00–18:00 et autorise 10 h par
+      // jour, Fromage n'en autorise que 8 — et l'unique poissonnière se
+      // retrouvait plafonnée à 8 h par un comptoir où elle ne met jamais les
+      // pieds, ce qui rendait sa journée impossible à tenir et faisait déclarer
+      // le rayon infaisable. Exactement la faute déjà corrigée pour les
+      // coupures, jamais appliquée aux durées.
+      // ── La provenance se lit sur les valeurs BRUTES ────────────────────────
+      //
+      // Surtout pas sur `problem.rules.maximumShiftMinutes` d'un sous-problème :
+      // celui-là vaut déjà `min(durée max du rayon, plafond du magasin)`, donc
+      // l'étiqueter « rayon » désigne le magasin une fois sur deux. C'est la
+      // cinquième fois que le même piège se referme — un agrégat ne peut pas
+      // porter le nom d'un seul de ses opérandes.
+      //
+      // Ces cinq-là sont des réglages que quelqu'un a saisis quelque part, et
+      // chacun a son propre écran. Le minimum désigne donc toujours un endroit
+      // réel à aller corriger.
+      const ownRawSectorCap = Math.min(
+        ...active
+          .filter((sector) => employee.allowedSectorIds?.includes(sector.id))
+          .map((sector) => sector.maximumDailyDuration ?? Number.POSITIVE_INFINITY)
+      )
+      const cap = dailyCapOf([
+        { minutes: ownRawSectorCap, source: "sector" },
+        { minutes: employee.maximumDailyMinutes, source: "contract" },
+        { minutes: input.settings.maximumDailyMinutes ?? Number.POSITIVE_INFINITY, source: "settings" },
+        { minutes: input.store.planningSettings.maxDailyDuration ?? input.store.planningSettings.maxShiftDuration ?? Number.POSITIVE_INFINITY, source: "store" },
+        { minutes: availableMinutes, source: "window" },
+      ])
+      employeeDays.push({
+        employeeId: employee.id,
+        date: day.date,
+        available,
+        mandatory: availableEntries.some((entry) => entry.mandatory),
+        fixedRest: entries.some((entry) => entry.fixedRest),
+        earliestStartMinutes: earliest,
+        latestEndMinutes: latest,
+        maximumMinutes: available ? cap.minutes : 0,
+        ...(available ? { maximumMinutesSource: cap.source } : {}),
+        // Les règles fixes sont propres au SALARIÉ, pas au rayon : tous les
+        // sous-problèmes portent donc la même valeur, et la première suffit.
+        ...(availableEntries[0]?.fixedStartMinutes != null
+          ? { fixedStartMinutes: availableEntries[0].fixedStartMinutes } : {}),
+        ...(availableEntries[0]?.fixedEndMinutes != null
+          ? { fixedEndMinutes: availableEntries[0].fixedEndMinutes } : {}),
+        ...(availableEntries.some((entry) => entry.mustOpen) ? { mustOpen: true } : {}),
+        ...(availableEntries.some((entry) => entry.mustClose) ? { mustClose: true } : {}),
+        unavailableReason: available ? undefined : entries[0]?.unavailableReason ?? "no-authorized-sector-open",
+      })
+    }
+  }
+
+  const minFinite = (values: readonly (number | null | undefined)[]) => {
+    const finite = values.filter((value): value is number => typeof value === "number" && Number.isFinite(value))
+    return finite.length ? Math.min(...finite) : null
+  }
+  // General day limits remain the safe intersection. Split bounds are the
+  // permissive envelope used only to GENERATE candidates; each candidate is
+  // then checked against the rules of the sectors it actually works. Requiring
+  // every selected counter to allow splits made Poisson unable to use a split
+  // simply because Fromage forbade them, even on a Poisson-only day.
+  const splitParts = parts.filter(({ problem }) => problem.rules.splitShiftAllowed)
+  const splitShiftAllowed = splitParts.length > 0
+  const nullableMinimum = (values: readonly (number | null | undefined)[]) =>
+    values.some((value) => value == null)
+      ? null
+      : Math.min(...values.filter((value): value is number => typeof value === "number"))
+  const nullableMaximum = (values: readonly (number | null | undefined)[]) =>
+    values.some((value) => value == null)
+      ? null
+      : Math.max(...values.filter((value): value is number => typeof value === "number"))
+  const rules: PlanningRulesV3 = {
+    minimumShiftMinutes: Math.max(
+      MULTI_SECTOR_MINIMUM_SHIFT_MINUTES,
+      ...parts.map(({ problem }) => problem.rules.minimumShiftMinutes)
+    ),
+    // ENVELOPPE, pas intersection — même traitement que les coupures juste en
+    // dessous, et pour la même raison.
+    //
+    // Ce plafond ne borne plus personne à lui seul : la limite qui s'applique
+    // réellement à un salarié est posée par rayon dans
+    // `employeeDays[].maximumMinutes`, à partir des seuls comptoirs où il est
+    // autorisé. Le garder en intersection revenait à faire décider la journée
+    // de la poissonnière par le rayon Fromage.
+    maximumShiftMinutes: Math.max(...parts.map(({ problem }) => problem.rules.maximumShiftMinutes)),
+    minimumRestMinutes: Math.max(...parts.map(({ problem }) => problem.rules.minimumRestMinutes)),
+    // Le repli structurel se calcule sur la ZONE, jamais par intersection.
+    //
+    // `defaultMaximumConsecutiveWorkedDays` promet d'être NON CONTRAIGNANT :
+    // c'est la plus longue série de jours ouverts, donc aucun planning
+    // réalisable ne peut la dépasser. La promesse tient pour un rayon et
+    // l'intersection la détruisait. Sur une semaine réelle : Poisson ferme le
+    // mercredi et Fromage le jeudi, chacun n'a donc que 3 jours ouverts
+    // d'affilée, `min` retenait 3 — et l'imposait à des salariés que leur
+    // disponibilité oblige à travailler 6 jours consécutifs sur des comptoirs
+    // ouverts toute la semaine. Tout planning violait la règle, l'évaluateur
+    // les rejetait tous, et le moteur rendait « aucun planning légal trouvé »
+    // sans jamais pouvoir dire pourquoi.
+    //
+    // Une valeur réellement CONFIGURÉE reste une règle métier et continue de
+    // s'intersecter : là, le rayon le plus strict a raison de contraindre.
+    maximumConsecutiveWorkedDays: minFinite([
+      ...parts
+        .filter(({ problem }) => problem.rules.maximumConsecutiveWorkedDaysSource === "configured")
+        .map(({ problem }) => problem.rules.maximumConsecutiveWorkedDays),
+      defaultMaximumConsecutiveWorkedDays(days),
+    ]),
+    maximumConsecutiveWorkedDaysSource: parts.some(({ problem }) => problem.rules.maximumConsecutiveWorkedDaysSource === "configured") ? "configured" : "derived-fallback",
+    splitShiftAllowed,
+    maximumSplitMinutes: splitShiftAllowed
+      ? nullableMaximum(splitParts.map(({ problem }) => problem.rules.maximumSplitMinutes))
+      : null,
+    minimumSplitMinutes: splitShiftAllowed
+      ? nullableMinimum(splitParts.map(({ problem }) => problem.rules.minimumSplitMinutes))
+      : null,
+    maximumContinuousMinutes: Math.min(
+      MULTI_SECTOR_MAXIMUM_CONTINUOUS_MINUTES,
+      ...parts
+        .map(({ problem }) => problem.rules.maximumContinuousMinutes)
+        .filter((value): value is number => typeof value === "number")
+    ),
+    maximumSplitsPerDay: splitShiftAllowed
+      ? nullableMaximum(splitParts.map(({ problem }) => problem.rules.maximumSplitsPerDay))
+      : null,
+    // Les responsabilités sont imposées par rayon dans le MILP de placement.
+    minimumOpeningsPerDay: 0,
+    exactClosingsPerDay: 0,
+    closingFairness: null,
+  }
+
+  const commonRuleConflict = commonMultiSectorRuleConflict(parts, rules)
+  if (commonRuleConflict !== null) {
+    return {
+      ok: false,
+      errors: [{
+        code: "incompatible_multi_sector_rules",
+        path: "business.sectors",
+        message: commonRuleConflict,
+      }],
+    }
+  }
+
+  return {
+    ok: true,
+    problem: {
+      version: PLANNING_PROBLEM_V3_VERSION,
+      planningId: input.settings.planningId as PlanningId,
+      sectorId: active[0].id,
+      sectors: sectorModels,
+      period: { start: input.settings.period.start, end: input.settings.period.end },
+      timeStepMinutes: step,
+      employees,
+      days,
+      employeeDays,
+      demandSlots: parts.flatMap(({ sector, problem }) => problem.demandSlots.map((slot) => ({ ...slot, sectorId: sector.id }))),
+      rules,
+      closingHistory: parts.flatMap(({ sector, problem }) =>
+        (problem.closingHistory ?? []).map((entry) => ({ ...entry, sectorId: sector.id }))
+      ),
+      objectives: PLANNING_MULTI_SECTOR_OBJECTIVES_V3,
+    },
+  }
+}
+
+function commonMultiSectorRuleConflict(
+  parts: readonly { readonly sector: { readonly name: string }; readonly problem: PlanningProblemV3 }[],
+  rules: PlanningRulesV3
+): string | null {
+  const selected = parts.map(({ sector }) => sector.name).join(", ")
+  const sourceNames = (select: (rules: PlanningRulesV3) => number | null | undefined, value: number) =>
+    parts.filter(({ problem }) => select(problem.rules) === value).map(({ sector }) => sector.name).join(", ")
+  const conflict = (minimumLabel: string, minimum: number, minimumSources: string, maximumLabel: string, maximum: number, maximumSources: string) =>
+    `Impossible de construire une règle commune pour ${selected} : ${minimumLabel} ${duration(minimum)} (${minimumSources}) dépasse ${maximumLabel} ${duration(maximum)} (${maximumSources}). Le planning affiché n'a pas été modifié.`
+
+  // Par comptoir, et non plus sur l'enveloppe.
+  //
+  // `maximumShiftMinutes` est désormais le plus PERMISSIF des plafonds, donc le
+  // comparer au minimum commun ne dirait plus rien : un comptoir plafonné sous
+  // ce minimum ne peut accueillir aucun shift légal, et c'est lui qu'il faut
+  // nommer, pas la zone.
+  const tightest = parts
+    .map(({ sector, problem }) => ({ name: sector.name, maximum: problem.rules.maximumShiftMinutes }))
+    .sort((left, right) => left.maximum - right.maximum)[0]
+  if (tightest !== undefined && rules.minimumShiftMinutes > tightest.maximum) {
+    return conflict(
+      "la durée minimale retenue de",
+      rules.minimumShiftMinutes,
+      sourceNames((candidate) => candidate.minimumShiftMinutes, rules.minimumShiftMinutes) || "minimum légal de 4 h",
+      "la durée maximale du rayon le plus strict, de",
+      tightest.maximum,
+      tightest.name
+    )
+  }
+  if (rules.maximumContinuousMinutes != null && rules.minimumShiftMinutes > rules.maximumContinuousMinutes) {
+    return conflict(
+      "la durée minimale retenue de",
+      rules.minimumShiftMinutes,
+      sourceNames((candidate) => candidate.minimumShiftMinutes, rules.minimumShiftMinutes) || "minimum légal de 4 h",
+      "la durée continue maximale retenue de",
+      rules.maximumContinuousMinutes,
+      sourceNames((candidate) => candidate.maximumContinuousMinutes, rules.maximumContinuousMinutes) || "limite commune de 8 h"
+    )
+  }
+  if (
+    rules.splitShiftAllowed
+    && rules.minimumSplitMinutes != null
+    && rules.maximumSplitMinutes != null
+    && rules.minimumSplitMinutes > rules.maximumSplitMinutes
+  ) {
+    return conflict(
+      "la coupure minimale retenue de",
+      rules.minimumSplitMinutes,
+      sourceNames((candidate) => candidate.minimumSplitMinutes, rules.minimumSplitMinutes),
+      "la coupure maximale retenue de",
+      rules.maximumSplitMinutes,
+      sourceNames((candidate) => candidate.maximumSplitMinutes, rules.maximumSplitMinutes)
+    )
+  }
+  return null
+}
+
+/**
+ * Jusqu'à quand ce rayon peut s'attarder, ce jour-là.
+ *
+ * Son horaire nominal plus l'extension tolérée, plafonné par la fermeture du
+ * MAGASIN — que seul ce constructeur connaît, le problème ne la transporte pas.
+ * Un magasin qui n'affiche pas d'horaire ce jour-là ne plafonne rien : le rayon
+ * fait autorité, comme partout ailleurs dans ce fichier.
+ */
+function latestCloseFor(input: PlanningGenerationInput, day: PlanningDayV3): number | null {
+  if (day.closed || day.closesAtMinutes === null) return day.closesAtMinutes
+  const storeHours = input.store.openingHours.find((item) => item.day === day.weekDay)
+  const storeCloses =
+    storeHours && !storeHours.closed && storeHours.closesAt
+      ? minutesOfDay(storeHours.closesAt)
+      : null
+  const extended = day.closesAtMinutes + SECTOR_CLOSING_EXTENSION_MINUTES
+  return storeCloses === null ? extended : Math.max(day.closesAtMinutes, Math.min(extended, storeCloses))
+}
+
+/**
+ * Le plafond du jour, ET le réglage qui l'a produit.
+ *
+ * Cinq entrées, cinq écrans différents pour les corriger. Renvoyer le seul
+ * nombre laissait le diagnostic deviner, et il devinait mal : « plafond fixé
+ * par la configuration du magasin » s'affichait alors qu'un RAYON plafonnait,
+ * envoyant modifier un réglage qui ne changeait rien.
+ *
+ * En cas d'égalité, l'ordre de cette liste tranche, du plus spécifique au plus
+ * général : c'est celui qu'il est le plus naturel d'aller corriger.
+ */
+function dailyCapOf(
+  candidates: readonly { readonly minutes: number; readonly source: PlanningDailyCapSourceV3 }[]
+): { readonly minutes: number; readonly source: PlanningDailyCapSourceV3 } {
+  return candidates.reduce((best, candidate) =>
+    candidate.minutes < best.minutes ? candidate : best
+  )
+}
+
+/** Le plus petit des plafonds réellement déclarés, ou `null` si aucun ne l'est. */
+function minimumOf(values: readonly (number | null | undefined)[]): number | null {
+  const declared = values.filter((value): value is number => typeof value === "number")
+  return declared.length === 0 ? null : Math.min(...declared)
+}
+
+function mergedIntervalMinutes(intervals: readonly (readonly [number, number])[]): number {
+  const sorted = intervals
+    .filter(([start, end]) => end > start)
+    .map(([start, end]) => [start, end] as [number, number])
+    .sort((left, right) => left[0] - right[0] || left[1] - right[1])
+  if (sorted.length === 0) return 0
+  let total = 0
+  let [start, end] = sorted[0]
+  for (const [nextStart, nextEnd] of sorted.slice(1)) {
+    if (nextStart <= end) end = Math.max(end, nextEnd)
+    else {
+      total += end - start
+      start = nextStart
+      end = nextEnd
+    }
+  }
+  return total + end - start
 }
 
 /**
@@ -578,6 +1284,34 @@ function presenceFloorFor(
     best = best === null ? floor.employees : Math.max(best, floor.employees)
   }
   return best
+}
+
+/**
+ * True when at least one balance is switched on.
+ *
+ * A declared policy with both flags false is a manager who looked and chose not
+ * to balance. That must behave exactly like no policy at all — same problem,
+ * same fingerprint, same answer — which is what the « règle désactivée :
+ * résultat inchangé » requirement means in practice.
+ */
+export function closingFairnessActive(
+  fairness: { readonly balanceClosings: boolean; readonly balanceSaturdayClosings: boolean } | null | undefined
+): boolean {
+  return fairness !== null && fairness !== undefined && (fairness.balanceClosings || fairness.balanceSaturdayClosings)
+}
+
+/** Minutes since midnight → "HH:mm", for error messages only. */
+function clock(minutes: number): string {
+  const hours = Math.floor(minutes / 60)
+  return `${String(hours).padStart(2, "0")}:${String(minutes % 60).padStart(2, "0")}`
+}
+
+/** Duration in minutes -> compact French text, for error messages only. */
+function duration(minutes: number): string {
+  const hours = Math.floor(minutes / 60)
+  const remainder = minutes % 60
+  if (hours === 0) return `${remainder} min`
+  return remainder === 0 ? `${hours} h` : `${hours} h ${remainder}`
 }
 
 /** "HH:mm" → minutes since midnight, or null when malformed. */

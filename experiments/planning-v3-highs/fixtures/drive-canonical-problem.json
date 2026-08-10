@@ -343,7 +343,7 @@
       "available": false,
       "mandatory": false,
       "fixedRest": true,
-      "earliestStartMinutes": 480,
+      "earliestStartMinutes": 0,
       "latestEndMinutes": 0,
       "maximumMinutes": 0,
       "unavailableReason": "closed"
@@ -1331,14 +1331,16 @@
     "maximumSplitMinutes": 90,
     "minimumSplitMinutes": 45,
     "maximumContinuousMinutes": 480,
-    "maximumSplitsPerDay": null,
+    "maximumSplitsPerDay": 1,
     "minimumOpeningsPerDay": 1,
-    "exactClosingsPerDay": 1
+    "exactClosingsPerDay": 1,
+    "closingFairness": null
   },
   "objectives": [
     "coverage-deficit",
     "contract-deviation",
     "avoidable-surplus",
+    "saturday-closing-fairness",
     "opening-fairness",
     "closing-fairness",
     "preference-satisfaction"

@@ -26,10 +26,14 @@ export interface TinyProblemOptions {
     contractMinutes: number
     canOpen?: boolean
     canClose?: boolean
+    canSplitShift?: boolean
     maximumOpenings?: number | null
     maximumClosings?: number | null
     prefersClosing?: boolean
     restDays?: readonly IsoDate[]
+    /** Individual hour bounds, already intersected with the sector's window. */
+    earliestStartMinutes?: number
+    latestEndMinutes?: number
   }[]
   readonly dates?: readonly IsoDate[]
   readonly budgetMinutes?: number | readonly number[]
@@ -70,7 +74,7 @@ export function tinyProblem(options: TinyProblemOptions = {}): PlanningProblemV3
     maximumDailyMinutes: close - open,
     canOpen: person.canOpen ?? true,
     canClose: person.canClose ?? true,
-    canSplitShift: false,
+    canSplitShift: person.canSplitShift ?? false,
     maximumOpenings: person.maximumOpenings ?? null,
     maximumClosings: person.maximumClosings ?? null,
     prefersOpening: false,
@@ -95,6 +99,10 @@ export function tinyProblem(options: TinyProblemOptions = {}): PlanningProblemV3
   for (const [personIndex, person] of people.entries()) {
     for (const date of dates) {
       const resting = person.restDays?.includes(date) ?? false
+      // An individual bound may only narrow the sector's window, exactly as the
+      // builder intersects them.
+      const earliest = Math.max(open, person.earliestStartMinutes ?? open)
+      const latest = Math.min(close, person.latestEndMinutes ?? close)
       employeeDays.push({
         employeeId: employees[personIndex].id,
         date,
@@ -102,9 +110,9 @@ export function tinyProblem(options: TinyProblemOptions = {}): PlanningProblemV3
         // Every available day is mandatory, mirroring the Drive sector rule.
         mandatory: !resting,
         fixedRest: resting,
-        earliestStartMinutes: open,
-        latestEndMinutes: close,
-        maximumMinutes: resting ? 0 : close - open,
+        earliestStartMinutes: earliest,
+        latestEndMinutes: latest,
+        maximumMinutes: resting ? 0 : Math.max(0, latest - earliest),
         unavailableReason: resting ? "fixed-rest" : undefined,
       })
     }

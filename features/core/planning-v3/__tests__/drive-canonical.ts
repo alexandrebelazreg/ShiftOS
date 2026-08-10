@@ -14,10 +14,7 @@ import type { PlanningGenerationInput } from "@/features/core/planning-generator
 import { createEmptySector } from "@/features/sectors"
 
 import { buildPlanningProblemV3 } from "@/features/core/planning-v3/problem-builder"
-import type {
-  PlanningEmployeeDayV3,
-  PlanningProblemV3,
-} from "@/features/core/planning-v3/types/problem"
+import type { PlanningProblemV3 } from "@/features/core/planning-v3/types/problem"
 import type {
   PlanningAssignmentV3,
   PlanningSolutionV3,
@@ -109,6 +106,8 @@ export const DRIVE_CANONICAL_RULES = {
   maximumShiftMinutes: 600,
   minimumSplitMinutes: 45,
   maximumSplitMinutes: 90,
+  /** One coupure a day, never two. */
+  maximumSplitsPerDay: 1,
   minimumRestMinutes: 720,
   minimumOpeningsPerDay: 1,
   exactClosingsPerDay: 1,
@@ -180,6 +179,13 @@ export const DRIVE_TEAM_SHAPE: readonly CanonicalPerson[] = [
 
 function workingDaysOf(person: CanonicalPerson): WeekDay[] {
   return OPEN_DAYS.filter((day) => day !== person.fixedRestDay)
+}
+
+/** The individual "ne commence pas avant" bound, in minutes, or undefined. */
+function earliestStartOverrideFor(employeeId: string): number | undefined {
+  return (DRIVE_CANONICAL_RULES.earliestStartOverrides as Readonly<Record<string, number>>)[
+    employeeId
+  ]
 }
 
 /**
@@ -305,6 +311,20 @@ export function driveCanonicalInput(): PlanningGenerationInput {
         type: "MAX_CLOSINGS" as const,
         value: DRIVE_CANONICAL_RULES.maximumClosingsPerEmployee,
       },
+      // « Ne commence pas avant 08:00 », declared as a real constraint. It used
+      // to be injected into the built problem below, which meant the rule
+      // existed only in this file: a real Drive reaching the engine carried no
+      // hour bound at all.
+      ...(earliestStartOverrideFor(person.id) === undefined
+        ? []
+        : [
+            {
+              id: brand<ConstraintId>(`earliest_${person.id}`),
+              employeeId: brand<EmployeeId>(person.id),
+              type: "EARLIEST_START" as const,
+              value: earliestStartOverrideFor(person.id)!,
+            },
+          ]),
     ]),
     business: {
       sectors: [
@@ -316,6 +336,16 @@ export function driveCanonicalInput(): PlanningGenerationInput {
           minimumShiftDuration: DRIVE_CANONICAL_RULES.minimumShiftMinutes,
           splitShiftAllowed: true,
           maximumSplitDuration: DRIVE_CANONICAL_RULES.maximumSplitMinutes,
+          // The advanced rules, declared by the SECTOR. They used to be stamped
+          // onto the built problem below, so they existed only in this file and
+          // a real Drive reaching the engine carried none of them.
+          maximumDailyDuration: DRIVE_CANONICAL_RULES.maximumShiftMinutes,
+          maximumContinuousDuration: DRIVE_CANONICAL_RULES.maximumContinuousMinutes,
+          minimumSplitDuration: DRIVE_CANONICAL_RULES.minimumSplitMinutes,
+          maximumSplitsPerDay: DRIVE_CANONICAL_RULES.maximumSplitsPerDay,
+          minimumOpeningsPerDay: DRIVE_CANONICAL_RULES.minimumOpeningsPerDay,
+          requiredClosingsPerDay: DRIVE_CANONICAL_RULES.exactClosingsPerDay,
+          minimumRestMinutes: DRIVE_CANONICAL_RULES.minimumRestMinutes,
           // Declared, never guessed. A fixed rest day still wins — see the note
           // on this function.
           workEveryNonFixedRestDay: true,
@@ -345,27 +375,17 @@ export function driveCanonicalInput(): PlanningGenerationInput {
 /**
  * The canonical problem.
  *
- * Built through the REAL production builder, then given the three rules the
- * application configuration cannot express yet. All are applied by NARROWING
- * the built problem, never by widening it:
+ * Built through the REAL production builder, with NO override left.
  *
- * - `earliestStartMinutes` per employee — the model supports it, the validator
- *   enforces it, but no constraint type carries an hour bound yet (see the
- *   extension point in `build-problem.ts`);
- * - `maximumContinuousMinutes` — no sector field declares it, so the builder
- *   leaves it null rather than defaulting it to the daily maximum, which would
- *   make "ten hours in one block" legal by omission.
+ * Every rule this fixture used to stamp onto the built problem is now declared
+ * by the configuration and translated by the builder: `hardMinimumEmployees`
+ * from the sector's `minimumPresence`, `earliestStartMinutes` from the
+ * employee's `EARLIEST_START` constraint, and — since the « Contraintes
+ * avancées » block — `maximumContinuousMinutes`, `minimumSplitMinutes` and
+ * `maximumSplitsPerDay` from the sector's own fields.
  *
- * `hardMinimumEmployees` used to be a third override and is NOT one any more:
- * the sector now carries `minimumPresence` and the builder translates it onto
- * every slot it covers. That matters beyond tidiness — while the floor was
- * injected here, the rule existed only inside this file, and a real Drive
- * reaching the engine carried no floor at all.
- *
- * Both remaining overrides are KNOWN GAPS in the application model, not
- * shortcuts: the day a configuration field exists, the override disappears and
- * the builder produces the value. `drive-canonical.test.ts` pins each one so a
- * gap cannot be closed silently or widened accidentally.
+ * That matters beyond tidiness. While a rule was injected here it existed only
+ * inside this file, and a real Drive reaching the engine carried none of it.
  */
 export function buildDriveCanonicalProblem(): PlanningProblemV3 {
   const built = buildPlanningProblemV3(driveCanonicalInput())
@@ -377,33 +397,7 @@ export function buildDriveCanonicalProblem(): PlanningProblemV3 {
     )
   }
 
-  const overrides = DRIVE_CANONICAL_RULES.earliestStartOverrides as Readonly<
-    Record<string, number>
-  >
-
-  const employeeDays: PlanningEmployeeDayV3[] = built.problem.employeeDays.map((entry) => {
-    const override = overrides[String(entry.employeeId)]
-    if (override === undefined) return entry
-    const earliest = Math.max(entry.earliestStartMinutes, override)
-    return {
-      ...entry,
-      earliestStartMinutes: earliest,
-      maximumMinutes: Math.min(
-        entry.maximumMinutes,
-        Math.max(0, entry.latestEndMinutes - earliest)
-      ),
-    }
-  })
-
-  return {
-    ...built.problem,
-    employeeDays,
-    rules: {
-      ...built.problem.rules,
-      maximumContinuousMinutes: DRIVE_CANONICAL_RULES.maximumContinuousMinutes,
-      minimumSplitMinutes: DRIVE_CANONICAL_RULES.minimumSplitMinutes,
-    },
-  }
+  return built.problem
 }
 
 /** The problem as JSON, for the Python spike and for any cross-language check. */

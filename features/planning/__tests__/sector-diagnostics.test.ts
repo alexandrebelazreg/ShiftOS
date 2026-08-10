@@ -25,7 +25,8 @@ function completeSector(id: string, name: string): SectorDemandConfiguration {
     ...base,
     name,
     status: "active",
-    workEveryNonFixedRestDay: false,
+    workEveryNonFixedRestDay: true,
+    weeklyDistributionEnabled: true,
     hours: WEEK_DAYS.map((day) =>
       OPEN.includes(day)
         ? { day, closed: false, opensAt: "09:00", closesAt: "17:00" }

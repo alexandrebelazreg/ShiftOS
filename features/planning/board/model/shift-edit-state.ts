@@ -164,6 +164,21 @@ export function applyShiftEdits(
     )
     const start = segments[0]?.startMinutes ?? override.startMinutes
     const end = segments[segments.length - 1]?.endMinutes ?? override.endMinutes
+    const movedBy = start - shift.startMinutes
+    const pureMove = end - shift.endMinutes === movedBy
+    const sectorAssignments = shift.sectorAssignments?.map((block, index, blocks) => ({
+      ...block,
+      startMinutes: pureMove
+        ? block.startMinutes + movedBy
+        : index === 0
+          ? start
+          : block.startMinutes,
+      endMinutes: pureMove
+        ? block.endMinutes + movedBy
+        : index === blocks.length - 1
+          ? end
+          : block.endMinutes,
+    }))
     return {
       ...shift,
       startMinutes: start,
@@ -173,6 +188,7 @@ export function applyShiftEdits(
         0
       ),
       segments,
+      ...(sectorAssignments ? { sectorAssignments } : {}),
       opensDay: day?.opensAtMinutes === start,
       closesDay: day?.closesAtMinutes === end,
     }

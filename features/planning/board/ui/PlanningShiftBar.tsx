@@ -13,6 +13,7 @@ import {
   type EditableShift,
   type ShiftDragMode,
 } from "@/features/planning/board/model/shift-edit"
+import { sectorBarPaint, sectorBarTitle } from "@/features/planning/board/model/sector-paint"
 import { KIND_SURFACE } from "@/features/planning/board/ui/level-styles"
 
 interface PlanningShiftBarProps {
@@ -67,7 +68,15 @@ export function PlanningShiftBar({
   const geometry =
     editing && (preview ?? editable)
       ? segmentGeometry(preview ?? editable!, bounds!)
-      : shift.segments
+      : shift.sectorBlocks.length > 0
+        ? shift.sectorBlocks
+        : shift.segments
+
+  // La peinture du bloc, quand le rayon en déclare une.
+  const paintOf = (index: number) => {
+    const block = shift.sectorBlocks[index]
+    return block ? sectorBarPaint(block.color, block) : null
+  }
 
   const cancel = useCallback(() => {
     drag.current = null
@@ -134,8 +143,11 @@ export function PlanningShiftBar({
     cancel()
   }
 
-  const bodyLabel = (index: number) =>
-    index === 0 ? `${shift.startLabel} – ${shift.endLabel}` : "suite"
+  const bodyLabel = (index: number) => {
+    const block = !editing ? shift.sectorBlocks[index] : undefined
+    if (block) return `${block.sectorName} · ${block.startLabel}–${block.endLabel}`
+    return index === 0 ? `${shift.startLabel} – ${shift.endLabel}` : "suite"
+  }
 
   return (
     <>
@@ -147,7 +159,13 @@ export function PlanningShiftBar({
           onPointerDown={editing ? beginDrag("move") : undefined}
           onPointerMove={editing ? onPointerMove : undefined}
           onPointerUp={editing ? onPointerUp : undefined}
-          style={{ left: `${segment.leftPercent}%`, width: `${segment.widthPercent}%` }}
+          style={{
+            left: `${segment.leftPercent}%`,
+            width: `${segment.widthPercent}%`,
+            // La couleur du rayon prime sur toute classe : elle est saisie
+            // par le gérant, donc aucune classe ne peut l'exprimer.
+            ...(paintOf(index) ?? {}),
+          }}
           className={cn(
             "absolute inset-y-1 flex items-center justify-center overflow-hidden rounded-md border px-2",
             "text-[11px] font-medium shadow-sm transition",
@@ -158,9 +176,22 @@ export function PlanningShiftBar({
             selected
               ? "ring-2 ring-primary ring-offset-1"
               : locked && "ring-1 ring-amber-500/80",
-            KIND_SURFACE[shift.kind]
+            // L'habillage de secours ne sert que si le rayon n'a pas de
+            // couleur : sinon les classes lutteraient contre le style calculé.
+            paintOf(index)
+              ? "border"
+              : shift.sectorBlocks[index]
+                ? SECTOR_SURFACES[sectorColorIndex(shift.sectorBlocks[index].sectorId)]
+                : KIND_SURFACE[shift.kind]
           )}
-          title={`${shift.kindLabel} · ${shift.label} · ${shift.durationLabel}${locked ? " · verrouillé" : ""}`}
+          title={sectorBarTitle({
+            sectorName: shift.sectorBlocks[index]?.sectorName,
+            kindLabel: shift.kindLabel,
+            role: shift.sectorBlocks[index] ?? { opens: false, closes: false },
+            label: shift.label,
+            durationLabel: shift.durationLabel,
+            locked,
+          })}
         >
           {locked && index === 0 ? (
             <span className="mr-1 shrink-0 text-[10px] leading-none" aria-label="Verrouillé">
@@ -194,6 +225,19 @@ export function PlanningShiftBar({
       ) : null}
     </>
   )
+}
+
+const SECTOR_SURFACES = [
+  "border-emerald-300 bg-emerald-100 text-emerald-950",
+  "border-sky-300 bg-sky-100 text-sky-950",
+  "border-violet-300 bg-violet-100 text-violet-950",
+  "border-amber-300 bg-amber-100 text-amber-950",
+] as const
+
+function sectorColorIndex(sectorId: string): number {
+  let hash = 0
+  for (const character of sectorId) hash = (hash * 31 + character.charCodeAt(0)) >>> 0
+  return hash % SECTOR_SURFACES.length
 }
 
 interface HandleProps {

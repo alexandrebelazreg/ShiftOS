@@ -12,20 +12,17 @@ import { useEmployees } from "@/features/employees/hooks/useEmployees"
 import type { StoreConfig } from "@/features/store/schemas/store.schema"
 import {
   preparePlanningGeneration,
+  marketZoneSectors,
   resolveGenerationScope,
-  runPlanningFlow,
   selectableSectors,
   type GenerationScope,
   type GenerationScopeVerdict,
-  type PlanningFlowResult,
 } from "@/features/planning/flow"
-import { createEditorState, type EditorState } from "@/features/planning/editor"
+import { type EditorState } from "@/features/planning/editor"
 import {
   CURRENT_PLANNING_ENGINE_VERSION,
   PLANNING_ENGINE_LABELS,
   endpointEngineFor,
-  usesV3Pipeline,
-  type PlanningEngineVersion,
 } from "@/features/core/planning-v3/types/engine-version"
 import type { PlanningRegenerationRequest } from "@/features/planning/board"
 import {
@@ -36,8 +33,6 @@ import {
   v3TechnicalCaveats,
   type V3AttemptOutcome,
 } from "@/features/planning/v3"
-import { EngineSelector } from "@/features/planning/view/EngineSelector"
-import type { PlanningIssue } from "@/features/core/planning-generator/types/business-pipeline"
 import { PlanningEditor } from "@/features/planning/editor/ui"
 import {
   PlanningBoard,
@@ -57,13 +52,8 @@ import {
   planningStore,
   type PlanningRecord,
   type PlanningStatus,
-  type PlanningSummary,
 } from "@/features/planning/persistence"
-
-type GenerationState =
-  | { status: "idle" }
-  | { status: "loading" }
-  | { status: "done"; result: PlanningFlowResult }
+import { PlanningGenerationLoader } from "@/features/planning/view/PlanningGenerationLoader"
 
 /**
  * What the LAST V3 attempt did — never what is on screen.
@@ -78,18 +68,6 @@ type V3State =
   | { readonly status: "accepted"; readonly outcome: Extract<V3AttemptOutcome, { status: "accepted" }> }
   | { readonly status: "rejected"; readonly outcome: Extract<V3AttemptOutcome, { status: "rejected" }> }
 
-/** The planning to restore when the manager backs out of V3. */
-interface V2Snapshot {
-  readonly state: EditorState
-  readonly record: PlanningRecord | null
-  readonly generation: GenerationState
-}
-
-/** ISO date `n` days from `date` (UTC), as YYYY-MM-DD. */
-function isoDate(date: Date, addDays = 0): string {
-  const d = new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate() + addDays))
-  return d.toISOString().slice(0, 10)
-}
 
 /** A one-week planning scope starting today (temporary default until a picker exists). */
 /**
@@ -108,23 +86,33 @@ function scopeForWeek(monday: string) {
   }
 }
 
+function sameSectorScope(left: readonly string[], right: readonly string[] | undefined): boolean {
+  if (!right || left.length !== right.length) return false
+  const expected = new Set(right)
+  return left.every((id) => expected.has(id))
+}
+
 /**
  * PlanningView — the manager-facing planning generation screen. It ORCHESTRATES
- * only: collects the store + employees, calls `runPlanningFlow` (which drives
- * every engine), and renders the loading / error / result states. No business
- * logic lives here.
+ * only: collects the store + employees, prepares the input and runs
+ * the one engine over the solve endpoint, and renders the running / refused /
+ * result states. No business logic lives here.
  */
-export function PlanningView({ initialStore }: { initialStore: StoreConfig | null }) {
+export function PlanningView({
+  initialStore,
+  initialWeek,
+  initialPlanningId,
+}: {
+  readonly initialStore: StoreConfig | null
+  readonly initialWeek?: string
+  readonly initialPlanningId?: string
+}) {
   const { employees, isLoading } = useEmployees()
   const setup = useSetupReadiness(initialStore)
-  const [state, setState] = useState<GenerationState>({ status: "idle" })
-  // Which engine the NEXT generation will use. Defaults to V2 and stays there
-  // unless the manager deliberately picks otherwise.
-  const [engine, setEngine] = useState<PlanningEngineVersion>(CURRENT_PLANNING_ENGINE_VERSION)
-  // Which engine produced what is CURRENTLY on screen. Different from `engine`
-  // between choosing V3 and a V3 run actually succeeding — which is precisely
-  // the window in which the screen must not lie about what it is showing.
-  const [activeEngine, setActiveEngine] = useState<PlanningEngineVersion>("v2")
+  // One engine. It is still named rather than assumed, because the badge, the
+  // technical drawer and every saved result say which engine produced a week —
+  // and "the only one" stops being an answer the moment a second one exists.
+  const engine = CURRENT_PLANNING_ENGINE_VERSION
   const [v3, setV3] = useState<V3State>({ status: "idle" })
   // Why the last attempt was refused before any engine ran. Held apart from
   // every engine result: it is about the selection and the configuration, not
@@ -141,12 +129,6 @@ export function PlanningView({ initialStore }: { initialStore: StoreConfig | nul
    * and would be overwritten every render.
    */
   const [selectedSectorIds, setSelectedSectorIds] = useState<readonly string[] | null>(null)
-  // Blocking issues a V2 run reported. Previously computed and then dropped on
-  // the floor: the screen filtered them out of the technical drawer and showed
-  // nothing in their place, so a refused generation looked like a bad one.
-  const [v2Blocking, setV2Blocking] = useState<readonly string[]>([])
-  const [v2Snapshot, setV2Snapshot] = useState<V2Snapshot | null>(null)
-  const [savedPlannings, setSavedPlannings] = useState<readonly PlanningSummary[]>([])
   const [record, setRecord] = useState<PlanningRecord | null>(null)
   const [editorState, setEditorState] = useState<EditorState | null>(null)
   const [editorInstance, setEditorInstance] = useState(0)
@@ -157,23 +139,40 @@ export function PlanningView({ initialStore }: { initialStore: StoreConfig | nul
   // time today, but making the choice explicit means a future week costs no UI
   // change when it becomes possible.
   const [targetWeek, setTargetWeek] = useState<string>(() =>
-    mondayOf(new Date().toISOString().slice(0, 10))
+    initialWeek ?? mondayOf(new Date().toISOString().slice(0, 10))
   )
   const weekOptions = useMemo(() => listWeekOptions(targetWeek), [targetWeek])
   /** Only active sectors can be planned, so only they can be picked. */
   const pickableSectors = useMemo(() => selectableSectors(setup.sectors ?? []), [setup.sectors])
+  const marketZoneIds = useMemo(
+    () => marketZoneSectors(pickableSectors).map((sector) => sector.id),
+    [pickableSectors]
+  )
+  /** Prefer the historical/manual sector (the Drive) over a newly-created automatic aisle. */
+  const defaultSectorIds = useMemo(() => {
+    const sector = pickableSectors.find((entry) =>
+      entry.id.trim().toLocaleLowerCase("fr-FR") === "drive"
+      || entry.name.trim().toLocaleLowerCase("fr-FR") === "drive"
+    )
+      ?? pickableSectors.find((entry) => entry.weeklyDistributionEnabled !== false)
+      ?? pickableSectors[0]
+    return sector ? [sector.id] : []
+  }, [pickableSectors])
   /**
-   * The effective selection: every active sector until the manager narrows.
+   * The effective selection: the first configured sector until the manager
+   * explicitly widens it.  This keeps the historical Drive on its proven
+   * mono-sector path when a new aisle is added; multi-sector is an intentional
+   * action, never a side effect of activating another sector.
    *
    * DERIVED, not initialised in an effect. `null` means "never chosen", and it
-   * resolves to all pickable sectors; `[]` means "chosen none" and stays empty.
+   * resolves to the protected default sector; `[]` means "chosen none" and stays empty.
    * Keeping the two apart is what stops a transient empty list — the sector
    * repository still loading — from being read as a deliberate choice and
    * overwriting one the manager had already made.
    */
   const selection = useMemo(
-    () => selectedSectorIds ?? pickableSectors.map((sector) => sector.id),
-    [selectedSectorIds, pickableSectors]
+    () => selectedSectorIds ?? defaultSectorIds,
+    [selectedSectorIds, defaultSectorIds]
   )
   const sectorChoices = useMemo(
     () =>
@@ -181,13 +180,14 @@ export function PlanningView({ initialStore }: { initialStore: StoreConfig | nul
         id: sector.id,
         name: sector.name || "Sans nom",
         selected: selection.includes(sector.id),
+        marketZone: sector.marketZone,
       })),
     [pickableSectors, selection]
   )
 
   const toggleSector = (sectorId: string): void =>
     setSelectedSectorIds((current) => {
-      const next = new Set(current ?? pickableSectors.map((sector) => sector.id))
+      const next = new Set(current ?? defaultSectorIds)
       if (next.has(sectorId)) next.delete(sectorId)
       else next.add(sectorId)
       return [...next]
@@ -195,6 +195,14 @@ export function PlanningView({ initialStore }: { initialStore: StoreConfig | nul
 
   const toggleAllSectors = (selectAll: boolean): void =>
     setSelectedSectorIds(selectAll ? pickableSectors.map((sector) => sector.id) : [])
+
+  /**
+   * Zone marché is one generation scope, not an additive filter. Selecting it
+   * replaces Drive (or any other scope) so a single click cannot accidentally
+   * hand Drive to the multi-sector builder.
+   */
+  const toggleMarketZone = (selectAll: boolean): void =>
+    setSelectedSectorIds(selectAll ? marketZoneIds : [])
 
   /**
    * Readiness for what is SELECTED, not for the whole configuration.
@@ -217,14 +225,18 @@ export function PlanningView({ initialStore }: { initialStore: StoreConfig | nul
       editorState
         ? adaptEditorStateToBoard(
             editorState,
-            (setup.sectors ?? []).map((sector) => ({ id: sector.id, name: sector.name })),
-            // Whichever engine produced the schedule on screen describes it.
-            // Reading V2's report under a V3 planning would put the wrong
-            // reserves and the wrong technical facts under the right week.
-            usesV3Pipeline(activeEngine) ? buildV3BoardDiagnostics(v3) : buildBoardDiagnostics(state)
+            // Les horaires voyagent avec le secteur : c'est eux qui décident où
+            // commence et finit la journée sur la grille, pas ceux du magasin.
+            (setup.sectors ?? [])
+              .filter((sector) => {
+                const planned = editorState.sectorScope?.sectorIds ?? record?.sectorIds ?? selection
+                return planned.includes(sector.id)
+              })
+              .map((sector) => ({ id: sector.id, name: sector.name, marketZone: sector.marketZone, hours: sector.hours, color: sector.color })),
+            buildV3BoardDiagnostics(v3)
           )
         : null,
-    [editorState, setup.sectors, state, activeEngine, v3]
+    [editorState, record?.sectorIds, selection, setup.sectors, v3]
   )
   // The publish dialog restates the reserves, so it reads the same summary the
   // banner under the schedule does — one computation, no second wording.
@@ -261,19 +273,36 @@ export function PlanningView({ initialStore }: { initialStore: StoreConfig | nul
   )
 
   useEffect(() => {
-    void planningStore
-      .list()
-      .then(setSavedPlannings)
-      .catch(() => setPersistenceError("Impossible de charger les plannings enregistrés."))
-  }, [])
+    if (!initialPlanningId) return
 
-  async function refreshSavedPlannings() {
-    try {
-      setSavedPlannings(await planningStore.list())
-    } catch {
-      setPersistenceError("Impossible de charger les plannings enregistrés.")
+    let active = true
+    void planningStore.reopen(initialPlanningId)
+      .then((reopened) => {
+        if (!active) return
+        if (!reopened) throw new Error("Planning introuvable.")
+        setRecord(reopened)
+        setEditorState(reopened.state)
+        setSelectedSectorIds(reopened.sectorIds ?? null)
+        setTargetWeek(mondayOf(reopened.periodStart))
+        setEditorInstance((value) => value + 1)
+        setIsDirty(false)
+        setV3({ status: "idle" })
+      })
+      .catch((error: unknown) => {
+        if (active) {
+          setPersistenceError(
+            error instanceof Error ? error.message : "Impossible d’ouvrir le planning."
+          )
+        }
+      })
+      .finally(() => {
+        if (active) setIsPersisting(false)
+      })
+
+    return () => {
+      active = false
     }
-  }
+  }, [initialPlanningId])
 
   /**
    * Generate or regenerate with the SELECTED engine. Never with the other one.
@@ -300,21 +329,14 @@ export function PlanningView({ initialStore }: { initialStore: StoreConfig | nul
       // Nothing is generated and NOTHING is replaced. A refusal must not cost
       // the manager the planning already on screen.
       setScopeRefusal(verdict)
-      setV2Blocking([])
       return
     }
     setScopeRefusal(null)
-
-    if (usesV3Pipeline(engine)) {
-      void handleGenerateV3(verdict.scope, engine, regeneration)
-      return
-    }
-    handleGenerateV2(verdict.scope)
+    void handleGenerateV3(verdict.scope, regeneration)
   }
 
   async function handleGenerateV3(
     generationScope: GenerationScope,
-    version: PlanningEngineVersion,
     regeneration?: PlanningRegenerationRequest
   ) {
     if (!initialStore) return
@@ -337,7 +359,7 @@ export function PlanningView({ initialStore }: { initialStore: StoreConfig | nul
           status: "rejected",
           title: "La configuration ne permet pas de préparer une génération",
           message: "Le planning affiché est inchangé.",
-          details: prepared.errors.map((error) => `${error.code} — ${error.message}`),
+          details: prepared.errors.map((error) => error.message),
         },
       })
       return
@@ -345,19 +367,23 @@ export function PlanningView({ initialStore }: { initialStore: StoreConfig | nul
 
     // The reference the locks, the retouches and the stability objective all
     // point at: what is on screen right now, edits included.
+    // Switching from Drive to Zone marché (or to a solo counter) is a fresh
+    // scope, even on the same week. Reusing Drive locks or stability penalties
+    // there would make an unrelated planning constrain the new group.
+    const scopedRegeneration = sameSectorScope(
+      generationScope.sectorIds,
+      editorState?.sectorScope?.sectorIds
+    ) ? regeneration : undefined
     const baseline =
-      regeneration !== undefined && editorState !== null
+      scopedRegeneration !== undefined && editorState !== null
         ? baselineFromEditorState(editorState)
         : undefined
 
-    // The chosen engine is the ONLY thing that differs between the two V3 runs.
-    // Everything else — the problem, the request, the audit, the acceptance
-    // gate — is shared, which is what makes comparing them mean anything.
     const outcome = await runV3Generation({
       prepared,
-      regeneration,
+      regeneration: scopedRegeneration,
       baseline,
-      solve: { engine: endpointEngineFor(version) },
+      solve: { engine: endpointEngineFor() },
     })
 
     if (outcome.status === "rejected") {
@@ -369,136 +395,36 @@ export function PlanningView({ initialStore }: { initialStore: StoreConfig | nul
       return
     }
 
-    // Accepted: keep what V2 had, so backing out is a restore rather than a
-    // regeneration the manager would have to wait for a second time.
-    if (activeEngine === "v2" && editorState !== null) {
-      setV2Snapshot({ state: editorState, record, generation: state })
-    }
     setPublishDialogOpen(false)
     setRecord(null)
     setEditorState(outcome.editorState)
     setEditorInstance((value) => value + 1)
     setIsDirty(true)
-    setActiveEngine("v3")
-    setState({ status: "idle" })
     setV3({ status: "accepted", outcome })
-  }
-
-  /**
-   * Leave V3 behind, in one click.
-   *
-   * Restores the exact V2 planning that was on screen before the switch when
-   * there was one; otherwise clears the V3 schedule rather than leaving it
-   * under a "V2 stable" label. It never regenerates: putting the manager back
-   * where they were must not cost them another wait, and must not quietly
-   * produce a schedule they did not ask for.
-   */
-  function handleReturnToV2() {
-    setEngine("v2")
-    setV3({ status: "idle" })
-    setPublishBlocked(false)
-    setPublishDialogOpen(false)
-
-    if (v2Snapshot !== null) {
-      setEditorState(v2Snapshot.state)
-      setRecord(v2Snapshot.record)
-      setState(v2Snapshot.generation)
-      setEditorInstance((value) => value + 1)
-      setV2Snapshot(null)
-      setActiveEngine("v2")
-      return
-    }
-
-    if (usesV3Pipeline(activeEngine)) {
-      setEditorState(null)
-      setRecord(null)
-      setState({ status: "idle" })
-      setEditorInstance((value) => value + 1)
-    }
-    setActiveEngine("v2")
-  }
-
-  function handleGenerateV2(generationScope: GenerationScope) {
-    if (!initialStore) return
-    setState({ status: "loading" })
-    // Defer so the loading state paints before the (synchronous) engines run.
-    setTimeout(() => {
-      const result = runPlanningFlow({
-        store: initialStore,
-        employees: generationScope.employees,
-        sectors: generationScope.sectors,
-        scope: scopeForWeek(targetWeek),
-      })
-      // A blocked run is a REFUSAL, not a schedule with warnings. Its blocking
-      // issues used to be computed and then dropped — the technical drawer
-      // filtered them out and nothing took their place — so the manager saw an
-      // unusable week replace a working one with no explanation. It is now
-      // reported, and it replaces nothing.
-      const blocking =
-        result.status === "success" && result.generation.status === "blocked"
-          ? result.generation.issues
-              .filter((issue: PlanningIssue) => issue.severity === "blocking")
-              .map((issue: PlanningIssue) => issue.message)
-          : []
-      setV2Blocking(blocking)
-
-      if (result.status === "success" && blocking.length === 0) {
-        setPublishDialogOpen(false)
-        setPublishBlocked(false)
-        setRecord(null)
-        // A successful V2 run is the manager choosing V2 outright: the V3
-        // attempt and the snapshot it was guarding are both spent.
-        setActiveEngine("v2")
-        setV3({ status: "idle" })
-        setV2Snapshot(null)
-        setEditorState(
-          createEditorState({
-            coreInput: result.coreInput,
-            configuration: result.configuration,
-            planning: result.generation.planning,
-            shifts: result.generation.shifts,
-            assignments: result.generation.assignments,
-          })
-        )
-        setEditorInstance((value) => value + 1)
-        setIsDirty(true)
-        setState({ status: "done", result })
-        return
-      }
-
-      // Failed or refused: the previous planning stays exactly where it is.
-      setState(editorState === null ? { status: "done", result } : { status: "idle" })
-    }, 0)
   }
 
   /**
    * TEMPORARY, and deliberately so: a saved planning does not record WHICH
    * engine produced it, nor the V3 validation report.
    *
-   * `PlanningRecord` stores an `EditorState` and nothing beside it, so carrying
-   * the engine would mean threading a field through the record, the lifecycle,
-   * the repository and the serialisation — four files and their tests, for a
-   * mode that is explicitly experimental and switched off by default. This
-   * sprint was told not to invent a persistence layer, so it did not.
+   * `PlanningRecord` stores an `EditorState` plus the sector selection, and
+   * nothing beside it.
    *
-   * What that costs, precisely: reopening a saved planning shows it as V2,
-   * because `activeEngine` resets with the session. The schedule itself is
-   * complete and correct — the shifts, the assignments and the period are all
-   * there — only its provenance is lost. Anything published from a reopened V3
-   * planning is re-audited by the same publish gate as any other, so nothing
-   * unsafe follows from the gap; it is a traceability hole, not a safety one.
-   *
-   * Closing it is one optional field on `PlanningRecord` plus a migration of
-   * the stored payload, and it should happen before V3 stops being a toggle.
+   * What that costs is smaller than it was, now that one engine remains: a
+   * reopened planning can only have come from that engine. It stops being
+   * harmless the day a second one exists, and the fix is one optional field on
+   * `PlanningRecord` — the same place `sectorIds` already lives.
    */
   async function persistCurrent(): Promise<PlanningRecord | null> {
     if (!editorState) return null
     const saved = record
-      ? await planningStore.save(record.id, editorState)
-      : await planningStore.createDraft(editorState)
+      ? await planningStore.save(record.id, editorState, selection)
+      // The sector selection is captured here or nowhere: no shift, assignment
+      // or planning carries it, so a record saved without it can never feed a
+      // sector's closing history.
+      : await planningStore.createDraft(editorState, selection)
     setRecord(saved)
     setIsDirty(false)
-    await refreshSavedPlannings()
     return saved
   }
 
@@ -552,7 +478,6 @@ export function PlanningView({ initialStore }: { initialStore: StoreConfig | nul
       if (!saved) return
       const published = await planningStore.publish(saved.id)
       setRecord(published)
-      await refreshSavedPlannings()
     })
   }
 
@@ -590,19 +515,6 @@ export function PlanningView({ initialStore }: { initialStore: StoreConfig | nul
       if (!target) return
       const archived = await planningStore.archive(target.id)
       setRecord(archived)
-      await refreshSavedPlannings()
-    })
-  }
-
-  function handleOpen(id: string) {
-    void withPersistence(async () => {
-      const reopened = await planningStore.reopen(id)
-      if (!reopened) throw new Error("Planning introuvable.")
-      setRecord(reopened)
-      setEditorState(reopened.state)
-      setEditorInstance((value) => value + 1)
-      setIsDirty(false)
-      setState({ status: "idle" })
     })
   }
 
@@ -612,21 +524,29 @@ export function PlanningView({ initialStore }: { initialStore: StoreConfig | nul
       const draft = await planningStore.editPublished(record.id)
       setRecord(draft)
       setEditorState(draft.state)
+      setSelectedSectorIds(
+        draft.sectorIds
+          ? draft.sectorIds.filter((id) => pickableSectors.some((sector) => sector.id === id))
+          : null
+      )
       setEditorInstance((value) => value + 1)
       setIsDirty(false)
-      await refreshSavedPlannings()
     })
   }
 
-  const busyGenerating = state.status === "loading" || v3.status === "running"
-  /** What the screen says it is showing. Read from the run, never assumed. */
+  const busyGenerating = v3.status === "running"
+  /**
+   * What the screen says it is showing. Read from the RUN, never assumed.
+   *
+   * The engine names itself in its response — the exact build, the exact
+   * profile — and that is what the badge shows once a run has answered. Falling
+   * back to the registry label before then is deliberate: it names the engine
+   * that WILL run, not one that has.
+   */
   const activeEngineLabel =
-    usesV3Pipeline(activeEngine) && v3.status === "accepted"
+    v3.status === "accepted"
       ? describeV3Engine(v3.outcome.response)
-      : PLANNING_ENGINE_LABELS[activeEngine]
-  // Offered whenever V3 is involved at all — a live V3 planning, or a failed
-  // attempt sitting on top of an untouched V2 one.
-  const canReturnToV2 = usesV3Pipeline(activeEngine) || v3.status === "rejected"
+      : PLANNING_ENGINE_LABELS[engine]
   const currentStatus: PlanningStatus = record?.status ?? "draft"
   const readOnly = currentStatus !== "draft"
   // The loaded planning belongs to one week; when the manager is looking at any
@@ -648,7 +568,6 @@ export function PlanningView({ initialStore }: { initialStore: StoreConfig | nul
             description="Générez un planning à partir de la configuration du magasin et de votre équipe."
           />
           <div className="flex flex-wrap items-center gap-2">
-            <EngineSelector value={engine} onChange={setEngine} disabled={busyGenerating} />
             {/* The same control the board shows, on the same state: before the
                 first generation there is no board, and the sector to plan still
                 has to be choosable. */}
@@ -656,6 +575,7 @@ export function PlanningView({ initialStore }: { initialStore: StoreConfig | nul
               sectors={sectorChoices}
               onToggleSector={toggleSector}
               onToggleAll={toggleAllSectors}
+              onToggleMarketZone={toggleMarketZone}
             />
             <select
               value={targetWeek}
@@ -683,6 +603,12 @@ export function PlanningView({ initialStore }: { initialStore: StoreConfig | nul
         </div>
       )}
 
+      {persistenceError && !editorState ? (
+        <p role="alert" className="rounded-md border border-destructive/40 bg-destructive/5 p-3 text-sm text-destructive">
+          {persistenceError}
+        </p>
+      ) : null}
+
       {!initialStore ? (
         <Card>
           <CardHeader>
@@ -705,38 +631,8 @@ export function PlanningView({ initialStore }: { initialStore: StoreConfig | nul
         </Card>
       ) : null}
 
-      {savedPlannings.length > 0 ? (
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-base">Plannings enregistrés</CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-2">
-            {savedPlannings.map((planning) => (
-              <div key={planning.id} className="flex flex-wrap items-center justify-between gap-3 rounded-md border p-3">
-                <div>
-                  <p className="text-sm font-medium">{planning.label}</p>
-                  <p className="text-xs text-muted-foreground">{planning.periodStart} → {planning.periodEnd}</p>
-                </div>
-                <div className="flex items-center gap-2">
-                  <StatusBadge status={planning.status} />
-                  <Button size="sm" variant="outline" onClick={() => handleOpen(planning.id)} disabled={isPersisting}>
-                    Ouvrir
-                  </Button>
-                </div>
-              </div>
-            ))}
-          </CardContent>
-        </Card>
-      ) : null}
-
       {busyGenerating ? (
-        <Card>
-          <CardContent className="py-8 text-center text-sm text-muted-foreground">
-            {v3.status === "running"
-              ? `Résolution CP-SAT en cours, jusqu'à ${PLANNING_V3_DEFAULT_TIMEOUT_SECONDS} secondes… le planning actuel reste affiché tant qu'aucun résultat V3 n'est validé.`
-              : "Génération du planning…"}
-          </CardContent>
-        </Card>
+        <PlanningGenerationLoader maxSeconds={PLANNING_V3_DEFAULT_TIMEOUT_SECONDS} />
       ) : null}
 
       {scopeRefusal !== null ? (
@@ -766,26 +662,6 @@ export function PlanningView({ initialStore }: { initialStore: StoreConfig | nul
         </Card>
       ) : null}
 
-      {v2Blocking.length > 0 ? (
-        <Card role="alert" className="border-destructive/40">
-          <CardHeader>
-            <CardTitle className="text-base text-destructive">
-              Le moteur V2 a refusé de générer
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-3">
-            <ul className="space-y-1 text-sm">
-              {v2Blocking.map((message, index) => (
-                <li key={index}>{message}</li>
-              ))}
-            </ul>
-            <p className="text-sm text-muted-foreground">
-              Le planning affiché n’a pas été modifié.
-            </p>
-          </CardContent>
-        </Card>
-      ) : null}
-
       {v3.status === "rejected" ? (
         <Card role="alert" className="border-destructive/40">
           <CardHeader>
@@ -794,10 +670,11 @@ export function PlanningView({ initialStore }: { initialStore: StoreConfig | nul
           <CardContent className="space-y-3">
             <p className="text-sm">{v3.outcome.message}</p>
             {v3.outcome.details.length > 0 ? (
-              <ul className="space-y-1 text-sm text-muted-foreground">
+              <ul className="space-y-2 text-sm">
                 {v3.outcome.details.map((detail, index) => (
-                  <li key={index} className="font-mono text-xs">
-                    {detail}
+                  <li key={index} className="flex gap-3 rounded-md border border-destructive/20 bg-destructive/5 p-3">
+                    <span aria-hidden="true" className="mt-1.5 size-1.5 shrink-0 rounded-full bg-destructive" />
+                    <span>{detail}</span>
                   </li>
                 ))}
               </ul>
@@ -805,39 +682,16 @@ export function PlanningView({ initialStore }: { initialStore: StoreConfig | nul
             {/* No automatic retry and no automatic V2 run. The engine failed;
                 what happens next is the manager's decision, not the screen's. */}
             <p className="text-sm text-muted-foreground">
-              Aucun repli automatique n’a été effectué : le planning affiché n’a pas été modifié.
+              Votre planning actuel est conservé : aucune tentative automatique ne l’a remplacé.
             </p>
+            {/* No automatic retry: the engine failed, and what happens next
+                is the manager's decision. There is nothing to fall back TO any
+                more, so the only offer is to try again. */}
             <div className="flex flex-wrap gap-2">
-              <Button size="sm" onClick={handleReturnToV2}>
-                Revenir à V2
-              </Button>
-              <Button size="sm" variant="outline" onClick={() => handleGenerate()} disabled={busyGenerating}>
-                Réessayer en V3
+              <Button size="sm" onClick={() => handleGenerate()} disabled={busyGenerating}>
+                Relancer la génération
               </Button>
             </div>
-          </CardContent>
-        </Card>
-      ) : null}
-
-      {state.status === "done" && state.result.status === "error" ? (
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-base text-destructive">
-              Échec de la génération ({state.result.errors.length} problème
-              {state.result.errors.length === 1 ? "" : "s"})
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <ul className="space-y-2">
-              {state.result.errors.map((error, index) => (
-                <li key={index} className="text-sm">
-                  <span className="font-mono text-xs text-muted-foreground">
-                    {error.path || error.code}
-                  </span>
-                  <span className="ml-2">{error.message}</span>
-                </li>
-              ))}
-            </ul>
           </CardContent>
         </Card>
       ) : null}
@@ -862,22 +716,12 @@ export function PlanningView({ initialStore }: { initialStore: StoreConfig | nul
               five minutes ago to know what they are about to publish. */}
           <div className="flex flex-wrap items-center justify-between gap-2 rounded-md border px-3 py-2">
             <div className="flex items-center gap-2 text-sm">
-              <Badge variant={usesV3Pipeline(activeEngine) ? "secondary" : "outline"}>
-                {activeEngineLabel}
-              </Badge>
-              {usesV3Pipeline(activeEngine) ? (
-                <span className="text-xs text-muted-foreground">
-                  Mode expérimental — détails dans le panneau technique.
-                </span>
-              ) : null}
+              <Badge variant="secondary">{activeEngineLabel}</Badge>
+              <span className="text-xs text-muted-foreground">
+                Détails dans le panneau technique.
+              </span>
             </div>
             <div className="flex items-center gap-2">
-              <EngineSelector value={engine} onChange={setEngine} disabled={busyGenerating} />
-              {canReturnToV2 ? (
-                <Button size="sm" variant="outline" onClick={handleReturnToV2}>
-                  Revenir à V2
-                </Button>
-              ) : null}
             </div>
           </div>
 
@@ -888,8 +732,10 @@ export function PlanningView({ initialStore }: { initialStore: StoreConfig | nul
             onSaveRequest={saveAndReport}
             onGenerate={handleGenerate}
             sectorIds={selection}
+            sectorChoices={sectorChoices}
             onToggleSector={toggleSector}
             onToggleAllSectors={toggleAllSectors}
+            onToggleMarketZone={toggleMarketZone}
             generating={busyGenerating}
             dirty={isDirty}
             onPersistenceBlockChange={setEditsBlockPersistence}
@@ -935,7 +781,7 @@ export function PlanningView({ initialStore }: { initialStore: StoreConfig | nul
                   key={`${record?.id ?? "new"}_${editorInstance}`}
                   initialState={editorState}
                   readOnly={readOnly}
-                  diagnostic={state.status === "done" && state.result.status === "success" && state.result.generation.status === "blocked"}
+                  diagnostic={v3.status === "rejected"}
                   onStateChange={(next) => {
                     setEditorState(next)
                     setIsDirty(true)
@@ -985,26 +831,4 @@ function buildV3BoardDiagnostics(v3: V3State) {
       ...v3TechnicalCaveats(response, problem),
     ],
   }
-}
-
-function buildBoardDiagnostics(state: GenerationState) {
-  if (state.status !== "done" || state.result.status !== "success") return undefined
-  const generation = state.result.generation
-  const technical = generation.issues
-    .filter((issue: PlanningIssue) => issue.severity !== "blocking")
-    .map((issue: PlanningIssue) => ({ label: issue.code, value: issue.message }))
-  return {
-    blocking: generation.status === "blocked",
-    requiresAcceptance: generation.status === "degraded",
-    technical,
-  }
-}
-
-function StatusBadge({ status }: { status: PlanningStatus }) {
-  const labels: Record<PlanningStatus, string> = {
-    draft: "Brouillon",
-    published: "Publié",
-    archived: "Archivé",
-  }
-  return <Badge variant={status === "draft" ? "outline" : status === "published" ? "default" : "secondary"}>{labels[status]}</Badge>
 }

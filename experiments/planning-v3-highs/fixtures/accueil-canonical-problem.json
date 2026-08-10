@@ -557,14 +557,16 @@
     "maximumSplitMinutes": 90,
     "minimumSplitMinutes": 45,
     "maximumContinuousMinutes": 480,
-    "maximumSplitsPerDay": null,
+    "maximumSplitsPerDay": 1,
     "minimumOpeningsPerDay": 1,
-    "exactClosingsPerDay": 1
+    "exactClosingsPerDay": 1,
+    "closingFairness": null
   },
   "objectives": [
     "coverage-deficit",
     "contract-deviation",
     "avoidable-surplus",
+    "saturday-closing-fairness",
     "opening-fairness",
     "closing-fairness",
     "preference-satisfaction"

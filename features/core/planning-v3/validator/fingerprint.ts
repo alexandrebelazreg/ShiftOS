@@ -40,18 +40,19 @@ export function fingerprintProblem(problem: PlanningProblemV3): string {
     `rules=${JSON.stringify(problem.rules)}`,
     `objectives=${problem.objectives.join(",")}`,
   ]
+  if (problem.sectors !== undefined) parts.push(`sectors=${JSON.stringify(problem.sectors)}`)
   for (const employee of [...problem.employees].sort(byId)) {
     // The daily bounds and the right to split belong here as much as the
     // contract does: they decide what a day may hold, so two rosters that
     // differ on them pose different questions. Only the display name is left
     // out — it changes nothing a solver can act on.
     parts.push(
-      `E|${String(employee.id)}|${employee.contractMinutes}|${employee.workingDays.join(".")}|${employee.fixedRestDays.join(".")}|${employee.minimumDailyMinutes}|${employee.maximumDailyMinutes}|${employee.canOpen ? 1 : 0}${employee.canClose ? 1 : 0}${employee.canSplitShift ? 1 : 0}|${employee.maximumOpenings ?? "-"}|${employee.maximumClosings ?? "-"}`
+      `E|${String(employee.id)}|${employee.contractMinutes}|${employee.workingDays.join(".")}|${employee.fixedRestDays.join(".")}|${employee.minimumDailyMinutes}|${employee.maximumDailyMinutes}|${employee.canOpen ? 1 : 0}${employee.canClose ? 1 : 0}${employee.canSplitShift ? 1 : 0}|${employee.maximumOpenings ?? "-"}|${employee.maximumClosings ?? "-"}${employee.allowedSectorIds === undefined ? "" : `|${employee.allowedSectorIds.join(".")}`}`
     )
   }
   for (const day of [...problem.days].sort((left, right) => left.date.localeCompare(right.date))) {
     parts.push(
-      `D|${day.date}|${day.closed ? 1 : 0}|${day.opensAtMinutes ?? "-"}|${day.closesAtMinutes ?? "-"}|${day.budgetMinutes}`
+      `D|${day.date}|${day.closed ? 1 : 0}|${day.opensAtMinutes ?? "-"}|${day.closesAtMinutes ?? "-"}|${day.budgetMinutes}${day.budgetMode === undefined ? "" : `|${day.budgetMode}`}`
     )
   }
   // Per-person, per-day availability — the field this function was blind to for
@@ -72,6 +73,19 @@ export function fingerprintProblem(problem: PlanningProblemV3): string {
       `A|${String(entry.employeeId)}|${entry.date}|${entry.available ? 1 : 0}${entry.mandatory ? 1 : 0}${entry.fixedRest ? 1 : 0}|${entry.earliestStartMinutes}|${entry.latestEndMinutes}|${entry.maximumMinutes}`
     )
   }
+  // Closing history — hashed ONLY when a balance is on, which is exactly when
+  // it can change an answer. Hashing it unconditionally would give a new
+  // identity to every week whose history moved, invalidating stored results for
+  // problems that would still be solved identically.
+  //
+  // `rules` already carries the policy and is hashed whole, so switching a
+  // balance on moves the digest on its own; this block adds the numbers the
+  // engines will actually read.
+  for (const entry of [...(problem.closingHistory ?? [])].sort(byEmployeeId)) {
+    parts.push(
+      `H${entry.sectorId === undefined ? "" : `|${entry.sectorId}`}|${String(entry.employeeId)}|${entry.closings}|${entry.opportunities}|${entry.saturdayClosings}|${entry.saturdayOpportunities}`
+    )
+  }
   for (const slot of [...problem.demandSlots].sort(bySlot)) {
     // The head-count fields are ALL of them, including the ones that may be
     // absent. A fingerprint blind to `hardMinimumEmployees` gave the same
@@ -81,7 +95,7 @@ export function fingerprintProblem(problem: PlanningProblemV3): string {
     // Absent is written as `-` rather than skipped, so "not declared" and
     // "declared zero" stay distinguishable.
     parts.push(
-      `S|${slot.id}|${slot.date}|${slot.startMinutes}|${slot.endMinutes}|${slot.requiredEmployees}|${slot.hardMinimumEmployees ?? "-"}|${slot.maximumEmployees ?? "-"}`
+      `S|${slot.id}${slot.sectorId === undefined ? "" : `|${slot.sectorId}`}|${slot.date}|${slot.startMinutes}|${slot.endMinutes}|${slot.requiredEmployees}|${slot.hardMinimumEmployees ?? "-"}|${slot.maximumEmployees ?? "-"}`
     )
   }
   return `p3_${hash64(parts.join("\n"))}`
@@ -95,7 +109,10 @@ export function fingerprintSolution(solution: PlanningSolutionV3): string {
         `${String(assignment.employeeId)}|${assignment.date}|${[...assignment.segments]
           .sort((left, right) => left.startMinutes - right.startMinutes)
           .map((segment) => `${segment.startMinutes}-${segment.endMinutes}`)
-          .join(",")}`
+          .join(",")}${assignment.sectorAssignments === undefined ? "" : `|${[...assignment.sectorAssignments]
+            .sort((left, right) => left.startMinutes - right.startMinutes)
+            .map((block) => `${block.sectorId}:${block.startMinutes}-${block.endMinutes}`)
+            .join(",")}`}`
     )
     .sort()
   return `s3_${hash64([solution.version, solution.problemFingerprint, ...rows].join("\n"))}`
@@ -103,6 +120,10 @@ export function fingerprintSolution(solution: PlanningSolutionV3): string {
 
 function byId(left: { id: unknown }, right: { id: unknown }): number {
   return String(left.id).localeCompare(String(right.id))
+}
+
+function byEmployeeId(left: { employeeId: unknown }, right: { employeeId: unknown }): number {
+  return String(left.employeeId).localeCompare(String(right.employeeId))
 }
 
 function byEmployeeDay(

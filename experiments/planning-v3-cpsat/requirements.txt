@@ -1,4 +1,0 @@
-# Spike CP-SAT — dépendance Python, hors du produit.
-# Déjà présente sur la machine de référence ; rien n'a été installé.
-# OR-Tools est sous licence Apache 2.0.
-ortools==9.15.6755

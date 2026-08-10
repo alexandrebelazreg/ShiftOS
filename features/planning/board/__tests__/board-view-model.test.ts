@@ -1,5 +1,6 @@
 import { readdirSync, readFileSync } from "node:fs"
-import { join } from "node:path"
+import { dirname, join } from "node:path"
+import { fileURLToPath } from "node:url"
 import { describe, expect, it } from "vitest"
 
 import type { EmployeeId } from "@/features/core/models"
@@ -247,7 +248,11 @@ describe("board — vue employé", () => {
   it("reste cohérente avec la vue secteur", () => {
     const board = buildPlanningBoard(
       input(),
-      selection({ view: "employee", employeeId: "luca" as unknown as EmployeeId })
+      selection({
+        view: "employee",
+        employeeId: "luca" as unknown as EmployeeId,
+        sectorIds: ["drive", "caisse"],
+      })
     )
     const row = board.sectorView.rows.find((r) => String(r.employeeId) === "luca")!
     const view = board.employeeView!
@@ -429,5 +434,278 @@ describe("board — les composants React ne portent aucune logique métier", () 
     const source = stripLiterals(readFileSync(join(UI, name), "utf8"))
     const offences = FORBIDDEN.filter((rule) => rule.pattern.test(source)).map((rule) => rule.reason)
     expect(offences).toEqual([])
+  })
+})
+
+describe("déficits — la présence est une CONCURRENCE, pas un recouvrement", () => {
+  /**
+   * Le bug corrigé, repris tel qu'il est apparu à l'écran.
+   *
+   * Jeudi 12:00–13:00, besoin 2. Sur la grille : Erwan finit à 12:15, Luca
+   * prend à 12:15, Dylan couvre toute l'heure. Deux personnes sont présentes à
+   * chaque instant. Le tableau annonçait pourtant « Présents : 1 », parce qu'il
+   * ne comptait que les shifts couvrant le créneau ENTIER à eux seuls — donc ni
+   * Erwan ni Luca. La ligne « Présents » au-dessus, elle, comptait la
+   * concurrence : deux calculs contradictoires sur le même écran.
+   */
+  const handover = (): PlanningBoardInput => ({
+    periodStart: "2026-07-30",
+    periodEnd: "2026-07-30",
+    sectors: [{ id: "drive", name: "Drive" }],
+    employees: [
+      employee("erwan", "Erwan Lureau", 375),
+      employee("luca", "Luca Zanuso", 465),
+      employee("dylan", "Dylan Autret", 435),
+    ],
+    days: [
+      { date: "2026-07-30", weekDay: "thursday", closed: false, opensAtMinutes: 360, closesAtMinutes: 1200 },
+    ],
+    shifts: [
+      shift("s1", "erwan", "2026-07-30", 360, 735), // 06:00 – 12:15
+      shift("s2", "luca", "2026-07-30", 735, 1200), // 12:15 – 20:00
+      shift("s3", "dylan", "2026-07-30", 585, 1020), // 09:45 – 17:00
+    ],
+    demand: [
+      { sectorId: "drive", date: "2026-07-30", startMinutes: 720, endMinutes: 780, requiredEmployees: 2 },
+    ],
+  })
+
+  it("ne signale aucun déficit sur une heure couverte par une passation", () => {
+    const board = buildPlanningBoard(handover(), {
+      view: "sector",
+      sectorIds: ["drive"],
+      date: "2026-07-30",
+      employeeId: null,
+    })
+    expect(board.summary.deficits).toEqual([])
+  })
+
+  it("compte les deux présents, et non le seul qui couvre toute l'heure", () => {
+    // Besoin porté à 3 : le créneau devient réellement court, et le chiffre
+    // rapporté doit être 2 — pas 1, qui était l'ancien comptage.
+    const problem = handover()
+    const board = buildPlanningBoard(
+      { ...problem, demand: [{ ...problem.demand[0], requiredEmployees: 3 }] },
+      { view: "sector", sectorIds: ["drive"], date: "2026-07-30", employeeId: null }
+    )
+    expect(board.summary.deficits).toHaveLength(1)
+    expect(board.summary.deficits[0].present).toBe(2)
+    expect(board.summary.deficits[0].required).toBe(3)
+  })
+
+  it("dit la même chose que la ligne « Présents » de la grille", () => {
+    // Les deux lectures doivent coïncider : c'est leur désaccord qui était le bug.
+    const board = buildPlanningBoard(handover(), {
+      view: "sector",
+      sectorIds: ["drive"],
+      date: "2026-07-30",
+      employeeId: null,
+    })
+    const noon = board.dayView.presentRow.find((cell) => cell.startMinutes === 720)
+    expect(noon?.present).toBe(2)
+    expect(board.summary.deficits).toEqual([])
+  })
+})
+
+describe("vue semaine — le total par jour", () => {
+  it("additionne les heures de tout le monde sur chaque jour ouvert", () => {
+    const board = buildPlanningBoard(input(), selection())
+    const monday = board.sectorView.columns.find((column) => column.date === "2026-07-20")
+    // Luca 06:00–14:00 (8 h) + Dylan 12:00–20:00 (8 h) = 16 h.
+    expect(monday?.totalLabel).toBe("16h")
+  })
+
+  it("ne compte que le secteur affiché", () => {
+    // Mardi : Luca 8 h sur Drive, Dylan 5 h sur Caisse. Le total Drive est 8 h.
+    const drive = buildPlanningBoard(input(), selection())
+    expect(drive.sectorView.columns.find((c) => c.date === "2026-07-21")?.totalLabel).toBe("8h")
+  })
+
+  it("n'affiche aucun total sur un jour fermé", () => {
+    // Zéro heure n'est pas « 0 h travaillée », c'est l'absence de journée.
+    const problem = input()
+    const board = buildPlanningBoard(
+      {
+        ...problem,
+        days: problem.days.map((day) =>
+          day.date === "2026-07-21" ? { ...day, closed: true } : day
+        ),
+      },
+      selection()
+    )
+    expect(board.sectorView.columns.find((c) => c.date === "2026-07-21")?.totalLabel).toBeNull()
+  })
+})
+
+describe("vue semaine — le contrat vit sous le nom", () => {
+  it("ne garde aucune colonne « Heures » dans le tableau", () => {
+    // Elle coûtait un septième de la largeur pour une ligne par salarié, en
+    // écrasant les jours qu'elle était censée aider à lire.
+    const view = readFileSync(
+      join(dirname(fileURLToPath(import.meta.url)), "..", "ui", "PlanningSectorView.tsx"),
+      "utf8"
+    )
+    expect(view).not.toContain(">Heures<")
+    // Le chiffre lui-même reste, sous le nom, avec son état de conformité.
+    expect(view).toContain("row.hoursLabel")
+    expect(view).toContain("row.deviationLabel")
+    expect(view).toContain("column.totalLabel")
+  })
+})
+
+describe("vue semaine — objectif de rayon et contrat salarié", () => {
+  it("distingue un objectif de rayon du vrai contrat salarié", () => {
+    const scoped: PlanningBoardInput = {
+      ...input(),
+      employees: [
+        {
+          ...employee("aurelie", "Aurélie Lemeltiez", 36 * 60 + 45),
+          weeklyTargetMinutes: 8 * 60,
+        },
+      ],
+      shifts: [shift("aurelie-lundi", "aurelie", "2026-07-20", 360, 840)],
+      demand: [
+        {
+          sectorId: "drive",
+          date: "2026-07-20",
+          startMinutes: 360,
+          endMinutes: 420,
+          requiredEmployees: 1,
+        },
+      ],
+    }
+
+    const board = buildPlanningBoard(
+      scoped,
+      selection({ view: "employee", employeeId: "aurelie" as unknown as EmployeeId })
+    )
+    const row = board.sectorView.rows[0]
+
+    expect(row.hoursLabel).toBe("8h dans ce rayon · contrat 36h45")
+    expect(row.onTarget).toBe(true)
+    expect(row.targetKind).toBe("sector-allocation")
+    expect(board.employeeView?.general).toContainEqual({
+      label: "Contrat hebdomadaire",
+      value: "36h45",
+      level: "neutral",
+    })
+    expect(board.employeeView?.general).toContainEqual({
+      label: "Objectif de cette génération",
+      value: "8h",
+      level: "neutral",
+    })
+    expect(board.summary.facts.map((fact) => fact.label)).toContain(
+      "Toutes les affectations prévues dans ce rayon sont réalisées"
+    )
+    expect(board.summary.facts.map((fact) => fact.label)).not.toContain(
+      "Tous les contrats sont respectés"
+    )
+  })
+
+  it("compte uniquement les minutes du rayon affiché dans un shift multi-rayon", () => {
+    const problem = input()
+    const multiSectorShift = {
+      ...shift("multi", "luca", "2026-07-20", 360, 840),
+      sectorAssignments: [
+        { sectorId: "drive", startMinutes: 360, endMinutes: 600 },
+        { sectorId: "caisse", startMinutes: 600, endMinutes: 840 },
+      ],
+    }
+    const board = buildPlanningBoard(
+      { ...problem, shifts: [multiSectorShift] },
+      selection({ sectorIds: ["drive"] })
+    )
+
+    expect(board.sectorView.columns[0].totalLabel).toBe("4h")
+    const row = board.sectorView.rows.find((row) => String(row.employeeId) === "luca")
+    expect(row?.plannedLabel).toBe("4h")
+    expect(row?.comparisonAvailable).toBe(false)
+    expect(row?.targetKind).toBe("filtered-selection")
+    expect(row?.deviationLabel).toBeNull()
+  })
+
+  it("additionne les besoins simultanés de plusieurs rayons", () => {
+    const problem = input()
+    const board = buildPlanningBoard(
+      {
+        ...problem,
+        demand: [
+          { sectorId: "drive", date: "2026-07-20", startMinutes: 360, endMinutes: 420, requiredEmployees: 1 },
+          { sectorId: "caisse", date: "2026-07-20", startMinutes: 360, endMinutes: 420, requiredEmployees: 1 },
+        ],
+      },
+      selection({ view: "day", sectorIds: ["drive", "caisse"], date: "2026-07-20" })
+    )
+
+    expect(board.dayView.requiredRow.find((cell) => cell.startMinutes === 360)?.required).toBe(2)
+  })
+})
+
+describe("grille — les bornes du jour viennent du SECTEUR", () => {
+  it("colore ouverture et fermeture contre les horaires du secteur", () => {
+    // Un Drive ouvrant à 06:00 dans un magasin ouvrant à 08:00 : le vrai
+    // ouvreur commence à 06:00, et c'est lui qui doit porter la couleur.
+    const problem = input()
+    const board = buildPlanningBoard(
+      {
+        ...problem,
+        // Journée déclarée par le secteur : 06:00 → 20:00.
+        days: problem.days.map((day) => ({ ...day, opensAtMinutes: 360, closesAtMinutes: 1200 })),
+      },
+      selection()
+    )
+    const monday = board.dayView.rows.flatMap((row) => row.shifts).filter((shift) => shift.date === "2026-07-20")
+    expect(monday.some((shift) => shift.opensDay)).toBe(true)
+    expect(monday.some((shift) => shift.closesDay)).toBe(true)
+  })
+
+  it("ne lit jamais les horaires du magasin dans l'adaptateur", () => {
+    // La grille est dessinée contre la fenêtre du secteur ; retomber sur le
+    // magasin y remettrait les bornes du jour au mauvais endroit.
+    const adapter = readFileSync(
+      join(dirname(fileURLToPath(import.meta.url)), "..", "adapters", "from-editor-state.ts"),
+      "utf8"
+    )
+    expect(adapter).not.toContain("sectorList[0]?.hours")
+    // Le magasin reste le repli, et seulement cela.
+    expect(adapter).toContain("Math.min(...openCandidates")
+    expect(adapter).toContain("Math.max(...openCandidates")
+  })
+})
+
+describe("la couleur et le rôle voyagent jusqu'à la barre", () => {
+  it("porte la couleur du rayon et le rôle PAR BLOC", () => {
+    // Le chemin qui manquait : la grille peut colorer par rayon seulement si le
+    // ViewModel lui donne la couleur et, pour chaque bloc, s'il ouvre ou ferme
+    // SON comptoir — pas celui du voisin.
+    const problem = input()
+    const multiSectorShift = {
+      ...shift("multi", "luca", "2026-07-20", 360, 840),
+      sectorAssignments: [
+        { sectorId: "drive", startMinutes: 360, endMinutes: 600 },
+        { sectorId: "caisse", startMinutes: 600, endMinutes: 840 },
+      ],
+    }
+    const board = buildPlanningBoard(
+      {
+        ...problem,
+        sectors: [
+          { id: "drive", name: "Drive", color: "#2563eb" },
+          { id: "caisse", name: "Caisse", color: "#facc15" },
+        ],
+        shifts: [multiSectorShift],
+      },
+      selection({ view: "day", sectorIds: ["drive", "caisse"], date: "2026-07-20" })
+    )
+
+    const blocks = board.dayView.rows
+      .flatMap((row) => row.shifts)
+      .flatMap((shift) => shift.sectorBlocks)
+    expect(blocks.map((block) => block.sectorName)).toEqual(["Drive", "Caisse"])
+    expect(blocks.map((block) => block.color)).toEqual(["#2563eb", "#facc15"])
+    expect(blocks.map((block) => block.durationLabel)).toEqual(["4h", "4h"])
+    // Le jour ouvre à 06:00 : c'est le bloc Drive qui ouvre, pas celui de Caisse.
+    expect(blocks.map((block) => block.opens)).toEqual([true, false])
+    expect(blocks.map((block) => block.closes)).toEqual([false, false])
   })
 })

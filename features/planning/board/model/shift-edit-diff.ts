@@ -1,4 +1,5 @@
 import type { EmployeeId } from "@/features/core/models"
+import { minimumConcurrentPresence } from "@/features/core/shared"
 
 import type { PlanningBoardInput } from "@/features/planning/board/model/board-input"
 import { clockLabel } from "@/features/planning/board/model/board-view-model"
@@ -46,55 +47,35 @@ export function deltaLabel(deltaMinutes: number): string {
   return `${sign}${hours} h ${String(minutes).padStart(2, "0")}`
 }
 
-function workedOn(input: PlanningBoardInput, employeeId: EmployeeId, date: string): number {
-  return input.shifts
-    .filter((shift) => shift.employeeId === employeeId && shift.date === date)
-    .reduce((sum, shift) => sum + shift.workedMinutes, 0)
-}
-
 /**
- * The badge for every employee on one day.
+ * The badge next to every employee's name: their WEEK against their contract.
  *
- * Computed for all of them, so a "± 0" tells the eye "unchanged" apart from
- * "not shown". The rule mirrors what the manager actually did: if worked time
- * changed, that is the story (`+15 min`); if it held but the shift slid along
- * the day, that is a move (`Décalé +30 min`) — a move keeps the contract, so it
- * must read differently from a real gain or loss.
+ * It used to report the change made to the day on screen. Truthful about the
+ * edit, and misread by everyone: a badge pinned to a NAME reads as a statement
+ * about the person, not about what happened to their Thursday. So +15 minutes
+ * on Tuesday and -15 on Thursday showed as "+15 min" on one tab and "-15 min"
+ * on another, while the employee's week had not moved at all — the manager was
+ * being warned about a deviation that did not exist.
+ *
+ * Now it answers the question the position asks: is this person at their
+ * contracted hours? Weekly, because every contract rule in ShiftOS is weekly,
+ * and stable across day tabs, because a week is not a property of a Thursday.
+ * The edit itself is still reported, where it belongs — the footer's last-edit
+ * line and the outline drawn around a touched shift.
  */
-export function dayEmployeeDeltas(
-  original: PlanningBoardInput,
-  edited: PlanningBoardInput,
-  date: string | null
+export function weeklyContractDeltas(
+  edited: PlanningBoardInput
 ): ReadonlyMap<EmployeeId, ShiftDeltaVM> {
   const deltas = new Map<EmployeeId, ShiftDeltaVM>()
-  if (date === null) return deltas
-  const originalById = new Map(original.shifts.map((shift) => [shift.id, shift]))
-
   for (const employee of edited.employees) {
-    const workedDelta = workedOn(edited, employee.id, date) - workedOn(original, employee.id, date)
-    if (workedDelta !== 0) {
-      deltas.set(employee.id, {
-        kind: workedDelta > 0 ? "extended" : "reduced",
-        label: deltaLabel(workedDelta),
-      })
-      continue
-    }
-    // Worked time held: is this a pure move? Match shifts by id — an edit keeps
-    // the id — and take the largest start shift as the reported displacement.
-    let startShift = 0
-    for (const shift of edited.shifts) {
-      if (shift.employeeId !== employee.id || shift.date !== date) continue
-      const before = originalById.get(shift.id)
-      if (!before) continue
-      const d = shift.startMinutes - before.startMinutes
-      if (Math.abs(d) > Math.abs(startShift)) startShift = d
-    }
-    deltas.set(
-      employee.id,
-      startShift !== 0
-        ? { kind: "shifted", label: `Décalé ${deltaLabel(startShift)}` }
-        : { kind: "unchanged", label: "± 0" }
-    )
+    const planned = edited.shifts
+      .filter((shift) => shift.employeeId === employee.id)
+      .reduce((sum, shift) => sum + shift.workedMinutes, 0)
+    const difference = planned - (employee.weeklyTargetMinutes ?? employee.contractMinutes)
+    deltas.set(employee.id, {
+      kind: difference === 0 ? "unchanged" : difference > 0 ? "extended" : "reduced",
+      label: deltaLabel(difference),
+    })
   }
   return deltas
 }
@@ -203,7 +184,7 @@ function contractDeviations(edited: PlanningBoardInput): ContractDeviationVM[] {
   const deviations: ContractDeviationVM[] = []
   for (const employee of edited.employees) {
     const planned = plannedByEmployee.get(employee.id) ?? 0
-    const delta = planned - employee.contractMinutes
+    const delta = planned - (employee.weeklyTargetMinutes ?? employee.contractMinutes)
     if (delta !== 0) {
       deviations.push({ name: employee.name, label: deltaLabel(delta), deltaMinutes: delta })
     }
@@ -212,20 +193,36 @@ function contractDeviations(edited: PlanningBoardInput): ContractDeviationVM[] {
 }
 
 /** Employees present through the whole hour `[start, start+60)`. */
-function presentAt(input: PlanningBoardInput, date: string, hourStart: number): number {
-  return shiftsOn(input, date).filter((shift) =>
-    shift.segments.some(
-      (segment) => segment.startMinutes <= hourStart && segment.endMinutes >= hourStart + HOUR
+/**
+ * How many people are on the floor throughout the hour — the THINNEST moment of
+ * it, not the number of shifts that happen to span it whole.
+ *
+ * The third place in the app to have counted containment instead of
+ * concurrency, and the last to be corrected. A hand-over at 12:15 leaves two
+ * people present at every instant of 12:00–13:00 while NO single shift covers
+ * the hour, so the old reading saw one body and announced « Couverture
+ * dégradée » over a day that had lost nothing.
+ */
+function presentAt(input: PlanningBoardInput, date: string, hourStart: number, sectorId: string): number {
+  return minimumConcurrentPresence(
+    { startMinutes: hourStart, endMinutes: hourStart + HOUR },
+    shiftsOn(input, date).flatMap((shift) =>
+      (shift.sectorAssignments ?? shift.segments.map((segment) => ({ ...segment, sectorId: shift.sectorId })))
+        .filter((segment) => segment.sectorId === sectorId)
+        .map((segment) => ({
+        startMinutes: segment.startMinutes,
+        endMinutes: segment.endMinutes,
+      }))
     )
-  ).length
+  )
 }
 
 /** The demand for the hour: the strongest requirement overlapping it. */
-function requiredAt(input: PlanningBoardInput, date: string, hourStart: number): number {
+function requiredAt(input: PlanningBoardInput, date: string, hourStart: number, sectorId: string): number {
   return input.demand
     .filter(
       (slot) =>
-        slot.date === date && slot.startMinutes < hourStart + HOUR && slot.endMinutes > hourStart
+        slot.sectorId === sectorId && slot.date === date && slot.startMinutes < hourStart + HOUR && slot.endMinutes > hourStart
     )
     .reduce((max, slot) => Math.max(max, slot.requiredEmployees), 0)
 }
@@ -307,10 +304,16 @@ export function assessDayEdits(
   for (let i = 0; i < hourCount; i++) {
     const hourStart = open + i * HOUR
     hourStarts.push(hourStart)
-    const required = requiredAt(edited, date, hourStart)
-    deficitBefore += Math.max(0, required - presentAt(original, date, hourStart))
-    deficitAfter += Math.max(0, required - presentAt(edited, date, hourStart))
-    presenceDelta.push(presentAt(edited, date, hourStart) - presentAt(original, date, hourStart))
+    let delta = 0
+    for (const sector of edited.sectors) {
+      const required = requiredAt(edited, date, hourStart, sector.id)
+      const before = presentAt(original, date, hourStart, sector.id)
+      const after = presentAt(edited, date, hourStart, sector.id)
+      deficitBefore += Math.max(0, required - before)
+      deficitAfter += Math.max(0, required - after)
+      delta += after - before
+    }
+    presenceDelta.push(delta)
   }
 
   if (deficitAfter < deficitBefore) {

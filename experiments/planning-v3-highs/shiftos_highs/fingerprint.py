@@ -34,6 +34,8 @@ def fingerprint_problem(problem: dict[str, Any]) -> str:
         f'rules={_js_stringify(problem["rules"])}',
         f'objectives={",".join(problem["objectives"])}',
     ]
+    if "sectors" in problem:
+        parts.append(f'sectors={_js_stringify(problem["sectors"])}')
     for employee in sorted(problem["employees"], key=lambda item: str(item["id"])):
         # The daily bounds and the right to split decide what a day may hold, so
         # two rosters differing on them pose different questions. Only the
@@ -46,15 +48,17 @@ def fingerprint_problem(problem: dict[str, Any]) -> str:
             f'{1 if employee["canSplitShift"] else 0}|'
             f'{employee["maximumOpenings"] if employee["maximumOpenings"] is not None else "-"}|'
             f'{employee["maximumClosings"] if employee["maximumClosings"] is not None else "-"}'
+            f'{"|" + ".".join(employee["allowedSectorIds"]) if "allowedSectorIds" in employee else ""}'
         )
     for day in sorted(problem["days"], key=lambda item: item["date"]):
         parts.append(
-            "D|{}|{}|{}|{}|{}".format(
+            "D|{}|{}|{}|{}|{}{}".format(
                 day["date"],
                 1 if day["closed"] else 0,
                 day["opensAtMinutes"] if day["opensAtMinutes"] is not None else "-",
                 day["closesAtMinutes"] if day["closesAtMinutes"] is not None else "-",
                 day["budgetMinutes"],
+                f'|{day["budgetMode"]}' if "budgetMode" in day else "",
             )
         )
     # Per-person, per-day availability. The field both sides were blind to for
@@ -73,6 +77,17 @@ def fingerprint_problem(problem: dict[str, Any]) -> str:
             f'{entry["earliestStartMinutes"]}|{entry["latestEndMinutes"]}|'
             f'{entry["maximumMinutes"]}'
         )
+    # Closing history — mirrors the TypeScript block exactly, including its
+    # absence. Hashed only when a balance is on, which is exactly when it can
+    # change an answer; `rules` already carries the policy and moves the digest
+    # on its own when a balance is switched on.
+    for entry in sorted(
+        problem.get("closingHistory") or [], key=lambda item: str(item["employeeId"])
+    ):
+        parts.append(
+            f'H{"|" + str(entry["sectorId"]) if "sectorId" in entry else ""}|{entry["employeeId"]}|{entry["closings"]}|{entry["opportunities"]}|'
+            f'{entry["saturdayClosings"]}|{entry["saturdayOpportunities"]}'
+        )
     for slot in sorted(
         problem["demandSlots"],
         key=lambda item: (item["date"], item["startMinutes"], item["id"]),
@@ -86,7 +101,7 @@ def fingerprint_problem(problem: dict[str, Any]) -> str:
         hard = slot.get("hardMinimumEmployees")
         maximum = slot.get("maximumEmployees")
         parts.append(
-            f'S|{slot["id"]}|{slot["date"]}|{slot["startMinutes"]}|{slot["endMinutes"]}|'
+            f'S|{slot["id"]}{"|" + str(slot["sectorId"]) if "sectorId" in slot else ""}|{slot["date"]}|{slot["startMinutes"]}|{slot["endMinutes"]}|'
             f'{slot["requiredEmployees"]}|{hard if hard is not None else "-"}|'
             f'{maximum if maximum is not None else "-"}'
         )
@@ -100,7 +115,13 @@ def fingerprint_solution(solution: dict[str, Any]) -> str:
         encoded = ",".join(
             f'{segment["startMinutes"]}-{segment["endMinutes"]}' for segment in segments
         )
-        rows.append(f'{assignment["employeeId"]}|{assignment["date"]}|{encoded}')
+        sector_encoded = ""
+        if "sectorAssignments" in assignment:
+            sector_encoded = "|" + ",".join(
+                f'{block["sectorId"]}:{block["startMinutes"]}-{block["endMinutes"]}'
+                for block in sorted(assignment["sectorAssignments"], key=lambda item: item["startMinutes"])
+            )
+        rows.append(f'{assignment["employeeId"]}|{assignment["date"]}|{encoded}{sector_encoded}')
     rows.sort()
     value = "\n".join([solution["version"], solution["problemFingerprint"], *rows])
     return f's3_{_hash64(value)}'

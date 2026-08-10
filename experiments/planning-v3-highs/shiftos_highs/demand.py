@@ -69,6 +69,27 @@ class Interval:
 
 
 @dataclass(frozen=True, slots=True)
+class SectorInterval:
+    """One atomic coverage interval of one day, ON ONE COUNTER.
+
+    Only multi-sector problems produce these. A market zone's counters are
+    disjoint — an employee stands at exactly one of them at any instant, which
+    the sector-assignment invariants enforce — so presence at a counter is not
+    interchangeable with presence at its neighbour, and the coverage question
+    has to be asked per counter. `DayDemand.intervals` remains the SUM of these
+    over the counters and is what every day-level reading uses.
+    """
+
+    sector_id: str
+    date: str
+    start: int
+    end: int
+    hard_minimum: int
+    reference_required: int
+    adapted_target: int
+
+
+@dataclass(frozen=True, slots=True)
 class DayDemand:
     date: str
     step: int
@@ -88,6 +109,9 @@ class DayDemand:
     #: True when the day can place more minutes than the reference profile asks
     #: for. The excess is surplus to schedule, never demand to meet.
     capacity_exceeds_reference: bool
+    #: The same day, read per counter. Empty for a mono-sector problem, whose
+    #: only counter is already what `intervals` describes.
+    sector_intervals: tuple[SectorInterval, ...] = ()
 
     @property
     def total_adapted_minutes(self) -> int:
@@ -128,22 +152,52 @@ class DemandModel:
         return 0
 
 
-def _atomic_profile(problem: dict[str, Any], date: str, step: int) -> dict[int, tuple[int, int]]:
-    """``{start: (hard_minimum, reference_required)}`` for one day.
+def _sector_atomic_profile(
+    problem: dict[str, Any], date: str, step: int
+) -> dict[tuple[str, int], tuple[int, int]]:
+    """``{(sector_id, start): (hard_minimum, reference_required)}`` for one day.
 
-    Overlapping slots take the MAXIMUM on both figures: two slots asking for one
-    and three people over the same minute ask for three, not four, and a floor
-    declared by either binds.
+    Overlapping slots OF THE SAME COUNTER take the MAXIMUM on both figures: two
+    slots asking for one and three people over the same minute ask for three,
+    not four, and a floor declared by either binds.
+
+    Slots of DIFFERENT counters are never merged. That distinction is the whole
+    correction here: reading a market zone with the maximum alone answered "how
+    many people does the busiest counter want" when the question is "how many
+    people does the zone want", and on the canonical five-counter Monday it
+    reported 480 employee-minutes of demand against a real 2 400.
     """
-    profile: dict[int, tuple[int, int]] = {}
+    profile: dict[tuple[str, int], tuple[int, int]] = {}
+    # Absent on the partial problems the demand tests build: this module reads
+    # numbers, and a caller that never mentions a counter has exactly one.
+    default_sector = str(problem.get("sectorId") or "")
     for slot in problem["demandSlots"]:
         if slot["date"] != date:
             continue
+        sector_id = str(slot.get("sectorId") or default_sector)
         hard = int(slot.get("hardMinimumEmployees") or 0)
         reference = int(slot["requiredEmployees"])
         for start in range(int(slot["startMinutes"]), int(slot["endMinutes"]), step):
-            previous_hard, previous_reference = profile.get(start, (0, 0))
-            profile[start] = (max(previous_hard, hard), max(previous_reference, reference))
+            key = (sector_id, start)
+            previous_hard, previous_reference = profile.get(key, (0, 0))
+            profile[key] = (max(previous_hard, hard), max(previous_reference, reference))
+    return profile
+
+
+def _atomic_profile(problem: dict[str, Any], date: str, step: int) -> dict[int, tuple[int, int]]:
+    """``{start: (hard_minimum, reference_required)}`` for one day, all counters.
+
+    The day-level reading: counters are disjoint, so the people the zone needs
+    at one instant is the SUM over its counters of what each needs. A
+    mono-sector problem has one counter and this returns exactly what the
+    per-counter profile already said.
+    """
+    profile: dict[int, tuple[int, int]] = {}
+    for (_sector_id, start), (hard, reference) in _sector_atomic_profile(
+        problem, date, step
+    ).items():
+        previous_hard, previous_reference = profile.get(start, (0, 0))
+        profile[start] = (previous_hard + hard, previous_reference + reference)
     return profile
 
 
@@ -228,10 +282,9 @@ def budget_minutes(problem: dict[str, Any], date: str) -> int | None:
 def available_worked_minutes(problem: dict[str, Any], date: str) -> int:
     """Minutes this day will actually place.
 
-    The budget is the volume the sector decided to spend, and it is the figure
-    to distribute whenever the problem carries one. But a budget is a DECISION,
-    not a capacity: it cannot be worked by people who are not there. So it is
-    capped by what the available employees could actually work.
+    An exact legacy budget is the volume the sector decided to spend. A flexible
+    percentage is only a target: contracted minutes may move onto the day, so
+    its usable volume is capped by employee capacity instead.
 
     When the budget is the smaller of the two, the day simply spends less than
     it could. When the CAPACITY is the smaller one, the day has been told to
@@ -242,6 +295,12 @@ def available_worked_minutes(problem: dict[str, Any], date: str) -> int:
     capacity = workable_capacity_minutes(problem, date)
     budget = budget_minutes(problem, date)
     if budget is None:
+        return capacity
+    day = next((item for item in problem["days"] if item["date"] == date), None)
+    if day is not None and day.get("budgetMode", "exact") == "target":
+        # A flexible distribution may move contracted minutes onto this day.
+        # Capacity, not the percentage target, is therefore the honest ceiling
+        # for adapting the soft coverage profile.
         return capacity
     return min(budget, capacity)
 
@@ -274,11 +333,21 @@ def _largest_remainder(
 
 def build_day_demand(problem: dict[str, Any], date: str) -> DayDemand:
     step = int(problem["timeStepMinutes"])
-    profile = _atomic_profile(problem, date, step)
-    starts = sorted(profile)
+    # The rescaling is decided on the ATOMIC PER-COUNTER cells and only then
+    # summed back to the day. Doing it the other way round — adapting the day's
+    # aggregate and splitting it afterwards — would have to invent a rule for
+    # which counter loses the rounded-off unit, and the largest-remainder pass
+    # below already answers that question exactly once, for every cell at once.
+    #
+    # Ordered by (start, counter) so a mono-sector problem, whose only counter
+    # makes the second key constant, walks its intervals in exactly the order it
+    # always did and reaches the same distribution byte for byte.
+    profile = _sector_atomic_profile(problem, date, step)
+    keys = sorted(profile, key=lambda key: (key[1], key[0]))
+    starts_of_key = [start for _sector_id, start in keys]
 
-    hard_units = [profile[start][0] for start in starts]
-    reference_units = [profile[start][1] for start in starts]
+    hard_units = [profile[key][0] for key in keys]
+    reference_units = [profile[key][1] for key in keys]
     flexible_units = [
         max(reference - hard, 0) for hard, reference in zip(hard_units, reference_units)
     ]
@@ -290,7 +359,9 @@ def build_day_demand(problem: dict[str, Any], date: str) -> DayDemand:
 
     # Two ways a day can be impossible, and they are NOT the same failure.
     reason: str | None = None
-    if budget is not None and budget > capacity:
+    day = next((item for item in problem["days"] if item["date"] == date), None)
+    exact_budget = day is None or day.get("budgetMode", "exact") == "exact"
+    if exact_budget and budget is not None and budget > capacity:
         # The day was told to place more minutes than the people present can
         # work. Daily budgets are exact in this model, so this is a
         # contradiction in the instruction, not a target to fall short of. It
@@ -302,11 +373,40 @@ def build_day_demand(problem: dict[str, Any], date: str) -> DayDemand:
         # opened, never a deficit to accept.
         reason = "hard-floor-exceeds-available-minutes"
 
-    if reason is not None:
-        intervals = tuple(
-            Interval(date, start, start + step, hard_units[index], reference_units[index], hard_units[index])
-            for index, start in enumerate(starts)
+    multi_sector = bool(problem.get("sectors"))
+
+    def fold(adapted: list[int]) -> tuple[tuple[Interval, ...], tuple[SectorInterval, ...]]:
+        """Per-counter cells → the day's aggregate, and the per-counter view."""
+        by_start: dict[int, tuple[int, int, int]] = {}
+        for index, (_sector_id, start) in enumerate(keys):
+            previous = by_start.get(start, (0, 0, 0))
+            by_start[start] = (
+                previous[0] + hard_units[index],
+                previous[1] + reference_units[index],
+                previous[2] + adapted[index],
+            )
+        aggregate = tuple(
+            Interval(date, start, start + step, *by_start[start])
+            for start in sorted(by_start)
         )
+        if not multi_sector:
+            return aggregate, ()
+        per_sector = tuple(
+            SectorInterval(
+                sector_id=keys[index][0],
+                date=date,
+                start=keys[index][1],
+                end=keys[index][1] + step,
+                hard_minimum=hard_units[index],
+                reference_required=reference_units[index],
+                adapted_target=adapted[index],
+            )
+            for index in range(len(keys))
+        )
+        return aggregate, per_sector
+
+    if reason is not None:
+        intervals, sector_intervals = fold(list(hard_units))
         return DayDemand(
             date=date,
             step=step,
@@ -318,6 +418,7 @@ def build_day_demand(problem: dict[str, Any], date: str) -> DayDemand:
             infeasible_reason=reason,
             flat_profile=sum(flexible_units) == 0,
             capacity_exceeds_reference=False,
+            sector_intervals=sector_intervals,
         )
 
     total_reference_flexible = sum(flexible_units)
@@ -352,23 +453,13 @@ def build_day_demand(problem: dict[str, Any], date: str) -> DayDemand:
         raw = [
             hard_units[index]
             + available_flexible_units * (flexible_units[index] / total_reference_flexible)
-            for index in range(len(starts))
+            for index in range(len(keys))
         ]
         total_units = sum(hard_units) + available_flexible_units
-        adapted = _largest_remainder(raw, total_units, starts)
+        adapted = _largest_remainder(raw, total_units, starts_of_key)
         flat = False
 
-    intervals = tuple(
-        Interval(
-            date=date,
-            start=start,
-            end=start + step,
-            hard_minimum=hard_units[index],
-            reference_required=reference_units[index],
-            adapted_target=adapted[index],
-        )
-        for index, start in enumerate(starts)
-    )
+    intervals, sector_intervals = fold(adapted)
 
     return DayDemand(
         date=date,
@@ -383,6 +474,7 @@ def build_day_demand(problem: dict[str, Any], date: str) -> DayDemand:
         capacity_exceeds_reference=(
             available - total_hard_minutes > total_reference_flexible * step
         ),
+        sector_intervals=sector_intervals,
     )
 
 

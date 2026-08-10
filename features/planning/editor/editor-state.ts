@@ -18,6 +18,36 @@ export interface EditorState {
   readonly settings: GenerationSettings
   readonly shifts: readonly Shift[]
   readonly assignments: readonly Assignment[]
+  /**
+   * Optional targets for a deliberately partial generation scope.
+   * They complement, and never replace, the employment contracts in
+   * `coreInput.contracts`.
+   */
+  readonly weeklyTargets?: readonly WeeklyPlanningTarget[]
+  /**
+   * Sector identity used by the run that produced this state.  Kept beside the
+   * editor data so filtering and reopening never have to infer a sector from a
+   * display name or from a requirement-id prefix.
+   */
+  readonly sectorScope?: EditorSectorScope
+}
+
+export interface EditorSectorScope {
+  readonly sectorIds: readonly string[]
+  readonly employees: readonly {
+    readonly employeeId: Assignment["employeeId"]
+    readonly sectorIds: readonly string[]
+  }[]
+  readonly demand: readonly {
+    readonly requirementId: string
+    readonly sectorId: string
+  }[]
+}
+
+export interface WeeklyPlanningTarget {
+  readonly employeeId: Assignment["employeeId"]
+  readonly minutes: number
+  readonly kind: "sector-allocation"
 }
 
 /** What the editor is initialized from (the output of a generation run). */
@@ -27,6 +57,8 @@ export interface EditorInit {
   readonly planning: Planning
   readonly shifts: readonly Shift[]
   readonly assignments: readonly Assignment[]
+  readonly weeklyTargets?: readonly WeeklyPlanningTarget[]
+  readonly sectorScope?: EditorSectorScope
 }
 
 /**
@@ -54,6 +86,8 @@ export function createEditorState(init: EditorInit): EditorState {
     settings: reconstructSettings(init.configuration, init.planning),
     shifts: init.shifts,
     assignments: init.assignments,
+    ...(init.weeklyTargets ? { weeklyTargets: init.weeklyTargets } : {}),
+    ...(init.sectorScope ? { sectorScope: init.sectorScope } : {}),
   }
 }
 

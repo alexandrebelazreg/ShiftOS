@@ -7,13 +7,13 @@ import type {
 
 /** Human-readable labels for each day of the week. */
 export const WEEK_DAY_LABELS: Record<WeekDay, string> = {
-  monday: "Monday",
-  tuesday: "Tuesday",
-  wednesday: "Wednesday",
-  thursday: "Thursday",
-  friday: "Friday",
-  saturday: "Saturday",
-  sunday: "Sunday",
+  monday: "Lundi",
+  tuesday: "Mardi",
+  wednesday: "Mercredi",
+  thursday: "Jeudi",
+  friday: "Vendredi",
+  saturday: "Samedi",
+  sunday: "Dimanche",
 }
 
 export const PLANNING_MODE_OPTIONS: {
@@ -23,13 +23,13 @@ export const PLANNING_MODE_OPTIONS: {
 }[] = [
   {
     value: "shift_library",
-    label: "Shift Library",
-    description: "Build plannings from a fixed catalogue of predefined shifts.",
+    label: "Catalogue de services",
+    description: "Construire le planning à partir de services définis à l’avance.",
   },
   {
     value: "dynamic",
-    label: "Dynamic Shift Generation",
-    description: "Let ShiftOS generate shifts within the bounds you define.",
+    label: "Génération automatique",
+    description: "Laisser ShiftOS créer les services dans les limites configurées.",
   },
 ]
 
@@ -40,23 +40,23 @@ export const SPLIT_SHIFT_POLICY_OPTIONS: {
 }[] = [
   {
     value: "forbidden",
-    label: "Forbidden",
-    description: "Split shifts are never allowed.",
+    label: "Interdites",
+    description: "Une journée contient toujours une seule plage de travail.",
   },
   {
     value: "exceptional",
-    label: "Exceptional",
-    description: "Allowed only in exceptional cases.",
+    label: "Exceptionnelles",
+    description: "Possibles uniquement après une intervention manuelle.",
   },
   {
     value: "allowed",
-    label: "Allowed",
-    description: "Allowed within the configured limits.",
+    label: "Autorisées",
+    description: "ShiftOS peut en proposer dans les limites indiquées.",
   },
   {
     value: "free",
-    label: "Free",
-    description: "No restriction beyond the configured limits.",
+    label: "Libres",
+    description: "ShiftOS peut en proposer librement, dans les bornes indiquées.",
   },
 ]
 
@@ -72,19 +72,42 @@ export const TIME_GRANULARITY_OPTIONS: { value: TimeGranularity; label: string }
  * (API / config) when the backend exists.
  */
 export const COUNTRY_OPTIONS = [
-  "France",
-  "Belgium",
-  "Spain",
-  "Germany",
-  "United Kingdom",
-  "United States",
+  { value: "France", label: "France" },
+  { value: "Belgium", label: "Belgique" },
+  { value: "Spain", label: "Espagne" },
+  { value: "Germany", label: "Allemagne" },
+  { value: "United Kingdom", label: "Royaume-Uni" },
+  { value: "United States", label: "États-Unis" },
 ] as const
 
 export const TIMEZONE_OPTIONS = [
-  "Europe/Paris",
-  "Europe/Brussels",
-  "Europe/Madrid",
-  "Europe/Berlin",
-  "Europe/London",
-  "America/New_York",
+  { value: "Europe/Paris", label: "Paris — heure d’Europe centrale" },
+  { value: "Europe/Brussels", label: "Bruxelles — heure d’Europe centrale" },
+  { value: "Europe/Madrid", label: "Madrid — heure d’Europe centrale" },
+  { value: "Europe/Berlin", label: "Berlin — heure d’Europe centrale" },
+  { value: "Europe/London", label: "Londres — heure du Royaume-Uni" },
+  { value: "America/New_York", label: "New York — heure de l’Est" },
 ] as const
+
+export function countryLabel(value: string): string {
+  return COUNTRY_OPTIONS.find((option) => option.value === value)?.label ?? value
+}
+
+export function timezoneLabel(value: string): string {
+  return TIMEZONE_OPTIONS.find((option) => option.value === value)?.label ?? value
+}
+
+export function timeGranularityLabel(value: string | number): string {
+  return (
+    TIME_GRANULARITY_OPTIONS.find((option) => String(option.value) === String(value))
+      ?.label ?? String(value)
+  )
+}
+
+export function planningModeLabel(value: PlanningMode): string {
+  return PLANNING_MODE_OPTIONS.find((option) => option.value === value)?.label ?? value
+}
+
+export function splitShiftPolicyLabel(value: SplitShiftPolicyKind): string {
+  return SPLIT_SHIFT_POLICY_OPTIONS.find((option) => option.value === value)?.label ?? value
+}

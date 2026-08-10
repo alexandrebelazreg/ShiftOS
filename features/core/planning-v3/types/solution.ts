@@ -18,11 +18,23 @@ export interface PlanningSegmentV3 {
   readonly endMinutes: number
 }
 
+/** Sous-intervalle travaillé dans un rayon précis. */
+export interface PlanningSectorAssignmentV3 {
+  readonly sectorId: string
+  readonly startMinutes: number
+  readonly endMinutes: number
+}
+
 /** Everything one employee works on one date. */
 export interface PlanningAssignmentV3 {
   readonly employeeId: EmployeeId
   readonly date: IsoDate
   readonly segments: readonly PlanningSegmentV3[]
+  /**
+   * Couverture exacte des segments par rayon. Absent sur une ancienne solution
+   * mono-rayon, auquel cas tout le shift appartient au rayon du problème.
+   */
+  readonly sectorAssignments?: readonly PlanningSectorAssignmentV3[]
 }
 
 /**

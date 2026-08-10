@@ -5,7 +5,12 @@ import type { GenerationSettings } from "@/features/core/planning-generator"
 import { buildEmptyPlanning } from "@/features/core/planning-generator"
 import type { StoreConfiguration } from "@/features/store/models"
 
-import { createEditorState, type EditorState } from "@/features/planning/editor"
+import {
+  createEditorState,
+  type EditorState,
+  type EditorSectorScope,
+  type WeeklyPlanningTarget,
+} from "@/features/planning/editor"
 import type { PlanningBaselineV3 } from "@/features/core/planning-contract/types/baseline"
 
 /**
@@ -48,6 +53,8 @@ export interface V3EditorStateInput {
   readonly coreInput: PlanningInput
   readonly configuration: StoreConfiguration
   readonly settings: GenerationSettings
+  readonly weeklyTargets?: readonly WeeklyPlanningTarget[]
+  readonly sectorScope?: EditorSectorScope
 }
 
 export function editorStateFromV3Solution(input: V3EditorStateInput): EditorState {
@@ -60,6 +67,8 @@ export function editorStateFromV3Solution(input: V3EditorStateInput): EditorStat
     planning: buildEmptyPlanning(input.coreInput.store.id, input.settings),
     shifts,
     assignments,
+    ...(input.weeklyTargets ? { weeklyTargets: input.weeklyTargets } : {}),
+    ...(input.sectorScope ? { sectorScope: input.sectorScope } : {}),
   })
 }
 
@@ -88,6 +97,15 @@ export function v3ShiftsAndAssignments(input: V3EditorStateInput): {
         startTime: toTimeString(segment.startMinutes),
         endTime: toTimeString(segment.endMinutes),
       })),
+      ...(assignment.sectorAssignments
+        ? {
+            sectorAssignments: assignment.sectorAssignments.map((block) => ({
+              sectorId: block.sectorId,
+              startTime: toTimeString(block.startMinutes),
+              endTime: toTimeString(block.endMinutes),
+            })),
+          }
+        : {}),
       createdAt: now,
       updatedAt: now,
     })

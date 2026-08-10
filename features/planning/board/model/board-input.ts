@@ -16,6 +16,29 @@ import type { EmployeeId, IsoDate, WeekDay } from "@/features/core/models"
 export interface BoardSector {
   readonly id: string
   readonly name: string
+  readonly marketZone?: boolean
+  /**
+   * La couleur réglée pour ce rayon, telle que le gérant l'a choisie.
+   *
+   * C'est elle qui identifie le rayon sur la grille. Absente, la barre garde
+   * son habillage de secours : on n'invente pas un réglage.
+   */
+  readonly color?: string
+  /**
+   * The sector's own opening hours, when it declares them.
+   *
+   * The board colours a shift "opening" or "closing" by comparing it to the
+   * day's window, and that window is the SECTOR's — a Drive that opens an hour
+   * before the shop has its own opening, and marking it against the store's
+   * would paint the real opener as an ordinary day. Absent means the sector
+   * follows the store.
+   */
+  readonly hours?: readonly {
+    readonly day: WeekDay
+    readonly closed: boolean
+    readonly opensAt: string
+    readonly closesAt: string
+  }[]
 }
 
 export interface BoardEmployee {
@@ -24,6 +47,11 @@ export interface BoardEmployee {
   /** Sectors this person may be scheduled in. */
   readonly sectorIds: readonly string[]
   readonly contractMinutes: number
+  /**
+   * Target of this particular generation when it deliberately covers only a
+   * sector share of the employment contract.
+   */
+  readonly weeklyTargetMinutes?: number
   /** Human-readable rules, already worded by the adapter. */
   readonly rules: readonly string[]
 }
@@ -45,7 +73,9 @@ export interface BoardSegment {
 export interface BoardShift {
   readonly id: string
   readonly employeeId: EmployeeId
+  /** Premier rayon, conservé pour les anciens consommateurs mono-rayon. */
   readonly sectorId: string
+  readonly sectorAssignments?: readonly (BoardSegment & { readonly sectorId: string })[]
   readonly date: IsoDate
   /** Continuous span from first start to last end, split shifts included. */
   readonly startMinutes: number

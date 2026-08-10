@@ -1,8 +1,8 @@
 import {
   createPythonRunner,
   resolveHighsFastPython,
-} from "@/features/core/planning-contract/adapters/cp-sat/run-python"
-import type { CpSatRunner } from "@/features/core/planning-contract/adapters/cp-sat/run-python"
+} from "@/features/core/planning-contract/adapters/python/run-python"
+import type { CpSatRunner } from "@/features/core/planning-contract/adapters/python/run-python"
 import type { EnginePreservationSupport } from "@/features/core/planning-contract/adapters/from-audited-v3"
 import { toSolvePlanningResponse } from "@/features/core/planning-contract/adapters/from-audited-v3"
 import { toBackendErrorResponse } from "@/features/core/planning-contract/errors"
@@ -12,7 +12,7 @@ import type {
   SolvePlanningResponse,
   SolveTechnicalFact,
 } from "@/features/core/planning-contract/types/solve-response"
-import type { AuditedSolutionV3 } from "@/features/core/planning-v3/orchestrator/solve-and-validate"
+import type { AuditedSolutionV3 } from "@/features/core/planning-v3/types/audited-solution"
 import type { PlanningSolutionV3 } from "@/features/core/planning-v3/types/solution"
 import type {
   PlanningSolverResultV3,
@@ -103,7 +103,12 @@ export function createHighsFastAdapter(
     config.timeoutSeconds ?? HIGHS_FAST_DEFAULT_TIMEOUT_SECONDS,
     HIGHS_FAST_MAX_TIMEOUT_SECONDS
   )
-  const processTimeoutMs = config.processTimeoutMs ?? Math.round(timeoutSeconds * 1000) + 30_000
+  // The Python pipeline checks its own solve deadline. The outer timeout is
+  // only a hung-process fuse, so it must leave room for Windows process start,
+  // scipy imports and final JSON serialisation. A five-second margin killed a
+  // healthy 58.7-second solve at 65 seconds before its answer crossed stdout.
+  // This does NOT enlarge the solver's search budget: it remains 60 seconds.
+  const processTimeoutMs = config.processTimeoutMs ?? Math.round(timeoutSeconds * 1000) + 15_000
   const runner =
     config.runner ??
     createPythonRunner({
@@ -255,7 +260,10 @@ function auditEnvelope(
           envelope.diagnostics.engineStatus === "feasible-zero-deficit"
             ? "state-limit"
             : "timeout",
-        deterministic: true,
+        // A wall-clock-limited MIP may stop on a different node between runs.
+        // Stable ordering makes the walk reproducible when it completes, but a
+        // timed incumbent must not be advertised as deterministic.
+        deterministic: false,
         durationMs: Math.round((numberOf(envelope.diagnostics.totalSeconds) ?? 0) * 1000),
       },
       statistics: emptyStatistics(envelope),
@@ -282,12 +290,473 @@ function emptyResult(
           ? "Impossibilité démontrée : aucune allocation ne satisfait contrats et budgets, ou un plancher dur dépasse la capacité."
           : "Aucun planning trouvé dans le voisinage exploré. Ceci ne démontre rien sur la semaine.",
       candidateSpace: "incomplete",
-      stopCause: envelope.status === "infeasible" ? "exhausted" : "timeout",
-      deterministic: true,
+      stopCause:
+        envelope.status === "infeasible"
+          ? "exhausted"
+          : envelope.status === "invalid-problem"
+            ? "not-started"
+            : "timeout",
+      deterministic: envelope.status === "infeasible",
     },
     statistics: emptyStatistics(envelope),
-    diagnostics: [],
+    diagnostics: diagnosticsOf(envelope),
   }
+}
+
+function diagnosticsOf(envelope: HighsFastResponseEnvelope) {
+  const reason = envelope.diagnostics.reason
+  if (typeof reason !== "string" || reason.length === 0) return []
+
+  if (reason === "day-cannot-be-staffed") {
+    const days = recordsOf(envelope.diagnostics.infeasibleDays)
+    if (days.length === 0) {
+      return [
+        {
+          code: reason,
+          message:
+            "Au moins une journée demande plus de travail ou de présence obligatoire que l'équipe disponible ne peut en fournir.",
+        },
+      ]
+    }
+
+    return days.map((day) => {
+      const date = formatIsoDate(day.date)
+      const dayReason = typeof day.reason === "string" ? day.reason : reason
+      const missing = formatDuration(day.missingMinutes)
+
+      if (dayReason === "daily-budget-exceeds-workable-capacity") {
+        const budget = formatDuration(day.budgetMinutes)
+        const capacity = formatDuration(day.workableCapacityMinutes)
+        const employees = numberOf(day.availableEmployeeCount)
+        const capacitySubject =
+          employees === null
+            ? "l'équipe disponible peut"
+            : employees === 1
+              ? "le salarié disponible peut"
+              : `les ${employees} salariés disponibles peuvent`
+        return {
+          code: dayReason,
+          message:
+            `${date} : le budget impose ${budget ?? "un volume inconnu"} de travail, ` +
+            `mais ${capacitySubject} fournir au maximum ${capacity ?? "un volume inférieur"} ` +
+            `compte tenu de leurs disponibilités et limites quotidiennes.` +
+            (missing ? ` Il manque ${missing} de capacité.` : "") +
+            " Réduisez le budget de cette journée ou augmentez les disponibilités/capacités quotidiennes.",
+        }
+      }
+
+      if (dayReason === "hard-floor-exceeds-available-minutes") {
+        const hardMinimum = formatDuration(day.hardMinimumMinutes)
+        const available = formatDuration(day.availableWorkedMinutes)
+        const peakEmployees = numberOf(day.peakHardMinimumEmployees)
+        const peakStart = formatClock(day.peakHardMinimumStartMinutes)
+        const peakEnd = formatClock(day.peakHardMinimumEndMinutes)
+        const peak =
+          peakEmployees !== null && peakEmployees > 0 && peakStart && peakEnd
+            ? ` Le pic obligatoire est de ${peakEmployees} salarié${peakEmployees > 1 ? "s" : ""} entre ${peakStart} et ${peakEnd}.`
+            : ""
+        return {
+          code: dayReason,
+          message:
+            `${date} : les minimums de présence obligatoires demandent ` +
+            `${hardMinimum ?? "plus d'heures que disponibles"}, mais seulement ` +
+            `${available ?? "un volume inférieur"} peuvent être travaillées.` +
+            (missing ? ` Il manque ${missing}.` : "") +
+            peak +
+            " Réduisez le minimum obligatoire sur ces créneaux ou ajoutez de la disponibilité.",
+        }
+      }
+
+      return {
+        code: dayReason,
+        message: `${date} : la capacité disponible ne permet pas de respecter les contraintes obligatoires de cette journée.`,
+      }
+    })
+  }
+
+  if (reason === "sector-role-cannot-be-staffed") {
+    const conflicts = recordsOf(envelope.diagnostics.infeasibleSectorRoles)
+    if (conflicts.length === 0) {
+      return [{
+        code: reason,
+        message: "Au moins un rayon ouvert ne possède pas assez de salariés autorisés et disponibles pour assurer son ouverture ou sa fermeture obligatoire.",
+      }]
+    }
+    return conflicts.map((conflict) => {
+      const date = formatIsoDate(conflict.date)
+      const sector = typeof conflict.sectorName === "string" ? conflict.sectorName : "Rayon inconnu"
+      const opensAt = formatClock(conflict.opensAtMinutes)
+      const closesAt = formatClock(conflict.closesAtMinutes)
+      const requiredOpeners = numberOf(conflict.requiredOpeners) ?? 0
+      const openingCandidates = numberOf(conflict.openingCandidateCount) ?? 0
+      const requiredClosers = numberOf(conflict.requiredClosers) ?? 0
+      const closingCandidates = numberOf(conflict.closingCandidateCount) ?? 0
+      const jointRoleConflict = conflict.jointRoleConflict === true
+      const crossSectorConflict = conflict.crossSectorConflict === true
+      const assigned = Array.isArray(conflict.assignedEmployeeNames)
+        ? conflict.assignedEmployeeNames.filter((name): name is string => typeof name === "string")
+        : []
+      // Deux formes de phrase, et elles ne se joignent pas.
+      //
+      // Un effectif manquant se compte (« il faut 2 ouvreurs, mais 1
+      // disponible ») ; un conflit de rôles se raconte (« l'ouverture et la
+      // fermeture ne peuvent pas être tenues par la même personne »). Les
+      // coller derrière un « il faut » commun produisait « il faut l'ouverture
+      // à 07:00 et la fermeture à 18:00 doivent être réparties », que personne
+      // ne peut lire.
+      const shortages: string[] = []
+      if (openingCandidates < requiredOpeners) {
+        shortages.push(`${requiredOpeners} ouvreur${requiredOpeners > 1 ? "s" : ""} à ${opensAt ?? "l'ouverture"}, mais ${openingCandidates} disponible${openingCandidates > 1 ? "s" : ""}`)
+      }
+      if (closingCandidates < requiredClosers) {
+        shortages.push(`${requiredClosers} fermeur${requiredClosers > 1 ? "s" : ""} à ${closesAt ?? "la fermeture"}, mais ${closingCandidates} disponible${closingCandidates > 1 ? "s" : ""}`)
+      }
+
+      // Ce qui BLOQUE réellement, et donc le levier à bouger.
+      //
+      // Le message annonçait « une limite continue de 8 h » quelle que soit la
+      // règle qui mordait, alors que le nombre affiché est le minimum entre le
+      // plafond quotidien et le plafond continu. Sur un rayon ouvert 11 h avec
+      // une coupure maximale d'1 h 30, c'est le PLAFOND QUOTIDIEN qui refuse :
+      // allonger la coupure autorisée résout la journée, augmenter le plafond
+      // quotidien seul ne la résout pas. Envoyer le manager sur la mauvaise
+      // règle est pire que ne rien dire.
+      const solo = recordOf(conflict.soloRoleBlock)
+      const remedies: string[] = ["affectez un second salarié disponible ce jour-là"]
+      let jointSentence = ""
+      if (jointRoleConflict) {
+        const span = formatDuration(conflict.openingClosingSpanMinutes) ?? "toute l'amplitude du rayon"
+        const worked = solo ? formatDuration(solo.soloWorkedMinutes) : null
+        const cap = solo ? formatDuration(solo.dailyCapMinutes) : formatDuration(conflict.maximumSingleSpanMinutes)
+        const requiredSplit = solo ? formatDuration(solo.requiredSplitMinutes) : null
+        const maximumSplit = solo ? formatDuration(solo.maximumSplitMinutes) : null
+        const splitAllowed = solo?.splitAllowed === true
+
+        // D'OÙ vient le plafond. Trois réglages différents, trois écrans
+        // différents : le contrat du salarié, la configuration du magasin, la
+        // règle commune de la zone. Un « plafond de 8 h » sans sa provenance
+        // fait chercher dans les trois.
+        const employeeName = typeof solo?.employeeName === "string" ? solo.employeeName : null
+        const capOrigin = ((): string => {
+          switch (solo?.dailyCapSource) {
+            case "contract":
+              return employeeName ? ` fixé par le contrat de ${employeeName}` : " fixé par son contrat"
+            case "sector":
+              return " fixé par la durée maximale par jour de l'un de ses rayons"
+            case "settings":
+              return " fixé par les réglages de cette génération"
+            case "store":
+              return " fixé par la configuration du magasin"
+            case "window":
+            case "availability":
+              return " imposé par sa fenêtre de disponibilité ce jour-là"
+            case "zone":
+              return " fixé par la règle commune des rayons sélectionnés"
+            default:
+              return ""
+          }
+        })()
+
+        // Les trois plafonds, en clair, dès qu'ils ne disent pas la même chose.
+        //
+        // Nommer la source ne suffit pas : quatre allers-retours ont été perdus
+        // parce que le lecteur corrigeait un réglage et retombait sur le même
+        // refus, sans jamais voir LEQUEL des trois valait ce qu'il valait.
+        // Afficher les nombres retire la dernière chose à deviner.
+        const caps = [
+          { label: "contrat", value: numberOf(solo?.contractCapMinutes) },
+          { label: "journée", value: numberOf(solo?.dayCapMinutes) },
+          { label: "règle commune", value: numberOf(solo?.zoneCapMinutes) },
+        ].filter((entry): entry is { label: string; value: number } => entry.value !== null)
+        const capBreakdown = new Set(caps.map((entry) => entry.value)).size > 1
+          ? ` (${caps.map((entry) => `${entry.label} ${formatDuration(entry.value)}`).join(", ")})`
+          : ""
+
+        jointSentence =
+          `l'ouverture à ${opensAt ?? "l'heure prévue"} et la fermeture à ${closesAt ?? "l'heure prévue"} ` +
+          `ne peuvent pas être tenues par la même personne. `
+        if (worked && cap) {
+          jointSentence += splitAllowed && maximumSplit
+            ? `Couvrir ${span} avec la coupure maximale de ${maximumSplit} demanderait ${worked} de travail à un seul salarié, au-dessus du plafond de ${cap}${capOrigin}${capBreakdown}. `
+            : `Couvrir ${span} d'affilée demanderait ${worked} de travail à un seul salarié, au-dessus du plafond de ${cap}${capOrigin}${capBreakdown}. `
+        } else {
+          jointSentence += `Aucun candidat ne peut légalement cumuler les deux rôles sur ${span}. `
+        }
+        const raisedCap = formatDuration(solo?.soloWorkedMinutes)
+        if (solo?.dailyCapSource === "contract" && raisedCap && employeeName) {
+          remedies.push(`portez le maximum journalier du contrat de ${employeeName} à ${raisedCap}`)
+        } else if (solo?.dailyCapSource === "sector" && raisedCap) {
+          remedies.push(`portez la durée maximale par jour du rayon à ${raisedCap}`)
+        } else if (solo?.dailyCapSource === "settings" && raisedCap) {
+          remedies.push(`portez la durée maximale d'une journée de cette génération à ${raisedCap}`)
+        } else if (solo?.dailyCapSource === "store" && raisedCap) {
+          remedies.push(`portez la durée maximale d'une journée du magasin à ${raisedCap}`)
+        }
+        if (requiredSplit) {
+          remedies.push(`portez la coupure maximale du rayon à au moins ${requiredSplit}`)
+        } else if (!splitAllowed && solo?.sectorSplitAllowed === false) {
+          remedies.push("autorisez la coupure sur ce rayon")
+        } else if (!splitAllowed && solo?.employeeMaySplit === false) {
+          remedies.push(
+            employeeName
+              ? `autorisez la coupure pour ${employeeName}`
+              : "autorisez la coupure pour ce salarié"
+          )
+        }
+      }
+      // Qui est retenu ailleurs, et où. TOUS, pas seulement le premier trouvé :
+      // corriger un seul bloqueur et relancer pour retomber sur le suivant est
+      // une perte de temps que le moteur peut éviter en les nommant d'un coup.
+      const heldElsewhere = recordsOf(conflict.heldElsewhere)
+      const crossSectorDetail = crossSectorConflict
+        ? (() => {
+            const held = heldElsewhere.length > 0
+              ? heldElsewhere
+              : [{
+                  employeeName: conflict.conflictingEmployeeName,
+                  sectorName: conflict.conflictingSectorName,
+                  startMinutes: conflict.conflictingStartMinutes,
+                  endMinutes: conflict.conflictingEndMinutes,
+                }]
+            const phrases = held.map((entry) => {
+              const employee = typeof entry.employeeName === "string" ? entry.employeeName : "un salarié"
+              const otherSector = typeof entry.sectorName === "string" ? entry.sectorName : "un autre rayon"
+              const start = formatClock(entry.startMinutes)
+              const end = formatClock(entry.endMinutes)
+              return `${employee} tient déjà ${otherSector}` + (start && end ? ` de ${start} à ${end}` : "")
+            })
+            // L'accord suit le SUJET, pas le nombre de bloqueurs.
+            return ` ${phrases.join(" et ")} : ` + (assigned.length > 0
+              ? "les salariés restants ne peuvent pas couvrir ensemble l'ouverture et la fermeture de ce rayon."
+              : "personne ne peut couvrir l'ouverture et la fermeture de ce rayon.")
+          })()
+        : ""
+      remedies.push("ou fermez le rayon pour cette journée")
+      const cause = [
+        shortages.length > 0 ? `il faut ${shortages.join(" ; ")}.` : "",
+        jointSentence,
+      ].filter((part) => part.length > 0).join(" ")
+
+      return {
+        code: reason,
+        message:
+          `${date} — ${sector} : ${cause}`.trimEnd() + " " +
+          crossSectorDetail.trim() + (crossSectorDetail.trim() ? " " : "") +
+          (assigned.length > 0
+            ? `Salarié${assigned.length > 1 ? "s" : ""} actuellement autorisé${assigned.length > 1 ? "s" : ""} : ${assigned.join(", ")}. `
+            : "Aucun salarié n'est autorisé dans ce rayon. ") +
+          `Pour débloquer la journée : ${remedies.join(", ")}.`,
+      }
+    })
+  }
+
+  if (reason === "optional-work-days-not-supported") {
+    const count = numberOf(envelope.diagnostics.optionalCellCount) ?? 0
+    return [
+      {
+        code: reason,
+        message:
+          `Ce moteur exige actuellement que chaque journée disponible soit travaillée. ` +
+          `${count} journée(s) disponible(s) ont été déclarée(s) facultative(s).`,
+      },
+    ]
+  }
+
+  // Le verdict le plus FRÉQUENT du moteur, et il n'avait aucun branchement :
+  // il tombait dans le fourre-tout « sans détail exploitable supplémentaire »,
+  // en jetant les diagnostics les plus riches que le pipeline produise. Le
+  // moteur note pourtant, en français et par cellule, ce qui l'a arrêté —
+  // journées sans forme légale, domaine de durées vide, placement refusé — et
+  // ces notes sont exactement ce qu'il faut lire pour savoir quoi corriger.
+  if (reason === "no-legal-schedule-in-the-explored-neighbourhood") {
+    const notes = Array.isArray(envelope.diagnostics.notes)
+      ? envelope.diagnostics.notes.filter((note): note is string => typeof note === "string")
+      : []
+    const skeletonsPlaced = numberOf(envelope.diagnostics.skeletonsPlaced) ?? 0
+    const placementsInfeasible = numberOf(envelope.diagnostics.placementsInfeasible) ?? 0
+    const allocationsTested = numberOf(envelope.diagnostics.allocationsTested) ?? 0
+
+    // Ce qui a échoué, du plus concret au plus vague.
+    //
+    // La journée fautive passe devant tout le reste : un compte de refus ne dit
+    // rien à personne, une DATE se corrige.
+    const blamed = Array.isArray(envelope.diagnostics.daysWithoutPlacement)
+      ? envelope.diagnostics.daysWithoutPlacement.filter((date): date is string => typeof date === "string")
+      : []
+    let cause: string
+    if (blamed.length > 0) {
+      cause =
+        `${blamed.length > 1 ? "Les journées" : "La journée"} du ${blamed.map(formatIsoDate).join(", du ")} ` +
+        `ne peu${blamed.length > 1 ? "vent" : "t"} pas être servie${blamed.length > 1 ? "s" : ""} : ` +
+        "les ouvertures et fermetures obligatoires de ses rayons ne peuvent pas être tenues ensemble " +
+        "par les salariés disponibles ce jour-là, quelles que soient les heures choisies."
+    } else if (notes.some((note) => note.includes("sans forme légale"))) {
+      cause =
+        "certaines journées n'admettent aucune forme d'horaire légale : la durée à placer n'entre pas " +
+        "dans la fenêtre du salarié une fois le repos, la durée minimale et les coupures autorisées appliqués."
+    } else if (notes.some((note) => note.includes("aucune allocation ne satisfait"))) {
+      cause =
+        "aucune répartition des minutes ne satisfait à la fois les contrats, les budgets quotidiens " +
+        "et les durées réellement plaçables."
+    } else if (placementsInfeasible > 0) {
+      cause =
+        `${placementsInfeasible} placement${placementsInfeasible > 1 ? "s ont" : " a"} été refusé${placementsInfeasible > 1 ? "s" : ""} : ` +
+        "les durées retenues n'admettent aucun horaire simultané respectant le repos et les planchers de présence."
+    } else if (skeletonsPlaced === 0) {
+      cause = "aucun placement n'a pu être tenté dans le temps imparti."
+    } else {
+      cause =
+        "aucun des horaires essayés ne respecte toutes les règles à la fois, " +
+        "sans qu'une contrainte unique puisse être désignée."
+    }
+
+    return [{
+      code: reason,
+      message:
+        `${cause} Ce n'est PAS une preuve d'impossibilité : la recherche est heuristique et n'a exploré ` +
+        `qu'une partie des plannings possibles (${allocationsTested} répartition${allocationsTested > 1 ? "s" : ""} ` +
+        `essayée${allocationsTested > 1 ? "s" : ""}, ${skeletonsPlaced} placement${skeletonsPlaced > 1 ? "s" : ""}). ` +
+        `Relancer avec un budget de temps plus large peut aboutir.` +
+        (notes.length > 0 ? ` Détail du moteur : ${notes.slice(0, 3).join(" | ")}` : ""),
+    }]
+  }
+
+  if (reason === "allocation-feasibility-probe-ended-without-proof") {
+    return [
+      {
+        code: reason,
+        message:
+          "Le contrôle initial des contrats et budgets s'est arrêté sans solution et sans preuve d'infaisabilité.",
+      },
+    ]
+  }
+
+  if (reason === "no-minute-allocation-satisfies-contracts-and-budgets") {
+    const employeeConflicts = recordsOf(envelope.diagnostics.allocationEmployeeConflicts)
+    const dayConflicts = recordsOf(envelope.diagnostics.allocationDayConflicts)
+    const entries = [
+      ...employeeConflicts.map((conflict) => {
+        const name = typeof conflict.employeeName === "string"
+          ? conflict.employeeName
+          : "Un salarié"
+        const contract = formatDuration(conflict.contractMinutes) ?? "un volume inconnu"
+        const minimum = formatDuration(conflict.minimumPossibleMinutes) ?? "un minimum inconnu"
+        const maximum = formatDuration(conflict.maximumPossibleMinutes) ?? "une capacité inconnue"
+        const difference = formatDuration(conflict.differenceMinutes)
+        const days = numberOf(conflict.availableDayCount)
+        const availability = days === null
+          ? "ses jours et horaires disponibles"
+          : `${days} jour${days > 1 ? "s" : ""} disponible${days > 1 ? "s" : ""}`
+
+        if (conflict.reason === "contract-below-mandatory-minimum") {
+          return {
+            code: "employee-volume-below-mandatory-minimum",
+            message:
+              `${name} reçoit ${contract} dans ce rayon, mais ${availability} imposent au moins ${minimum} ` +
+              `avec la durée minimale quotidienne.` +
+              (difference ? ` Il manque ${difference}.` : "") +
+              " Réduisez ses jours travaillés dans ce rayon ou augmentez son volume attribué.",
+          }
+        }
+        return {
+          code: "employee-volume-exceeds-available-capacity",
+          message:
+            `${name} reçoit ${contract} dans ce rayon, mais ${availability} permettent au maximum ${maximum} ` +
+            `compte tenu de ses bornes horaires et de la durée continue autorisée.` +
+            (difference ? ` Retirez au moins ${difference}.` : "") +
+            " Ajoutez un autre salarié prioritaire ou élargissez ses disponibilités.",
+        }
+      }),
+      ...dayConflicts.map((conflict) => {
+        const date = formatIsoDate(conflict.date)
+        const budget = formatDuration(conflict.budgetMinutes) ?? "un volume inconnu"
+        const minimum = formatDuration(conflict.minimumMandatoryMinutes) ?? "un minimum inconnu"
+        const maximum = formatDuration(conflict.maximumCapacityMinutes) ?? "une capacité inconnue"
+        const difference = formatDuration(conflict.differenceMinutes)
+        const employees = numberOf(conflict.availableEmployeeCount)
+        const team = employees === null
+          ? "les salariés disponibles"
+          : `${employees} salarié${employees > 1 ? "s" : ""} disponible${employees > 1 ? "s" : ""}`
+
+        if (conflict.reason === "budget-below-mandatory-minimum") {
+          return {
+            code: "daily-budget-below-mandatory-minimum",
+            message:
+              `${date} : le rayon prévoit ${budget}, mais ${team} doivent travailler au moins ${minimum} au total.` +
+              (difference ? ` Le budget est trop bas de ${difference}.` : "") +
+              " Retirez un salarié obligatoire ce jour-là, ajoutez un repos fixe ou augmentez le budget.",
+          }
+        }
+        return {
+          code: "daily-budget-exceeds-capacity",
+          message:
+            `${date} : le rayon prévoit ${budget}, mais ${team} peuvent fournir au maximum ${maximum}.` +
+            (difference ? ` Il manque ${difference} de capacité.` : "") +
+            " Ajoutez de la disponibilité ou réduisez le besoin de cette journée.",
+        }
+      }),
+    ]
+    if (entries.length > 0) return entries
+
+    const totals = recordOf(envelope.diagnostics.allocationTotals)
+    const employees = numberOf(totals?.employeeCount)
+    const days = numberOf(totals?.openDayCount)
+    const volume = formatDuration(totals?.budgetMinutes)
+    return [{
+      code: reason,
+      message:
+        `Les volumes hebdomadaires concordent${volume ? ` (${volume})` : ""}, mais ils ne peuvent pas être ` +
+        `répartis entre${employees === null ? " les salariés" : ` ${employees} salarié${employees > 1 ? "s" : ""}`} ` +
+        `sur${days === null ? " les jours ouverts" : ` ${days} jour${days > 1 ? "s" : ""} ouvert${days > 1 ? "s" : ""}`} ` +
+        "sans enfreindre une durée minimale, une disponibilité ou une limite quotidienne. " +
+        "Vérifiez en priorité les jours de travail, repos fixes et bornes horaires des salariés sélectionnés.",
+    }]
+  }
+
+  return [{
+    code: reason,
+    message: "Le moteur a identifié une incompatibilité entre les règles de cette semaine, sans détail exploitable supplémentaire.",
+  }]
+}
+
+function recordsOf(value: unknown): Record<string, unknown>[] {
+  if (!Array.isArray(value)) return []
+  return value.filter(
+    (entry): entry is Record<string, unknown> =>
+      typeof entry === "object" && entry !== null && !Array.isArray(entry)
+  )
+}
+
+function recordOf(value: unknown): Record<string, unknown> | null {
+  return typeof value === "object" && value !== null && !Array.isArray(value)
+    ? value as Record<string, unknown>
+    : null
+}
+
+function formatIsoDate(value: unknown): string {
+  if (typeof value !== "string") return "Journée inconnue"
+  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value)
+  return match ? `${match[3]}/${match[2]}/${match[1]}` : value
+}
+
+function formatDuration(value: unknown): string | null {
+  const minutes = numberOf(value)
+  if (minutes === null) return null
+  const rounded = Math.max(0, Math.round(minutes))
+  const hours = Math.floor(rounded / 60)
+  const remainder = rounded % 60
+  if (hours === 0) return `${remainder} min`
+  if (remainder === 0) return `${hours} h`
+  return `${hours} h ${String(remainder).padStart(2, "0")}`
+}
+
+function formatClock(value: unknown): string | null {
+  const minutes = numberOf(value)
+  if (minutes === null) return null
+  const rounded = Math.round(minutes)
+  const hours = Math.floor(rounded / 60)
+  const remainder = ((rounded % 60) + 60) % 60
+  return `${String(hours).padStart(2, "0")}:${String(remainder).padStart(2, "0")}`
 }
 
 function emptyStatistics(envelope: HighsFastResponseEnvelope) {
@@ -351,7 +820,7 @@ function resolveWorkingDirectory(): string {
   return `${process.cwd()}/experiments/planning-v3-highs`
 }
 
-export { resolveHighsFastPython } from "@/features/core/planning-contract/adapters/cp-sat/run-python"
+export { resolveHighsFastPython } from "@/features/core/planning-contract/adapters/python/run-python"
 export {
   HIGHS_FAST_PROTOCOL_VERSION,
   parseHighsFastResponse,

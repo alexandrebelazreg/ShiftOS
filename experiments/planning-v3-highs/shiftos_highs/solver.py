@@ -117,11 +117,12 @@ def _structural_rows(
     # Exact daily budgets. This is what keeps surplus presence PLANNABLE: the
     # minutes above the adapted target still have to land somewhere.
     for day in open_days:
-        rows.add(
-            {index: candidates[index].worked_minutes for index in by_date[day["date"]]},
-            day["budgetMinutes"],
-            day["budgetMinutes"],
-        )
+        if day.get("budgetMode", "exact") == "exact":
+            rows.add(
+                {index: candidates[index].worked_minutes for index in by_date[day["date"]]},
+                day["budgetMinutes"],
+                day["budgetMinutes"],
+            )
 
     # Openings and closings.
     for day in open_days:
@@ -141,7 +142,7 @@ def _structural_rows(
                 if candidates[index].last_end == day["closesAtMinutes"]
             },
             rules["exactClosingsPerDay"],
-            rules["exactClosingsPerDay"],
+            np.inf,
         )
 
     day_by_date = {day["date"]: day for day in open_days}
@@ -188,6 +189,88 @@ def _structural_rows(
                     coefficients[index] = coefficients.get(index, 0) - candidates[index].last_end
                 rows.add(coefficients, rules["minimumRestMinutes"] - 24 * 60, np.inf)
             previous_date = day["date"]
+
+
+
+def _closing_fairness_objectives(
+    problem: dict[str, Any], candidates: list[Candidate], layout: Any
+) -> list[tuple[str, dict[int, float]]]:
+    """Secondary passes that spread closings, run AFTER coverage is frozen.
+
+    Each pass is a plain linear objective over the candidate columns: a
+    candidate that ends exactly at closing costs its employee's current load,
+    everything else costs nothing. Minimising it therefore hands the closing to
+    whoever is carrying the least — and, because it runs only once coverage,
+    deficit and business cost are already pinned by `rows.add(...)`, it can
+    reorder WHO closes without ever changing HOW MANY slots are covered.
+
+    Loads are integer permille, not decimals. The MILP needs floats in the end,
+    but the value fed to it is derived from an exact integer ratio, so two runs
+    on two machines rank the same employees the same way.
+
+    Returned empty when no balance is switched on, which keeps the pass list —
+    and therefore the diagnostics and the proof — identical to before.
+    """
+    rules = problem.get("rules") or {}
+    fairness = rules.get("closingFairness")
+    if not fairness:
+        return []
+    balance_general = bool(fairness.get("balanceClosings"))
+    balance_saturday = bool(fairness.get("balanceSaturdayClosings"))
+    if not (balance_general or balance_saturday):
+        return []
+
+    history = {str(entry["employeeId"]): entry for entry in (problem.get("closingHistory") or [])}
+    closes_at = {
+        day["date"]: day["closesAtMinutes"]
+        for day in problem["days"]
+        if not day["closed"] and day["closesAtMinutes"] is not None
+    }
+    saturdays = {
+        day["date"]
+        for day in problem["days"]
+        if not day["closed"] and _weekday(day["date"]) == 5
+    }
+
+    def permille(employee_id: str, closings_key: str, opportunities_key: str) -> float:
+        entry = history.get(employee_id)
+        if not entry:
+            return 0.0
+        opportunities = int(entry[opportunities_key])
+        if opportunities <= 0:
+            # No opportunity is no load — and the lightest possible claim on the
+            # next closing, which is why it sits below a genuine zero.
+            return -1.0
+        return float((int(entry[closings_key]) * 1000) // opportunities)
+
+    def objective(only_saturday: bool, closings_key: str, opportunities_key: str) -> dict[int, float]:
+        costs: dict[int, float] = {}
+        for candidate in candidates:
+            if only_saturday and candidate.date not in saturdays:
+                continue
+            if candidate.last_end != closes_at.get(candidate.date):
+                continue
+            weight = permille(candidate.employee_id, closings_key, opportunities_key)
+            if weight != 0.0:
+                costs[candidate.index] = weight
+        return costs
+
+    passes: list[tuple[str, dict[int, float]]] = []
+    # Saturday first: the problem declares `saturday-closing-fairness` ahead of
+    # `closing-fairness`, and a lexicographic solver enforces that order by the
+    # order it freezes the passes in.
+    if balance_saturday:
+        passes.append(("4-saturday-closing-fairness", objective(True, "saturdayClosings", "saturdayOpportunities")))
+    if balance_general:
+        passes.append(("5-closing-fairness", objective(False, "closings", "opportunities")))
+    return [(name, costs) for name, costs in passes if costs]
+
+
+def _weekday(date: str) -> int:
+    from datetime import date as _date
+
+    year, month, day = (int(part) for part in date.split("-"))
+    return _date(year, month, day).weekday()
 
 
 def _tie_break_costs(
@@ -364,6 +447,10 @@ def solve(problem: dict[str, Any], *, time_limit_seconds: float = 45.0) -> dict[
         ("1-under-covered-slots", under_covered_slots_objective(layout)),
         ("2-deficit-minutes", deficit_minutes_objective(layout)),
         ("3-business-cost", business_cost_objective(layout, budget_by_date)),
+        # Closing fairness runs here, under a frozen coverage: pass 1 pinned the
+        # under-covered slots, pass 2 the deficit minutes and pass 3 their
+        # business cost, so nothing below can buy fairness with a shortfall.
+        *_closing_fairness_objectives(problem, candidates, layout),
     ]
 
     incumbent: np.ndarray | None = None

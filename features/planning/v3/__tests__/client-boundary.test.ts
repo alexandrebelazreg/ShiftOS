@@ -3,7 +3,7 @@ import { join } from "node:path"
 import { describe, expect, it } from "vitest"
 
 /**
- * CP-SAT must not exist in the browser bundle. Enforced, not documented.
+ * The engine must not exist in the browser bundle. Enforced, not documented.
  *
  * The adapter spawns Python through `node:child_process`. One import of it from
  * anything the client reaches — a component, a hook, a barrel a component
@@ -25,7 +25,7 @@ const FORBIDDEN_IN_CLIENT = [
   { fragment: "node:", reason: "une API Node" },
   { fragment: "child_process", reason: "l'exécution d'un processus" },
   { fragment: "planning-contract/adapters", reason: "un adaptateur de moteur" },
-  { fragment: "experiments/", reason: "le spike CP-SAT" },
+  { fragment: "experiments/", reason: "une expérience Python" },
 ]
 
 function sourceFiles(directory: string): string[] {
@@ -78,7 +78,7 @@ describe("frontière client / serveur du moteur V3", () => {
   })
 })
 
-describe("la route serveur est le seul point d'entrée de CP-SAT", () => {
+describe("la route serveur est le seul point d'entrée du moteur", () => {
   function appFiles(directory: string): string[] {
     return readdirSync(directory).flatMap((entry) => {
       const path = join(directory, entry)
@@ -89,9 +89,9 @@ describe("la route serveur est le seul point d'entrée de CP-SAT", () => {
 
   const files = appFiles(join(ROOT, "app"))
 
-  it("n'importe l'adaptateur CP-SAT que depuis la route de résolution", () => {
+  it("n'importe l'adaptateur du moteur que depuis la route de résolution", () => {
     const importers = files.filter((file) =>
-      importsOf(file).some((specifier) => specifier.includes("adapters/cp-sat"))
+      importsOf(file).some((specifier) => specifier.includes("adapters/highs-fast"))
     )
     expect(importers.map((file) => file.replace(ROOT, "").replace(/\\/g, "/"))).toEqual([
       "/app/api/planning/v3/solve/route.ts",

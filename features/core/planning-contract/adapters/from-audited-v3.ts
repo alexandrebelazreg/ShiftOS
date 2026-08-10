@@ -1,4 +1,4 @@
-import type { AuditedSolutionV3 } from "@/features/core/planning-v3/orchestrator/solve-and-validate"
+import type { AuditedSolutionV3 } from "@/features/core/planning-v3/types/audited-solution"
 import type { PlanningViolationV3 } from "@/features/core/planning-v3/types/validation"
 
 import { assertSolvePlanningResponse } from "@/features/core/planning-contract/invariants"

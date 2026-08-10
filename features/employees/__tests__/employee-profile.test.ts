@@ -13,6 +13,8 @@ describe("profil employé", () => {
     expect((await employeeService.getById(created.id))?.weeklyHours).toBe(28)
     expect((await employeeService.getById(created.id))?.preferClosing).toBe(true)
     expect((await employeeService.getById(created.id))?.maxClosings).toBe(0)
+    expect(created.scheduleType).toBe("variable")
+    expect((await employeeService.setScheduleType(created.id, "fixed")).scheduleType).toBe("fixed")
   })
   it("normalise 36 h 45 en 2 205 minutes entières", async () => {
     const created = await employeeService.create({ firstName: "Minute", lastName: "Exacte", phone: "", email: "", status: "active", weeklyHours: 36.75, contractType: "full_time", sectors: [], competencies: {}, canOpen: false, canClose: false, splitShiftAllowed: false, fixedDaysOff: [], forbiddenDays: [], maxOpenings: null, maxClosings: null, preferOpening: false, preferClosing: false, notes: "" })
@@ -29,6 +31,7 @@ describe("profil employé", () => {
     const values = employeeToFormValues(created)
     expect(values.weeklyHours).toBe("36")
     expect(values.weeklyMinuteRemainder).toBe("45")
+    expect(values.scheduleType).toBe("variable")
   })
   it("exige une confirmation pour un ancien 36.5 sans weeklyMinutes", async () => {
     const current = await employeeService.create({ firstName: "Legacy", lastName: "Pilote", phone: "", email: "", status: "active", weeklyHours: 36, contractType: "full_time", sectors: [], competencies: {}, canOpen: false, canClose: false, splitShiftAllowed: false, fixedDaysOff: [], forbiddenDays: [], maxOpenings: null, maxClosings: null, preferOpening: false, preferClosing: false, notes: "" })

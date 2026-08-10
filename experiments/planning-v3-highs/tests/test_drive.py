@@ -19,7 +19,12 @@ class DriveFixtureTests(unittest.TestCase):
         )
 
     def test_problem_fingerprint_matches_typescript(self) -> None:
-        self.assertEqual(fingerprint_problem(self.problem), "p3_b114fe2b5b80e957")
+        # The point of this assertion is CROSS-LANGUAGE agreement: the value is
+        # the one `DRIVE_CANONICAL_FINGERPRINT` pins on the TypeScript side, and
+        # the two implementations must reach it independently. Re-pin both or
+        # neither — a Python-only edit would hide exactly the drift it exists to
+        # catch.
+        self.assertEqual(fingerprint_problem(self.problem), "p3_773bce83cf527f2f")
 
     def test_reference_solution_is_zero_deficit(self) -> None:
         report = evaluate(self.problem, self.reference)

@@ -2,10 +2,10 @@
 
 import { Controller, useFieldArray, useFormContext, useWatch } from "react-hook-form"
 
+import { ControlledStoreInput } from "@/features/store/components/ControlledStoreInput"
 import { FormSection } from "@/features/store/components/FormSection"
 import { WEEK_DAY_LABELS } from "@/features/store/lib/constants"
 import type { StoreFormValues } from "@/features/store/types/store.types"
-import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Switch } from "@/components/ui/switch"
 import { cn } from "@/lib/utils"
@@ -16,8 +16,10 @@ export function OpeningHoursSection() {
 
   return (
     <FormSection
+      id="horaires-ouverture"
+      step={2}
       title="Horaires d’ouverture"
-      description="Configurez les horaires de chaque jour de la semaine."
+      description="Indiquez les heures pendant lesquelles le magasin peut accueillir des services."
     >
       <div className="divide-y divide-border rounded-lg border border-border">
         {fields.map((field, index) => (
@@ -41,7 +43,6 @@ function DayRow({
 }) {
   const {
     control,
-    register,
     formState: { errors },
   } = useFormContext<StoreFormValues>()
 
@@ -49,20 +50,20 @@ function DayRow({
   const dayErrors = errors.openingHours?.[index]
 
   return (
-    <div className="flex flex-col gap-3 p-3 sm:flex-row sm:items-center sm:gap-4">
+    <div className={cn("flex flex-col gap-3 p-3 sm:flex-row sm:items-center sm:gap-4", closed && "bg-muted/30")}>
       <span className="w-24 shrink-0 text-sm font-medium">
         {WEEK_DAY_LABELS[day]}
       </span>
 
       <div className="flex flex-1 flex-wrap items-center gap-3">
         <div className="grid gap-1">
-          <Input
+          <ControlledStoreInput
+            name={`openingHours.${index}.opensAt`}
             type="time"
             aria-label={`Heure d’ouverture du ${WEEK_DAY_LABELS[day]}`}
             disabled={closed}
             aria-invalid={!!dayErrors?.opensAt || undefined}
             className="w-32"
-            {...register(`openingHours.${index}.opensAt`)}
           />
           {dayErrors?.opensAt ? (
             <span className="text-xs font-medium text-destructive">
@@ -74,13 +75,13 @@ function DayRow({
         <span className="text-sm text-muted-foreground">à</span>
 
         <div className="grid gap-1">
-          <Input
+          <ControlledStoreInput
+            name={`openingHours.${index}.closesAt`}
             type="time"
             aria-label={`Heure de fermeture du ${WEEK_DAY_LABELS[day]}`}
             disabled={closed}
             aria-invalid={!!dayErrors?.closesAt || undefined}
             className="w-32"
-            {...register(`openingHours.${index}.closesAt`)}
           />
           {dayErrors?.closesAt ? (
             <span className="text-xs font-medium text-destructive">
@@ -93,7 +94,7 @@ function DayRow({
       <Label
         className={cn(
           "flex shrink-0 items-center gap-2 text-sm",
-          closed ? "text-foreground" : "text-muted-foreground"
+          closed ? "text-muted-foreground" : "text-foreground"
         )}
       >
         <Controller
@@ -101,13 +102,13 @@ function DayRow({
           name={`openingHours.${index}.closed`}
           render={({ field }) => (
             <Switch
-              checked={field.value}
-              onCheckedChange={field.onChange}
-              aria-label={`${WEEK_DAY_LABELS[day]} fermé`}
+              checked={!field.value}
+              onCheckedChange={(open) => field.onChange(!open)}
+              aria-label={`${WEEK_DAY_LABELS[day]} ouvert`}
             />
           )}
         />
-        Fermé
+        {closed ? "Fermé" : "Ouvert"}
       </Label>
     </div>
   )

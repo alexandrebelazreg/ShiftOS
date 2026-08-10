@@ -4,13 +4,14 @@ import { Controller, useFormContext, useWatch } from "react-hook-form"
 
 import { FormField } from "@/features/store/components/FormField"
 import { FormSection } from "@/features/store/components/FormSection"
+import { MinutesAsHoursField } from "@/features/store/components/MinutesAsHoursField"
 import { RadioCards } from "@/features/store/components/RadioCards"
 import {
   PLANNING_MODE_OPTIONS,
   TIME_GRANULARITY_OPTIONS,
+  timeGranularityLabel,
 } from "@/features/store/lib/constants"
 import type { StoreFormValues } from "@/features/store/types/store.types"
-import { Input } from "@/components/ui/input"
 import {
   Select,
   SelectContent,
@@ -22,7 +23,6 @@ import {
 export function PlanningModeSection() {
   const {
     control,
-    register,
     formState: { errors },
   } = useFormContext<StoreFormValues>()
 
@@ -30,8 +30,10 @@ export function PlanningModeSection() {
 
   return (
     <FormSection
-      title="Planning mode"
-      description="How should ShiftOS build your plannings?"
+      id="creation-planning"
+      step={3}
+      title="Création du planning"
+      description="Choisissez comment les services sont créés. Ce choix est partagé par la configuration initiale et les modifications futures."
     >
       <Controller
         control={control}
@@ -42,52 +44,24 @@ export function PlanningModeSection() {
             onChange={field.onChange}
             options={PLANNING_MODE_OPTIONS}
             invalid={!!errors.planningMode}
+            className="md:grid-cols-2"
           />
         )}
       />
 
       {planningMode === "dynamic" ? (
-        <div className="grid gap-4 rounded-lg border border-dashed border-border p-4 md:grid-cols-3">
-          <FormField
-            label="Minimum shift duration"
-            htmlFor="minShiftDuration"
+        <div className="grid gap-4 rounded-lg border border-dashed border-border bg-muted/20 p-4 md:grid-cols-2">
+          <MinutesAsHoursField
+            name="minShiftDuration"
+            label="Durée minimale d’un service généré"
+            description="Une plage plus courte ne sera pas créée automatiquement."
             required
-            description="Minutes"
-            error={errors.minShiftDuration?.message}
-          >
-            <Input
-              id="minShiftDuration"
-              type="number"
-              min={0}
-              inputMode="numeric"
-              placeholder="e.g. 120"
-              aria-invalid={!!errors.minShiftDuration || undefined}
-              {...register("minShiftDuration")}
-            />
-          </FormField>
-
+          />
           <FormField
-            label="Maximum shift duration"
-            htmlFor="maxShiftDuration"
-            required
-            description="Minutes"
-            error={errors.maxShiftDuration?.message}
-          >
-            <Input
-              id="maxShiftDuration"
-              type="number"
-              min={0}
-              inputMode="numeric"
-              placeholder="e.g. 480"
-              aria-invalid={!!errors.maxShiftDuration || undefined}
-              {...register("maxShiftDuration")}
-            />
-          </FormField>
-
-          <FormField
-            label="Time granularity"
+            label="Précision des horaires"
             htmlFor="timeGranularity"
             required
+            description="Pas utilisé pour positionner le début et la fin des services."
             error={errors.timeGranularity?.message}
           >
             <Controller
@@ -100,7 +74,9 @@ export function PlanningModeSection() {
                     className="w-full"
                     aria-invalid={!!errors.timeGranularity || undefined}
                   >
-                    <SelectValue placeholder="Select granularity" />
+                    <SelectValue placeholder="Sélectionner une précision">
+                      {field.value ? timeGranularityLabel(field.value) : null}
+                    </SelectValue>
                   </SelectTrigger>
                   <SelectContent>
                     {TIME_GRANULARITY_OPTIONS.map((option) => (

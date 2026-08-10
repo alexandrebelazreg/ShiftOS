@@ -20,6 +20,16 @@ export interface PlanningRecord {
   readonly label: string
   readonly periodStart: string
   readonly periodEnd: string
+  /**
+   * Which sectors this planning covered.
+   *
+   * Optional because records saved before closing fairness existed carry none,
+   * and there is no way to recover it: no shift, assignment or planning names a
+   * sector. Such a record is deliberately EXCLUDED from every sector's history
+   * rather than guessed at — attributing one sector's closings to another would
+   * corrupt the very fairness this field exists to compute.
+   */
+  readonly sectorIds?: readonly string[]
   /** The full editor state — everything needed to restore the editor. */
   readonly state: EditorState
   readonly createdAt: string

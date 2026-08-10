@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest"
 import {
   describeWeek,
   hasPlanningForWeek,
+  marketZoneSelectionState,
   needsWeekChangeConfirmation,
   primaryPlanningAction,
   resolveTargetWeek,
@@ -46,6 +47,21 @@ describe("résumé des secteurs — libellé fermé", () => {
   it("ne code aucune combinaison en dur — noms arbitraires", () => {
     const custom = [sector("a", "Alpha", true), sector("b", "Bravo", true), sector("c", "Charlie", false)]
     expect(summarizeSectorSelection(custom)).toBe("Alpha + Bravo")
+  })
+})
+
+describe("sélection groupée Zone marché", () => {
+  it("est cochée seulement lorsque tous les secteurs configurés du groupe le sont", () => {
+    expect(marketZoneSelectionState([
+      { ...sector("drive", "Drive", true), marketZone: false },
+      { ...sector("fruits", "Fruits", true), marketZone: true },
+      { ...sector("charcuterie", "Charcuterie", true), marketZone: true },
+    ])).toEqual({ count: 2, selected: true })
+
+    expect(marketZoneSelectionState([
+      { ...sector("fruits", "Fruits", true), marketZone: true },
+      { ...sector("charcuterie", "Charcuterie", false), marketZone: true },
+    ])).toEqual({ count: 2, selected: false })
   })
 })
 

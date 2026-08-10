@@ -30,12 +30,15 @@ export const PLANNING_RULES_V3 = [
   "maximum-closings",
   "opening-count",
   "closing-count",
+  "closing-fairness",
+  "saturday-closing-fairness",
   "coverage-deficit",
   "hard-coverage-floor",
   "avoidable-surplus",
   "declared-metrics",
   "time-step",
   "solution-integrity",
+  "sector-assignment",
 ] as const
 export type PlanningRuleCodeV3 = (typeof PLANNING_RULES_V3)[number]
 

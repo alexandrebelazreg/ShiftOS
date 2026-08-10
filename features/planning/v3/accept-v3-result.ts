@@ -61,7 +61,7 @@ export function acceptV3Result(
     return {
       accepted: false,
       reason: "outcome-not-publishable",
-      message: `Le moteur V3 a répondu « ${response.outcome} » : aucun planning à afficher.`,
+      message: nonPublishableMessage(response),
     }
   }
 
@@ -128,6 +128,23 @@ export function acceptV3Result(
     solution: response.solution,
     report,
     requiresExplicitAcceptance: report.requiresExplicitAcceptance,
+  }
+}
+
+function nonPublishableMessage(response: SolvePlanningResponse): string {
+  switch (response.outcome) {
+    case "infeasible":
+      return "Les contrats, disponibilités et budgets de la semaine ne peuvent pas tous être respectés en même temps."
+    case "timeout-without-solution":
+      return "La recherche s’est arrêtée avant de trouver un planning. Cela ne prouve pas que la semaine est impossible."
+    case "backend-error":
+      return "Le moteur de calcul n’a pas pu terminer la demande. Vos règles ne sont pas nécessairement en cause."
+    case "invalid-problem":
+      return "Certaines données de configuration ne peuvent pas être utilisées par le moteur dans leur état actuel."
+    case "cancelled":
+      return "La recherche a été annulée avant de produire un planning."
+    default:
+      return "Aucun planning exploitable n’a été produit pour cette tentative."
   }
 }
 

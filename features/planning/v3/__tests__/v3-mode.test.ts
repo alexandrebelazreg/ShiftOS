@@ -205,25 +205,25 @@ describe("écran Planning — garanties structurelles", () => {
     "utf8"
   )
 
-  it("démarre sur le moteur par défaut, jamais sur une constante écrite à la main", () => {
-    expect(VIEW).toContain("useState<PlanningEngineVersion>(CURRENT_PLANNING_ENGINE_VERSION)")
+  it("nomme son moteur par la constante, jamais par un littéral", () => {
+    // Le badge, le panneau technique et tout résultat enregistré nomment le
+    // moteur. Écrire « V3 rapide » en dur ici, c'est garantir qu'un deuxième
+    // moteur affichera le nom du premier.
+    expect(VIEW).toContain("const engine = CURRENT_PLANNING_ENGINE_VERSION")
+    expect(VIEW).not.toContain('"v3-highs-fast"')
   })
 
-  it("n'appelle jamais la génération V2 depuis le chemin V3", () => {
-    // THE no-fallback guarantee. `handleGenerateV3` must contain no call to the
-    // V2 path anywhere between its opening and the next function.
-    const body = VIEW.slice(
-      VIEW.indexOf("async function handleGenerateV3"),
-      VIEW.indexOf("function handleReturnToV2")
-    )
-    expect(body.length).toBeGreaterThan(200)
-    expect(body).not.toContain("handleGenerateV2(")
-    expect(body).not.toContain("runPlanningFlow(")
+  it("ne connaît plus aucun moteur supprimé", () => {
+    // Un reste de V2 sur cet écran ne serait pas du code mort : ce serait un
+    // bouton qui promet un repli qui n'existe plus.
+    for (const removed of ["runPlanningFlow", "handleGenerateV2", "handleReturnToV2", "Revenir à V2", "v2Snapshot"]) {
+      expect(VIEW).not.toContain(removed)
+    }
   })
 
-  it("ne touche pas au planning affiché quand V3 échoue", () => {
-    // Everything between the rejection test and its `return` must do nothing but
-    // record the failure.
+  it("ne touche pas au planning affiché quand la génération échoue", () => {
+    // Tout ce qui sépare le test de rejet de son `return` ne doit faire
+    // qu'enregistrer l'échec.
     const rejection = VIEW.slice(
       VIEW.indexOf('if (outcome.status === "rejected")'),
       VIEW.indexOf('setV3({ status: "rejected", outcome })')
@@ -233,44 +233,27 @@ describe("écran Planning — garanties structurelles", () => {
     expect(rejection).not.toContain("planningStore")
   })
 
-  it("offre un retour à V2 sans régénérer", () => {
-    const body = VIEW.slice(
-      VIEW.indexOf("function handleReturnToV2"),
-      VIEW.indexOf("function handleGenerateV2")
-    )
-    expect(body).toContain('setEngine("v2")')
-    expect(body).not.toContain("runPlanningFlow(")
-    expect(body).not.toContain("handleGenerateV2(")
-    expect(VIEW).toContain("Revenir à V2")
+  it("n'offre aucun repli automatique après un échec", () => {
+    // Il n'y a plus rien vers quoi se replier. La seule proposition est de
+    // relancer, et c'est une décision du manager, pas de l'écran.
+    expect(VIEW).toContain("Relancer la génération")
+    expect(VIEW).toContain("Votre planning actuel est conservé")
   })
 
-  it("affiche le moteur du planning courant, et non celui qui est sélectionné", () => {
+  it("affiche le moteur qui a RÉPONDU, et non celui qui allait tourner", () => {
+    // La réponse nomme le build exact ; l'étiquette du registre ne nomme que
+    // l'intention. Les confondre ferait dire à l'écran qu'un planning vient
+    // d'un moteur qui n'a pas encore tourné.
     expect(VIEW).toContain("activeEngineLabel")
-    expect(VIEW).toContain("PLANNING_ENGINE_LABELS[activeEngine]")
+    expect(VIEW).toContain("describeV3Engine(v3.outcome.response)")
+    expect(VIEW).toContain("PLANNING_ENGINE_LABELS[engine]")
   })
 
-  it("transmet la régénération ET le moteur choisi", () => {
+  it("transmet la régénération et route par la table du registre", () => {
     expect(VIEW).toContain("function handleGenerate(regeneration?: PlanningRegenerationRequest)")
-    expect(VIEW).toContain("void handleGenerateV3(verdict.scope, engine, regeneration)")
-  })
-
-  it("route chaque moteur V3 vers son propre solveur, sans repli entre eux", () => {
-    // Le choix du moteur voyage avec la requête. Il ne peut pas être deviné
-    // côté serveur : c'est une décision par exécution, prise par la personne
-    // qui clique.
-    // Une table, pas un ternaire : avec trois moteurs, un ternaire route
-    // silencieusement le dernier arrivé vers la branche `else`, et le symptôme
-    // est un manager qui choisit un moteur et en reçoit un autre.
-    expect(VIEW).toContain("engine: endpointEngineFor(version)")
-  })
-
-  it("teste l'appartenance au pipeline V3 par un prédicat, jamais par une égalité littérale", () => {
-    // Un `=== "v3"` littéral oublié dans un seul des sept endroits ferait
-    // silencieusement retomber un écran V3 en V2.
-    expect(VIEW).toContain("usesV3Pipeline(activeEngine)")
-    expect(VIEW).toContain("usesV3Pipeline(engine)")
-    expect(VIEW).not.toContain('activeEngine === "v3"')
-    expect(VIEW).not.toContain('engine === "v3"')
+    expect(VIEW).toContain("void handleGenerateV3(verdict.scope, regeneration)")
+    // Jamais un littéral de moteur côté requête : le registre décide.
+    expect(VIEW).toContain("engine: endpointEngineFor()")
   })
 })
 

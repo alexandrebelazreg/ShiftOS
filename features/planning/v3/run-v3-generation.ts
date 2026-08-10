@@ -61,7 +61,7 @@ export async function runV3Generation(input: V3AttemptInput): Promise<V3AttemptO
       title: "Le problème V3 n'a pas pu être construit",
       message:
         "La configuration actuelle ne se traduit pas en problème V3. Le planning V2 est inchangé.",
-      details: built.errors.map((error) => `${error.code} — ${error.message}`),
+      details: built.errors.map((error) => error.message),
     }
   }
 
@@ -79,7 +79,7 @@ export async function runV3Generation(input: V3AttemptInput): Promise<V3AttemptO
       message: acceptance.message,
       details: response.diagnostics.entries
         .filter((entry) => entry.severity === "blocking")
-        .map((entry) => `${entry.code} — ${entry.message}`),
+        .map((entry) => entry.message),
     }
   }
 
@@ -90,6 +90,20 @@ export async function runV3Generation(input: V3AttemptInput): Promise<V3AttemptO
       coreInput: input.prepared.coreInput,
       configuration: input.prepared.configuration,
       settings: input.prepared.settings,
+      ...(input.prepared.weeklyTargets
+        ? { weeklyTargets: input.prepared.weeklyTargets }
+        : {}),
+      sectorScope: {
+        sectorIds: (problem.sectors ?? [{ id: problem.sectorId }]).map((sector) => sector.id),
+        employees: problem.employees.map((employee) => ({
+          employeeId: employee.id,
+          sectorIds: employee.allowedSectorIds ?? [problem.sectorId],
+        })),
+        demand: [...new Map(problem.demandSlots.map((slot) => [
+          slot.id,
+          { requirementId: slot.id, sectorId: slot.sectorId ?? problem.sectorId },
+        ])).values()],
+      },
     }),
     problem,
     request,
@@ -113,7 +127,7 @@ function rejectionTitle(response: SolvePlanningResponse): string {
     case "invalid-problem":
       return "Le moteur V3 a refusé la demande"
     case "infeasible":
-      return "Aucun planning légal n'existe pour cette semaine en V3"
+      return "Cette semaine ne peut pas être planifiée avec les règles actuelles"
     case "timeout-without-solution":
       return "Le moteur V3 n'a rien trouvé dans le temps imparti"
     case "cancelled":

@@ -35,7 +35,9 @@ clever placement could have avoided.
 
 from __future__ import annotations
 
+import time
 from dataclasses import dataclass
+from fractions import Fraction
 from itertools import combinations
 from typing import Any, Callable, Iterator
 
@@ -144,6 +146,10 @@ def analyse_week(
 
         openers: list[int] = []
         closers: list[int] = []
+        sector_days = [
+            (str(sector["id"]), next((entry for entry in sector["days"] if entry["date"] == day["date"]), None))
+            for sector in problem.get("sectors") or []
+        ]
         for employee_index, employee in enumerate(employees):
             minutes = allocation.minutes[employee_index][day_index]
             if minutes <= 0:
@@ -153,20 +159,43 @@ def analyse_week(
             # from inside the employee's own window. Four hours for someone who
             # may not start before 08:00 cannot hold a 06:00 opening, and no
             # placement will make them able to.
+            allowed = set(str(value) for value in employee.get("allowedSectorIds") or [problem["sectorId"]])
+            may_open_boundary = not sector_days or any(
+                sector_id in allowed and own_day and not own_day["closed"] and int(own_day["opensAtMinutes"]) == opens_at
+                for sector_id, own_day in sector_days
+            )
+            may_close_boundary = not sector_days or any(
+                sector_id in allowed and own_day and not own_day["closed"] and int(own_day["closesAtMinutes"]) == closes_at
+                for sector_id, own_day in sector_days
+            )
             if (
                 employee["canOpen"]
+                and may_open_boundary
                 and entry["earliestStartMinutes"] <= opens_at
                 and opens_at + minutes <= entry["latestEndMinutes"]
             ):
                 openers.append(employee_index)
             if (
                 employee["canClose"]
+                and may_close_boundary
                 and entry["latestEndMinutes"] >= closes_at
                 and closes_at - minutes >= entry["earliestStartMinutes"]
             ):
                 closers.append(employee_index)
 
         opening_demand = int(rules["minimumOpeningsPerDay"])
+        closing_demand = int(rules["exactClosingsPerDay"])
+        if sector_days:
+            opening_demand = sum(
+                int(own_day["minimumOpenings"])
+                for _sector_id, own_day in sector_days
+                if own_day and not own_day["closed"] and int(own_day["opensAtMinutes"]) == opens_at
+            )
+            closing_demand = sum(
+                int(own_day["exactClosings"])
+                for _sector_id, own_day in sector_days
+                if own_day and not own_day["closed"] and int(own_day["closesAtMinutes"]) == closes_at
+            )
         peak = 0
         day_demand = demand.days.get(day["date"])
         if day_demand is not None:
@@ -184,8 +213,8 @@ def analyse_week(
                 opens_at=opens_at,
                 closes_at=closes_at,
                 opening_demand=opening_demand,
-                minimum_openings=int(rules["minimumOpeningsPerDay"]),
-                closing_demand=int(rules["exactClosingsPerDay"]),
+                minimum_openings=opening_demand,
+                closing_demand=closing_demand,
                 opener_pool=tuple(openers),
                 closer_pool=tuple(closers),
                 peak_demand=peak,
@@ -312,7 +341,8 @@ def score_skeleton(
     demand: DemandModel,
     week: WeekFacts,
     roles: tuple[DayRoles, ...],
-) -> tuple[int, ...]:
+    loads: tuple[list[Fraction], list[Fraction]] | None = None,
+) -> tuple[Any, ...]:
     """A lexicographic tuple, never a weighted sum.
 
     Order: structural breaches, slots already doomed, minutes already doomed,
@@ -323,6 +353,8 @@ def score_skeleton(
     structural = 0
     doomed_slots = 0
     doomed_minutes = 0
+    sector_role_penalty = 0
+    employees = sorted(problem["employees"], key=lambda item: str(item["id"]))
 
     for entry in roles:
         day = week.by_index(entry.day_index)
@@ -353,6 +385,29 @@ def score_skeleton(
         for short, minutes in by_slot.values():
             doomed_slots += short
             doomed_minutes += minutes
+
+        # When several sectors share the same opening or closing boundary, the
+        # global skeleton only sees "two openers". Without this tie-break it
+        # happily picked both from Charcuterie, forcing one onto Fruits even
+        # though a Fruits-first opener was equally available. Count missing
+        # PRIMARY holders per sector here; placement may still use secondary
+        # sectors when coverage or a hard role requires it, but balanced role
+        # sets reach the reduced MILP first.
+        primary = {
+            employee_index: str((employees[employee_index].get("allowedSectorIds") or [problem["sectorId"]])[0])
+            for employee_index in range(len(employees))
+        }
+        for sector in problem.get("sectors") or []:
+            own_day = next((item for item in sector["days"] if item["date"] == day.date), None)
+            if not own_day or own_day["closed"]:
+                continue
+            sector_id = str(sector["id"])
+            if int(own_day["opensAtMinutes"]) == day.opens_at:
+                primary_openers = sum(1 for index in entry.openers if primary[index] == sector_id)
+                sector_role_penalty += max(0, int(own_day["minimumOpenings"]) - primary_openers)
+            if int(own_day["closesAtMinutes"]) == day.closes_at:
+                primary_closers = sum(1 for index in entry.closers if primary[index] == sector_id)
+                sector_role_penalty += max(0, int(own_day["exactClosings"]) - primary_closers)
 
     waste = 0
     for entry in roles:
@@ -389,7 +444,83 @@ def score_skeleton(
         max(closings.values(), default=0) - min(closings.values(), default=0)
     )
 
-    return (structural, doomed_slots, doomed_minutes, waste, fragility, spread)
+    # Closing fairness, LAST — after every coverage term above.
+    #
+    # It has to be here and not only in the enumeration order: equal-score
+    # skeletons are finally separated by `signature()`, a deterministic string
+    # that knows nothing about who is overloaded. A fairer skeleton would be
+    # generated and then discarded for an alphabetically luckier twin. As the
+    # last component of a lexicographic tuple it can only ever split a tie
+    # between skeletons that already cost the same coverage — which is exactly
+    # what a tie-break is allowed to do.
+    fairness: Fraction = Fraction(0)
+    if loads is not None:
+        general, saturday = loads
+        for entry in roles:
+            day = week.by_index(entry.day_index)
+            is_saturday = day is not None and _is_saturday(day.date)
+            for index in entry.closers:
+                # A Saturday closing weighs on both balances, and the Saturday
+                # one leads — the lexicographic order the problem declares.
+                fairness += (saturday[index] * 2 + general[index]) if is_saturday else general[index]
+
+    return (
+        structural,
+        doomed_slots,
+        doomed_minutes,
+        sector_role_penalty,
+        waste,
+        fragility,
+        spread,
+        fairness,
+    )
+
+
+
+def _is_saturday(date: str) -> bool:
+    """ISO date → Saturday, by Zeller-free civil arithmetic on the date string."""
+    from datetime import date as _date
+
+    year, month, day = (int(part) for part in date.split("-"))
+    return _date(year, month, day).weekday() == 5
+
+
+def closing_loads(problem: dict[str, Any]) -> tuple[list[Fraction], list[Fraction]] | None:
+    """Each employee's closing load, as EXACT fractions, or ``None`` when off.
+
+    A load is closings over opportunities. Evaluated as a decimal it would make
+    the tie-break depend on rounding, and an engine whose answer changes between
+    machines is not deterministic — so ``Fraction`` keeps the comparison in
+    integers, which is the same guarantee the TypeScript side gets from
+    comparing by cross product.
+
+    Nobody having had an opportunity is NOT a load of zero: it is no load at
+    all. Those employees sort first, which is the right reading — the week they
+    can finally close is the week to give them one.
+    """
+    rules = problem.get("rules") or {}
+    fairness = rules.get("closingFairness")
+    if not fairness:
+        return None
+    if not (fairness.get("balanceClosings") or fairness.get("balanceSaturdayClosings")):
+        return None
+
+    history = {str(entry["employeeId"]): entry for entry in (problem.get("closingHistory") or [])}
+    employees = sorted(problem["employees"], key=lambda item: str(item["id"]))
+
+    general: list[Fraction] = []
+    saturday: list[Fraction] = []
+    for employee in employees:
+        entry = history.get(str(employee["id"]))
+        for source, target in (
+            (("closings", "opportunities"), general),
+            (("saturdayClosings", "saturdayOpportunities"), saturday),
+        ):
+            closings = int(entry[source[0]]) if entry else 0
+            opportunities = int(entry[source[1]]) if entry else 0
+            # -1 sorts ahead of every real load, which starts at 0.
+            target.append(Fraction(closings, opportunities) if opportunities > 0 else Fraction(-1))
+    return general, saturday
 
 
 Family = tuple[str, Callable[[WeekFacts], list[DayFacts]], Callable[[WeekFacts, int], float], Callable[[WeekFacts, int], float]]
@@ -434,6 +565,8 @@ def _walk(
     opener_key: Callable[[WeekFacts, int], float],
     closer_key: Callable[[WeekFacts, int], float],
     limit: int,
+    loads: tuple[list[Fraction], list[Fraction]] | None = None,
+    deadline: float | None = None,
 ) -> list[tuple[DayRoles, ...]]:
     openings_used = [0] * len(employees)
     closings_used = [0] * len(employees)
@@ -456,7 +589,35 @@ def _walk(
     def may_close(index: int, day_index: int) -> bool:
         return all(not rest_conflict(week, day_index, open_day) for open_day in opens_on[index])
 
+    def interleave_primary_sectors(indices: list[int]) -> list[int]:
+        """Keep the preceding ranking, but expose one candidate per sector first.
+
+        `_walk` stops after a bounded number of combinations. With employees
+        sorted by id, all Charcuterie-first people could occupy the first two
+        positions, so every retained two-opener combination came from the same
+        sector and the balanced combination was never even scored. Round-robin
+        grouping changes only multi-sector enumeration order; mono-sector is
+        returned byte-for-byte.
+        """
+        if not any(len(employee.get("allowedSectorIds") or []) > 1 for employee in employees):
+            return indices
+        groups: dict[str, list[int]] = {}
+        for index in indices:
+            allowed = employees[index].get("allowedSectorIds") or []
+            primary = str(allowed[0]) if allowed else ""
+            groups.setdefault(primary, []).append(index)
+        result: list[int] = []
+        depth = 0
+        while len(result) < len(indices):
+            for group in groups.values():
+                if depth < len(group):
+                    result.append(group[depth])
+            depth += 1
+        return result
+
     def assign(position: int) -> None:
+        if deadline is not None and time.perf_counter() >= deadline:
+            return
         if len(found) >= limit:
             return
         if position == len(order):
@@ -464,8 +625,34 @@ def _walk(
             return
 
         day = order[position]
-        closers_sorted = sorted(day.closer_pool, key=lambda i: (closer_key(week, i), closings_used[i], i))
-        openers_sorted = sorted(day.opener_pool, key=lambda i: (opener_key(week, i), openings_used[i], i))
+        # Closing fairness enters HERE and nowhere else: it reorders who is
+        # asked first, never how many are asked. Coverage, deficit and every
+        # hard rule are decided by the sizes below, which this cannot touch —
+        # which is exactly what "tie-break between equally covered solutions"
+        # has to mean.
+        #
+        # Saturday load leads on a Saturday, general load elsewhere, so a
+        # Saturday closing is arbitrated by the Saturday balance first and the
+        # general one only as a tie-break — the lexicographic order the problem
+        # declares.
+        if loads is None:
+            closers_sorted = sorted(
+                day.closer_pool, key=lambda i: (closer_key(week, i), closings_used[i], i)
+            )
+        else:
+            general, saturday = loads
+            is_saturday = _is_saturday(day.date)
+
+            def fairness_key(index: int) -> tuple[Fraction, Fraction, float, int, int]:
+                lead = saturday[index] if is_saturday else general[index]
+                second = general[index] if is_saturday else saturday[index]
+                return (lead, second, closer_key(week, index), closings_used[index], index)
+
+            closers_sorted = sorted(day.closer_pool, key=fairness_key)
+        closers_sorted = interleave_primary_sectors(closers_sorted)
+        openers_sorted = interleave_primary_sectors(
+            sorted(day.opener_pool, key=lambda i: (opener_key(week, i), openings_used[i], i))
+        )
         opener_target = min(day.opening_demand, len(openers_sorted))
 
         for closers in combinations(closers_sorted, min(day.closing_demand, len(closers_sorted))):
@@ -537,6 +724,7 @@ def generate_skeletons_from_capacity(
     *,
     per_family: int = 6,
     keep: int = 8,
+    deadline: float | None = None,
 ) -> list[Skeleton]:
     """Skeletons ranked BEFORE any allocation exists.
 
@@ -555,14 +743,34 @@ def generate_skeletons_from_capacity(
     Both are correct for their own question and neither is a guess about the
     allocation, which does not exist yet.
     """
+    if problem.get("sectors"):
+        # A market zone has no meaningful global opener or closer: those roles
+        # belong to each counter and are enforced exactly by the placement.
+        # Inventing an additional day-wide skeleton can force the sole Poisson
+        # employee to close another sector at 20:00, for example, and thereby
+        # destroy a perfectly legal 07:00–18:00 split before placement begins.
+        return [Skeleton(roles=(), family="sector-placement", score=(0, 0, 0))]
+
     week = analyse_week(problem, model, _probe(model, lambda cell: cell.minimum), demand)
     presence = _probe(model, lambda cell: cell.maximum)
     employees = sorted(problem["employees"], key=lambda item: str(item["id"]))
+    loads = closing_loads(problem)
 
     by_signature: dict[str, Skeleton] = {}
     for name, order_of, opener_key, closer_key in _families():
-        for roles in _walk(week, employees, order_of(week), opener_key, closer_key, per_family):
-            score = score_skeleton(problem, model, presence, demand, week, roles)
+        if deadline is not None and time.perf_counter() >= deadline:
+            break
+        for roles in _walk(
+            week,
+            employees,
+            order_of(week),
+            opener_key,
+            closer_key,
+            per_family,
+            loads,
+            deadline,
+        ):
+            score = score_skeleton(problem, model, presence, demand, week, roles, loads)
             skeleton = Skeleton(roles=roles, family=name, score=score)
             signature = skeleton.signature()
             if signature not in by_signature:
@@ -580,15 +788,46 @@ def generate_skeletons(
     *,
     per_family: int = 6,
     keep: int = 8,
+    deadline: float | None = None,
 ) -> list[Skeleton]:
     """Build, deduplicate and rank. Never a single greedy result."""
+    if problem.get("sectors"):
+        # The same refusal as `generate_skeletons_from_capacity`, and for the
+        # same reason — it was missing here, so the complement path quietly
+        # reintroduced exactly what the primary path forbids.
+        #
+        # A day-wide role in a market zone is not a role: it forces a start at
+        # `min(opening)` and an end at `max(closing)` across counters that do not
+        # share those hours. On the canonical zone it produced six skeletons
+        # designating five simultaneous openers, which is harmless only because
+        # every counter there opens at the same minute; give the bakery a 07:00
+        # opening and the fish counter an 18:00 closing and those forced
+        # boundaries destroy legal shapes before the placement ever sees them.
+        #
+        # The complement path keeps its value regardless: its diversity comes
+        # from the MINUTES, and each new allocation is now placed under the same
+        # sector-placement skeleton, where the roles are imposed exactly.
+        return [Skeleton(roles=(), family="sector-placement", score=(0, 0, 0))]
+
     week = analyse_week(problem, model, allocation, demand)
     employees = sorted(problem["employees"], key=lambda item: str(item["id"]))
+    loads = closing_loads(problem)
 
     by_signature: dict[str, Skeleton] = {}
     for name, order_of, opener_key, closer_key in _families():
-        for roles in _walk(week, employees, order_of(week), opener_key, closer_key, per_family):
-            score = score_skeleton(problem, model, allocation, demand, week, roles)
+        if deadline is not None and time.perf_counter() >= deadline:
+            break
+        for roles in _walk(
+            week,
+            employees,
+            order_of(week),
+            opener_key,
+            closer_key,
+            per_family,
+            loads,
+            deadline,
+        ):
+            score = score_skeleton(problem, model, allocation, demand, week, roles, loads)
             skeleton = Skeleton(roles=roles, family=name, score=score)
             signature = skeleton.signature()
             # Two families reaching the same assignment describe the same

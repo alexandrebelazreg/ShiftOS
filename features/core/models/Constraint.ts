@@ -13,6 +13,19 @@ export const CONSTRAINT_TYPES = [
   "FORBIDDEN_DAY",
   "MAX_OPENINGS",
   "MAX_CLOSINGS",
+  "EARLIEST_START",
+  "LATEST_END",
+  // Les mêmes bornes, mais IMPOSÉES. « Ne commence pas avant 07:00 » laisse
+  // le moteur choisir 09:00 ; « commence à 07:00 » ne le laisse pas. Deux
+  // types plutôt qu'un drapeau sur les précédents : une borne et une valeur
+  // exacte ne se relaxent pas de la même façon, et un lecteur qui voit
+  // EARLIEST_START doit pouvoir se fier à ce qu'il lit.
+  "EXACT_START",
+  "EXACT_END",
+  // Ouvrir ou fermer un jour donné, sans dire quel rayon : le salarié ouvre
+  // celui qu'il sert ce jour-là. `day` porte le jour de la semaine.
+  "MUST_OPEN",
+  "MUST_CLOSE",
 ] as const
 export type KnownConstraintType = (typeof CONSTRAINT_TYPES)[number]
 export type ConstraintType = KnownConstraintType | (string & {})
@@ -27,6 +40,9 @@ export type ConstraintType = KnownConstraintType | (string & {})
  * type:
  * - day-scoped constraints (FIXED_DAY_OFF, FORBIDDEN_DAY) use `day`.
  * - count constraints (MAX_OPENINGS, MAX_CLOSINGS) use `value`.
+ * - time-of-day bounds (EARLIEST_START, LATEST_END) use `value` as an integer
+ *   number of MINUTES SINCE MIDNIGHT, never an "HH:mm" string: the whole core
+ *   reasons in minutes and a second representation would invite a rounding bug.
  * - future constraint types can carry `params` without a schema change.
  *
  * Example: an employee off on Sunday is one `FIXED_DAY_OFF` row with

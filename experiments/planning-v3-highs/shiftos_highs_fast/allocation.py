@@ -11,20 +11,22 @@ The problem solved here
 Find integer ``minutes[e][d]`` with
 
     row sums    Σ_d m[e][d] = contract(e)      exact
-    column sums Σ_e m[e][d] = budget(d)        exact
+    column sums Σ_e m[e][d] = budget(d)        for legacy exact budgets
+                |Σ_e m[e][d] - target(d)|     minimised for flexible targets
     each cell   minDaily(e) ≤ m[e][d] ≤ ceiling(e,d)   on available days
                 m[e][d] = 0                             elsewhere
     every cell a multiple of the time step
 
-There are no binaries for "works or rests". ShiftOS has no optional days: a
-fixed rest, an unavailability or an absence forbids work outright, and every
-other open day is worked. So availability decides the support of the matrix and
-the MILP only distributes minutes inside it.
+Une cellule obligatoire porte directement sa durée minimale. Une cellule
+disponible mais facultative reçoit un petit binaire « travaille / repos » : sa
+durée vaut alors zéro, ou au moins le minimum quotidien. Cela respecte enfin la
+distinction du contrat entre ``available`` et ``mandatory`` sans agrandir le
+MILP de placement.
 
 What the objective is for
 -------------------------
-Both sums are exact, so the only freedom is HOW a day's budget is split between
-the people on it — and that choice decides what the placement can do afterwards.
+Contracts are exact. Daily percentages are targets, so the model may also move
+minutes between days when availability or coverage makes that useful.
 Two things are worth steering:
 
 - **avoid forcing a split.** A duration above the continuous cap can only be
@@ -41,6 +43,7 @@ one.
 
 from __future__ import annotations
 
+import time
 from dataclasses import dataclass
 from typing import Any, Iterator
 
@@ -59,6 +62,7 @@ class Cell:
     maximum: int
     #: Longest stretch this employee can work in one piece on this day.
     continuous_maximum: int
+    mandatory: bool
 
 
 @dataclass(frozen=True, slots=True)
@@ -74,6 +78,27 @@ class Allocation:
 
 
 @dataclass(frozen=True, slots=True)
+class AllocationSolveResult:
+    """One allocation MILP outcome, without confusing timeout and proof.
+
+    SciPy returns ``x is None`` both when HiGHS proves the model infeasible and
+    when it stops before finding an incumbent.  The fast pipeline used to throw
+    that distinction away and could therefore report a timed-out feasibility
+    probe as a proven impossibility.  Keeping the native status beside the
+    optional allocation makes the only proof-producing caller check the fact it
+    actually needs.
+    """
+
+    allocation: Allocation | None
+    solver_status: int
+
+    @property
+    def proven_infeasible(self) -> bool:
+        # scipy.optimize.milp: 2 means the model was proven infeasible.
+        return self.solver_status == 2
+
+
+@dataclass(frozen=True, slots=True)
 class AllocationModel:
     employees: tuple[str, ...]
     dates: tuple[str, ...]
@@ -84,6 +109,212 @@ class AllocationModel:
         return self.cells[employee_index][day_index]
 
 
+def allocation_infeasibility_details(
+    problem: dict[str, Any], model: AllocationModel
+) -> dict[str, Any]:
+    """Explain the arithmetic around an allocation proof in manager terms.
+
+    HiGHS can prove that the transportation polytope is empty, but its native
+    status cannot say which row or column caused it. The simple bounds below
+    catch the common, actionable cases without pretending they are a second
+    proof: a contract outside the sum of its daily bounds, or a daily budget
+    outside the sum of the employees' bounds.
+    """
+    employees = sorted(problem["employees"], key=lambda item: str(item["id"]))
+    days = sorted(
+        [day for day in problem["days"] if not day["closed"]],
+        key=lambda day: day["date"],
+    )
+    employee_conflicts: list[dict[str, Any]] = []
+    for employee_index, employee in enumerate(employees):
+        cells = [cell for cell in model.cells[employee_index] if cell is not None]
+        minimum = sum(cell.minimum for cell in cells if cell.mandatory)
+        maximum = sum(cell.maximum for cell in cells)
+        contract = int(employee["contractMinutes"])
+        if minimum <= contract <= maximum:
+            continue
+        first_name = str(employee.get("firstName") or "").strip()
+        last_name = str(employee.get("lastName") or "").strip()
+        employee_conflicts.append(
+            {
+                "employeeId": str(employee["id"]),
+                "employeeName": f"{first_name} {last_name}".strip()
+                or str(employee["id"]),
+                "contractMinutes": contract,
+                "minimumPossibleMinutes": minimum,
+                "maximumPossibleMinutes": maximum,
+                "availableDayCount": len(cells),
+                "reason": (
+                    "contract-below-mandatory-minimum"
+                    if contract < minimum
+                    else "contract-exceeds-available-capacity"
+                ),
+                "differenceMinutes": (
+                    minimum - contract if contract < minimum else contract - maximum
+                ),
+            }
+        )
+
+    day_conflicts: list[dict[str, Any]] = []
+    for day_index, day in enumerate(days):
+        if day.get("budgetMode", "exact") == "target":
+            continue
+        cells = [
+            model.cell(employee_index, day_index)
+            for employee_index in range(len(employees))
+        ]
+        usable = [cell for cell in cells if cell is not None]
+        minimum = sum(cell.minimum for cell in usable if cell.mandatory)
+        maximum = sum(cell.maximum for cell in usable)
+        budget = int(day["budgetMinutes"])
+        if minimum <= budget <= maximum:
+            continue
+        day_conflicts.append(
+            {
+                "date": day["date"],
+                "budgetMinutes": budget,
+                "minimumMandatoryMinutes": minimum,
+                "maximumCapacityMinutes": maximum,
+                "availableEmployeeCount": len(usable),
+                "reason": (
+                    "budget-below-mandatory-minimum"
+                    if budget < minimum
+                    else "budget-exceeds-daily-capacity"
+                ),
+                "differenceMinutes": (
+                    minimum - budget if budget < minimum else budget - maximum
+                ),
+            }
+        )
+
+    return {
+        "allocationEmployeeConflicts": employee_conflicts,
+        "allocationDayConflicts": day_conflicts,
+        "allocationTotals": {
+            "employeeCount": len(employees),
+            "openDayCount": len(days),
+            "contractMinutes": sum(int(employee["contractMinutes"]) for employee in employees),
+            "budgetMinutes": sum(int(day["budgetMinutes"]) for day in days),
+        },
+    }
+
+
+def _forced_sector_role_minimums(
+    problem: dict[str, Any],
+    employees: list[dict[str, Any]],
+    entries: dict[tuple[str, str], dict[str, Any]],
+    step: int,
+) -> dict[tuple[str, str], int]:
+    """Minutes forced when one employee alone must open and close a sector.
+
+    The role preflight proves whether such a day is possible, but the allocation
+    MILP used to know nothing about the span attached to those two roles. It
+    could therefore allocate four ordinary hours to the only fish-counter
+    opener/closer, after which every placement shape was necessarily rejected.
+
+    This is a bound, not a heuristic: if the same sole eligible employee must
+    hold both boundaries, their worked minutes are the opening/closing span
+    minus at most the largest legal break. Two legal segments must also each
+    reach the global minimum shift duration.
+    """
+    sectors = problem.get("sectors") or []
+    if not sectors:
+        return {}
+
+    rules = problem.get("rules") or {}
+    minimum_segment = int(rules.get("minimumShiftMinutes") or 0)
+    continuous_cap = int(
+        rules.get("maximumContinuousMinutes")
+        or rules.get("maximumShiftMinutes")
+        or 0
+    )
+    forced: dict[tuple[str, str], int] = {}
+
+    for sector in sectors:
+        sector_id = str(sector.get("id"))
+        split_rules = (
+            sector.get("splitRules")
+            if isinstance(sector.get("splitRules"), dict)
+            else rules
+        )
+        assigned = [
+            employee
+            for employee in employees
+            if sector_id
+            in [str(value) for value in employee.get("allowedSectorIds") or []]
+        ]
+
+        for sector_day in sector.get("days") or []:
+            if bool(sector_day.get("closed")):
+                continue
+            if int(sector_day.get("minimumOpenings") or 0) < 1:
+                continue
+            if int(sector_day.get("exactClosings") or 0) < 1:
+                continue
+
+            date = str(sector_day.get("date"))
+            opens_at = sector_day.get("opensAtMinutes")
+            closes_at = sector_day.get("closesAtMinutes")
+            if not isinstance(opens_at, int) or not isinstance(closes_at, int):
+                continue
+
+            usable: list[tuple[dict[str, Any], dict[str, Any]]] = []
+            for employee in assigned:
+                employee_id = str(employee.get("id"))
+                entry = entries.get((employee_id, date))
+                if entry is None or not bool(entry.get("available")):
+                    continue
+                usable.append((employee, entry))
+
+            opening_candidates = [
+                employee
+                for employee, entry in usable
+                if bool(employee.get("canOpen"))
+                and int(entry.get("earliestStartMinutes") or 0) <= opens_at
+                and int(entry.get("latestEndMinutes") or 0) > opens_at
+            ]
+            closing_candidates = [
+                employee
+                for employee, entry in usable
+                if bool(employee.get("canClose"))
+                and int(entry.get("earliestStartMinutes") or 0) < closes_at
+                and int(entry.get("latestEndMinutes") or 0) >= closes_at
+            ]
+            if len(opening_candidates) != 1 or len(closing_candidates) != 1:
+                continue
+            employee = opening_candidates[0]
+            if str(employee.get("id")) != str(closing_candidates[0].get("id")):
+                continue
+
+            span = closes_at - opens_at
+            required = span
+            split_possible = (
+                bool(split_rules.get("splitShiftAllowed"))
+                and bool(employee.get("canSplitShift"))
+                and int(split_rules.get("maximumSplitsPerDay") or 1) >= 1
+            )
+            if split_possible:
+                maximum_gap_value = split_rules.get("maximumSplitMinutes")
+                maximum_gap = (
+                    int(maximum_gap_value)
+                    if maximum_gap_value is not None
+                    else max(0, span - 2 * minimum_segment)
+                )
+                split_minimum = max(2 * minimum_segment, span - maximum_gap)
+                required = min(span, split_minimum)
+            elif span > continuous_cap:
+                # The structural preflight reports this impossibility. Keeping
+                # the full span here also prevents a misleading short-duration
+                # allocation if this helper is called on its own.
+                required = span
+
+            required = -(-required // step) * step
+            key = (str(employee.get("id")), date)
+            forced[key] = max(forced.get(key, 0), required)
+
+    return forced
+
+
 def build_allocation_model(problem: dict[str, Any]) -> AllocationModel:
     step = int(problem["timeStepMinutes"])
     rules = problem["rules"]
@@ -92,6 +323,9 @@ def build_allocation_model(problem: dict[str, Any]) -> AllocationModel:
     entries = {
         (str(item["employeeId"]), item["date"]): item for item in problem["employeeDays"]
     }
+    forced_role_minimums = _forced_sector_role_minimums(
+        problem, employees, entries, step
+    )
 
     cells: list[tuple[Cell | None, ...]] = []
     for employee_index, employee in enumerate(employees):
@@ -103,7 +337,9 @@ def build_allocation_model(problem: dict[str, Any]) -> AllocationModel:
                 continue
             ceiling = _daily_ceiling(employee, entry, rules)
             minimum = max(
-                int(employee["minimumDailyMinutes"]), int(rules["minimumShiftMinutes"])
+                int(employee["minimumDailyMinutes"]),
+                int(rules["minimumShiftMinutes"]),
+                forced_role_minimums.get((str(employee["id"]), day["date"]), 0),
             )
             minimum = -(-minimum // step) * step
             continuous = int(rules.get("maximumContinuousMinutes") or ceiling)
@@ -114,6 +350,11 @@ def build_allocation_model(problem: dict[str, Any]) -> AllocationModel:
                     minimum=minimum,
                     maximum=(ceiling // step) * step,
                     continuous_maximum=min(ceiling, continuous),
+                    mandatory=(
+                        bool(entry.get("mandatory"))
+                        or (str(employee["id"]), day["date"])
+                        in forced_role_minimums
+                    ),
                 )
             )
         cells.append(tuple(row))
@@ -134,11 +375,11 @@ def solve_allocation(
     weights: dict[tuple[int, int], float] | None = None,
     even_weight: float = 1.0,
     origin: str = "milp",
-) -> Allocation | None:
-    """The MILP. Returns ``None`` when no matrix satisfies the exact sums.
+) -> AllocationSolveResult:
+    """Run the allocation MILP and preserve its proof-bearing solver status.
 
     `weights` is what makes several FAMILIES out of one model. The feasible set
-    never changes — contracts and budgets are exact either way — so every family
+    never changes — contracts stay exact and targets stay soft either way — so every family
     returns a legal allocation; they differ only in which legal one they prefer.
 
     A weight is a per-cell reward on minutes: give an employee more of a day's
@@ -163,7 +404,10 @@ def solve_allocation(
                 columns[(employee_index, day_index)] = len(columns)
 
     if not columns:
-        return None
+        # No variables is an empty model, not a solver proof.  Structural
+        # validation normally catches it before this point; preserving the
+        # distinction here keeps this function honest when called directly.
+        return AllocationSolveResult(allocation=None, solver_status=4)
 
     # A second column per splittable cell: how many steps above the continuous
     # cap it goes. Linked below, and the only thing the objective really cares
@@ -190,7 +434,21 @@ def solve_allocation(
     for key in columns:
         deviation[key] = len(columns) + len(overflow) + len(deviation)
 
-    total = len(columns) + len(overflow) + len(deviation)
+    works: dict[tuple[int, int], int] = {}
+    for key in columns:
+        cell = model.cell(*key)
+        assert cell is not None
+        if not cell.mandatory:
+            works[key] = len(columns) + len(overflow) + len(deviation) + len(works)
+
+    day_deviation: dict[int, int] = {}
+    for day_index, day in enumerate(days):
+        if day.get("budgetMode", "exact") == "target":
+            day_deviation[day_index] = (
+                len(columns) + len(overflow) + len(deviation) + len(works) + len(day_deviation)
+            )
+
+    total = len(columns) + len(overflow) + len(deviation) + len(works) + len(day_deviation)
 
     rows: list[int] = []
     cols: list[int] = []
@@ -224,7 +482,12 @@ def solve_allocation(
             for (_employee, index), column in columns.items()
             if index == day_index
         }
-        add(coefficients, budget / step, budget / step)
+        if day_index not in day_deviation:
+            add(coefficients, budget / step, budget / step)
+        else:
+            dev = day_deviation[day_index]
+            add({**coefficients, dev: -1.0}, -np.inf, budget / step)
+            add({column: -value for column, value in coefficients.items()} | {dev: -1.0}, -np.inf, -budget / step)
 
     # overflow ≥ minutes − continuousCap, in steps. The objective pushes it down,
     # so it settles at exactly the excess.
@@ -233,6 +496,15 @@ def solve_allocation(
         assert cell is not None
         add({columns[key]: 1.0, column: -1.0}, -np.inf, cell.continuous_maximum / step)
 
+    # Optional day: either zero, or a complete legal shift. Mandatory days keep
+    # the historical positive lower bound and need no binary.
+    for key, work_column in works.items():
+        cell = model.cell(*key)
+        assert cell is not None
+        minute_column = columns[key]
+        add({minute_column: 1.0, work_column: -cell.maximum / step}, -np.inf, 0.0)
+        add({minute_column: 1.0, work_column: -cell.minimum / step}, 0.0, np.inf)
+
     lower_bounds = np.zeros(total)
     upper_bounds = np.zeros(total)
     objective = np.zeros(total)
@@ -240,8 +512,22 @@ def solve_allocation(
     for key, column in columns.items():
         cell = model.cell(*key)
         assert cell is not None
-        lower_bounds[column] = cell.minimum / step
+        lower_bounds[column] = cell.minimum / step if cell.mandatory else 0.0
         upper_bounds[column] = cell.maximum / step
+
+    for column in works.values():
+        upper_bounds[column] = 1.0
+
+    for day_index, column in day_deviation.items():
+        maximum = sum(
+            model.cell(employee_index, day_index).maximum
+            for employee_index in range(len(employees))
+            if model.cell(employee_index, day_index) is not None
+        )
+        upper_bounds[column] = (maximum + int(days[day_index]["budgetMinutes"])) / step + 1.0
+        # A target matters, but coverage-oriented families may move minutes to
+        # another day when that produces a genuinely better week.
+        objective[column] = 2.0
 
     # |m − target|, as two inequalities per cell. Minimised, so the deviation
     # column settles at exactly the absolute gap.
@@ -287,6 +573,8 @@ def solve_allocation(
     integrality = np.ones(total, dtype=np.int8)
     for column in deviation.values():
         integrality[column] = 0
+    for column in day_deviation.values():
+        integrality[column] = 0
 
     result = milp(
         objective,
@@ -301,13 +589,22 @@ def solve_allocation(
     )
 
     if result.x is None:
-        return None
+        return AllocationSolveResult(
+            allocation=None,
+            solver_status=int(result.status),
+        )
 
     minutes = [[0] * len(days) for _ in employees]
     for (employee_index, day_index), column in columns.items():
         minutes[employee_index][day_index] = int(round(result.x[column])) * step
 
-    return Allocation(minutes=tuple(tuple(row) for row in minutes), origin=origin)
+    return AllocationSolveResult(
+        allocation=Allocation(
+            minutes=tuple(tuple(row) for row in minutes),
+            origin=origin,
+        ),
+        solver_status=int(result.status),
+    )
 
 
 def solve_polarised(
@@ -467,6 +764,7 @@ def repair_large_neighbourhood(
     *,
     time_limit: float,
     variants: int = 4,
+    deadline: float | None = None,
 ) -> list[Allocation]:
     """Free a few whole days at once and re-allocate them.
 
@@ -580,15 +878,23 @@ def repair_large_neighbourhood(
     label = "+".join(days[d]["date"][-5:] for d in chosen)
 
     for name, coefficients in shapes[:variants]:
+        if deadline is not None and time.perf_counter() >= deadline:
+            break
         objective = np.zeros(total)
         for column, value in coefficients.items():
             objective[column] = value
+        solver_limit = float(time_limit)
+        if deadline is not None:
+            solver_limit = min(
+                solver_limit,
+                max(0.05, deadline - time.perf_counter()),
+            )
         result = milp(
             objective,
             integrality=integrality,
             bounds=Bounds(lower_bounds, upper_bounds),
             constraints=constraint,
-            options={"time_limit": float(time_limit), "mip_rel_gap": 0.0},
+            options={"time_limit": solver_limit, "mip_rel_gap": 0.0},
         )
         if result.x is None:
             continue

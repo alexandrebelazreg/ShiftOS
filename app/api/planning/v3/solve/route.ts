@@ -1,6 +1,4 @@
-import { createCpSatAdapter } from "@/features/core/planning-contract/adapters/cp-sat"
 import { createHighsFastAdapter } from "@/features/core/planning-contract/adapters/highs-fast"
-import { createDecomposedV3Adapter } from "@/features/core/planning-contract/adapters/solve-with-decomposed-v3"
 import { buildSolvePlanningRequest } from "@/features/core/planning-contract/build-request"
 import { checkSolvePlanningResponse } from "@/features/core/planning-contract/invariants"
 import type { PlanningSolveAdapter } from "@/features/core/planning-contract/types/solve-response"
@@ -8,8 +6,6 @@ import type { SolvePlanningResponse } from "@/features/core/planning-contract/ty
 
 import {
   parsePlanningV3Request,
-  PLANNING_V3_DEFAULT_ENGINE,
-  PLANNING_V3_DEFAULT_PROFILE,
   PLANNING_V3_MAX_PAYLOAD_BYTES,
 } from "@/features/planning/v3/solve-endpoint-contract"
 
@@ -99,35 +95,25 @@ export async function POST(request: Request): Promise<Response> {
   }
   request.signal.addEventListener("abort", onAbort)
 
-  // The profile carries the budget and the search options; an explicit
-  // `timeoutSeconds` still overrides it, and the adapter clamps both to the
-  // ceiling. Nothing here chooses objectives or rules — a profile cannot.
-  const profile = parsed.body.profile ?? PLANNING_V3_DEFAULT_PROFILE
-  const engine = parsed.body.engine ?? PLANNING_V3_DEFAULT_ENGINE
-
-  // The ONE place an engine is chosen. All three adapters satisfy the same
-  // contract, so nothing below this line — including the invariant check and
-  // the serialisation — can tell which one answered. There is no fallback
-  // between them: a decomposed run that fails is reported as a decomposed run
-  // that failed, never quietly re-run on CP-SAT. A caller who asked for one
-  // engine and silently received another has no way to interpret the answer.
+  // `profile` and `engine` are still ACCEPTED and validated by the contract —
+  // a caller naming the engine it wants must be told when that name is wrong —
+  // but neither is read here any more: there is one engine, and it takes its
+  // budget from `timeoutSeconds`.
+  // The ONE place an engine is chosen. There is exactly one today, and it is
+  // still resolved through `PlanningSolveAdapter` rather than called directly:
+  // nothing below this line — including the invariant check and the
+  // serialisation — may be able to tell which engine answered, because that is
+  // the property that let three engines share this route and the property a
+  // fourth would arrive through.
+  //
+  // There is no fallback. A run that fails is reported as that engine failing,
+  // never quietly re-run on another: a caller who asked for one engine and
+  // silently received another has no way to interpret the answer.
   const timeoutSeconds = parsed.body.timeoutSeconds
-  const adapter: PlanningSolveAdapter =
-    engine === "decomposed"
-      ? createDecomposedV3Adapter({
-          ...(timeoutSeconds !== undefined ? { timeoutMs: timeoutSeconds * 1_000 } : {}),
-          signal: cancellation,
-        })
-      : engine === "highs-fast"
-        ? createHighsFastAdapter({
-            ...(timeoutSeconds !== undefined ? { timeoutSeconds } : {}),
-            signal: cancellation,
-          })
-        : createCpSatAdapter({
-            profile,
-            ...(timeoutSeconds !== undefined ? { timeoutSeconds } : {}),
-            signal: cancellation,
-          })
+  const adapter: PlanningSolveAdapter = createHighsFastAdapter({
+    ...(timeoutSeconds !== undefined ? { timeoutSeconds } : {}),
+    signal: cancellation,
+  })
 
   let response: SolvePlanningResponse
   try {

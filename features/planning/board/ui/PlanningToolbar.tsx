@@ -4,7 +4,7 @@ import { cn } from "@/lib/utils"
 
 import type { IsoDate } from "@/features/core/models"
 import type { BoardToolbarVM } from "@/features/planning/board/model/board-view-model"
-import type { WeekLabel } from "@/features/planning/board/model/header-controls"
+import type { SectorChoice, WeekLabel } from "@/features/planning/board/model/header-controls"
 import { PlanningSectorMenu } from "@/features/planning/board/ui/PlanningSectorMenu"
 
 const VIEW_LABELS = {
@@ -20,6 +20,8 @@ interface PlanningToolbarProps {
   readonly onChangeView: (view: "sector" | "day" | "employee") => void
   readonly onToggleSector: (sectorId: string) => void
   readonly onToggleAllSectors: (selectAll: boolean) => void
+  readonly onToggleMarketZone?: (selectAll: boolean) => void
+  readonly sectorChoices?: readonly SectorChoice[]
   readonly onSelectDate: (date: IsoDate) => void
   readonly onPreviousWeek: () => void
   readonly onNextWeek: () => void
@@ -52,6 +54,8 @@ export function PlanningToolbar({
   onChangeView,
   onToggleSector,
   onToggleAllSectors,
+  onToggleMarketZone,
+  sectorChoices,
   onSelectDate,
   onPreviousWeek,
   onNextWeek,
@@ -95,9 +99,10 @@ export function PlanningToolbar({
 
         {hasPlanning && toolbar.sectors.length > 0 ? (
           <PlanningSectorMenu
-            sectors={toolbar.sectors}
+            sectors={sectorChoices ?? toolbar.sectors}
             onToggleSector={onToggleSector}
             onToggleAll={onToggleAllSectors}
+            onToggleMarketZone={onToggleMarketZone}
           />
         ) : null}
 

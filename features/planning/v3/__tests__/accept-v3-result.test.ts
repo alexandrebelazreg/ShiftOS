@@ -4,8 +4,8 @@ import { tinyProblem } from "@/features/core/planning-v3/__tests__/tiny-problems
 import {
   CURRENT_PLANNING_ENGINE_VERSION,
   PLANNING_ENGINE_LABELS,
-  usesV3Pipeline,
   PLANNING_ENGINE_VERSIONS,
+  usesV3Pipeline,
   isPlanningEngineVersion,
 } from "@/features/core/planning-v3/types/engine-version"
 import { PLANNING_SOLUTION_V3_VERSION } from "@/features/core/planning-v3/types/solution"
@@ -60,40 +60,34 @@ function response(overrides: Partial<SolvePlanningResponse> = {}): SolvePlanning
 }
 
 describe("sélecteur de moteur", () => {
-  it("offre V2 et les deux moteurs V3 : le mode shadow n'existe toujours pas", () => {
-    expect([...PLANNING_ENGINE_VERSIONS]).toEqual([
-      "v2",
-      "v3",
-      "v3-decomposed",
-      "v3-highs-fast",
-    ])
+  it("n'offre qu'un moteur, et toujours aucun mode shadow", () => {
+    expect([...PLANNING_ENGINE_VERSIONS]).toEqual(["v3-highs-fast"])
     // Le shadow reste supprimé : un second planning que personne ne regarde
-    // n'est pas devenu une bonne idée parce qu'un troisième moteur existe.
+    // n'est pas devenu une bonne idée parce qu'il ne reste qu'un moteur.
     expect(isPlanningEngineVersion("v3-shadow")).toBe(false)
   })
 
-  it("garde V2 comme valeur par défaut malgré l'ajout d'un moteur", () => {
-    // What runs for someone who never opened the control. Adding an
-    // experimental engine must never change this.
-    expect(CURRENT_PLANNING_ENGINE_VERSION).toBe("v2")
+  it("n'expose qu'un seul moteur, qui est le défaut", () => {
+    // Ce qui tourne pour quelqu'un qui n'a jamais ouvert de réglage — et il n'y
+    // a plus de réglage à ouvrir.
+    expect(PLANNING_ENGINE_VERSIONS).toEqual(["v3-highs-fast"])
+    expect(CURRENT_PLANNING_ENGINE_VERSION).toBe("v3-highs-fast")
   })
 
-  it("nomme chaque moteur une seule fois, pour tous les écrans", () => {
-    expect(PLANNING_ENGINE_LABELS).toEqual({
-      v2: "V2 stable",
-      v3: "V3 expérimental",
-      "v3-decomposed": "V3 décomposé",
-      "v3-highs-fast": "V3 rapide (HiGHS)",
-    })
+  it("refuse les moteurs supprimés comme n'importe quelle valeur inconnue", () => {
+    // Un planning enregistré, un log de support ou une requête d'API peut
+    // encore porter un de ces noms. Le garde doit dire non, pas planter.
+    for (const removed of ["v2", "v3", "v3-decomposed"]) {
+      expect(isPlanningEngineVersion(removed)).toBe(false)
+    }
   })
 
-  it("range les deux moteurs V3 dans le même pipeline, et V2 en dehors", () => {
-    // Le prédicat existe pour que l'ajout d'un moteur V3 ne laisse pas six
-    // comparaisons littérales `=== "v3"` retomber silencieusement en V2.
-    expect(usesV3Pipeline("v2")).toBe(false)
-    expect(usesV3Pipeline("v3")).toBe(true)
-    expect(usesV3Pipeline("v3-decomposed")).toBe(true)
-    expect(usesV3Pipeline("v3-highs-fast")).toBe(true)
+  it("nomme le moteur une seule fois, pour tous les écrans", () => {
+    expect(PLANNING_ENGINE_LABELS).toEqual({ "v3-highs-fast": "V3 rapide" })
+  })
+
+  it("range le moteur dans le pipeline V3", () => {
+    expect(usesV3Pipeline()).toBe(true)
   })
 })
 

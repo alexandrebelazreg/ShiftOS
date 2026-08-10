@@ -40,6 +40,7 @@ const FIELD_TABS: Record<string, TabValue> = {
   weeklyMinuteRemainder: "contrat",
   legacyContractMinutes: "contrat",
   contractType: "contrat",
+  scheduleType: "contrat",
 
   sectors: "affectations",
   competencies: "affectations",
@@ -51,6 +52,12 @@ const FIELD_TABS: Record<string, TabValue> = {
   forbiddenDays: "contraintes",
   maxOpenings: "contraintes",
   maxClosings: "contraintes",
+  earliestStartTime: "contraintes",
+  latestEndTime: "contraintes",
+  startTimeIsExact: "contraintes",
+  endTimeIsExact: "contraintes",
+  openingDays: "contraintes",
+  closingDays: "contraintes",
 }
 
 /**

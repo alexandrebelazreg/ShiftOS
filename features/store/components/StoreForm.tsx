@@ -52,17 +52,17 @@ export function StoreForm({ initialStore, onSaved }: { initialStore?: StoreConfi
         <StoreInformationSection />
         <OpeningHoursSection />
         <PlanningModeSection />
-        <SplitShiftSection />
         <GeneralRulesSection />
+        <SplitShiftSection />
 
         {submitError ? (
           <p className="text-sm font-medium text-destructive">{submitError}</p>
         ) : null}
 
-        <div className="flex items-center justify-between gap-3">
-          {initialStore ? <Button type="button" variant="outline" onClick={onSaved}>Annuler</Button> : <Button type="button" variant="outline" disabled>Retour</Button>}
+        <div className="sticky bottom-4 z-10 flex items-center justify-end gap-3 rounded-xl border bg-background/95 p-3 shadow-lg backdrop-blur">
+          {initialStore ? <Button type="button" variant="outline" onClick={onSaved}>Annuler</Button> : null}
           <Button type="submit" disabled={isPending}>
-            {isPending ? "Enregistrement…" : initialStore ? "Enregistrer les modifications" : "Continuer"}
+            {isPending ? "Enregistrement…" : initialStore ? "Enregistrer les modifications" : "Enregistrer et continuer"}
           </Button>
         </div>
       </form>

@@ -5,8 +5,8 @@ import type { ShiftId } from "@/features/core/models"
 import type { StoreConfig } from "@/features/store/schemas/store.schema"
 import type { EmployeeRecord } from "@/features/employees/types/employee.types"
 
-import { runPlanningFlow } from "@/features/planning/flow"
-import { createEditorState, deleteShift, type EditorState } from "@/features/planning/editor"
+import { editorStateFixture } from "@/features/planning/__tests__/editor-state-fixture"
+import { deleteShift, type EditorState } from "@/features/planning/editor"
 import {
   canEdit,
   createInMemoryPlanningRepository,
@@ -72,18 +72,10 @@ function employee(id: string): EmployeeRecord {
 }
 
 function generateEditorState(): EditorState {
-  const result = runPlanningFlow({
+  return editorStateFixture({
     store: storeConfig(),
     employees: [employee("e1"), employee("e2")],
     scope: { planningId: "planning_1", period: { start: "2026-07-06", end: "2026-07-12" }, now: NOW },
-  })
-  if (result.status !== "success") throw new Error("generation failed")
-  return createEditorState({
-    coreInput: result.coreInput,
-    configuration: result.configuration,
-    planning: result.generation.planning,
-    shifts: result.generation.shifts,
-    assignments: result.generation.assignments,
   })
 }
 
@@ -132,6 +124,17 @@ describe("planning persistence", () => {
 
     const reopened = await store.reopen(record.id)
     expect(reopened!.state.shifts).toHaveLength(state.shifts.length - 1)
+  })
+
+  it("updates and restores the exact sector scope of a saved draft", async () => {
+    const store = makeStore()
+    const state = generateEditorState()
+    const record = await store.createDraft(state, ["drive"])
+
+    await store.save(record.id, state, ["drive", "fruits"])
+    const reopened = await store.reopen(record.id)
+
+    expect(reopened?.sectorIds).toEqual(["drive", "fruits"])
   })
 
   it("makes a published planning read-only", async () => {

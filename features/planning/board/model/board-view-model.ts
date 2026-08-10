@@ -53,6 +53,21 @@ export interface BoardShiftVM {
   readonly widthPercent: number
   /** One block per continuous segment, for split shifts. */
   readonly segments: readonly { readonly leftPercent: number; readonly widthPercent: number }[]
+  readonly sectorBlocks: readonly {
+    readonly sectorId: string
+    readonly sectorName: string
+    /** La couleur du rayon, ou `null` s'il n'en déclare pas. */
+    readonly color: string | null
+    /** Ce bloc ouvre-t-il SON comptoir ? Rendu comme un ombrage à gauche. */
+    readonly opens: boolean
+    /** Le ferme-t-il ? Ombrage à droite. */
+    readonly closes: boolean
+    readonly startLabel: string
+    readonly endLabel: string
+    readonly durationLabel: string
+    readonly leftPercent: number
+    readonly widthPercent: number
+  }[]
 }
 
 // ── Toolbar ──────────────────────────────────────────────────────────────────
@@ -67,7 +82,7 @@ export interface BoardToolbarVM {
   readonly periodLabel: string
   readonly canGoPreviousWeek: boolean
   readonly canGoNextWeek: boolean
-  readonly sectors: readonly { readonly id: string; readonly name: string; readonly selected: boolean }[]
+  readonly sectors: readonly { readonly id: string; readonly name: string; readonly selected: boolean; readonly marketZone?: boolean }[]
   readonly days: readonly {
     readonly date: IsoDate
     readonly label: string
@@ -85,6 +100,15 @@ export interface BoardSectorColumnVM {
   readonly shortLabel: string
   readonly dateLabel: string
   readonly closed: boolean
+  /**
+   * Everyone's hours on this day, added up.
+   *
+   * The one figure that says whether a day is over- or under-loaded relative to
+   * its neighbours — a question the per-employee rows cannot answer, because
+   * each of them is individually reasonable while the week leans on Friday.
+   * Null on a closed day: no hours is not "0 h worked", it is no day at all.
+   */
+  readonly totalLabel: string | null
 }
 
 export interface BoardSectorRowVM {
@@ -94,8 +118,11 @@ export interface BoardSectorRowVM {
   readonly plannedLabel: string
   readonly contractLabel: string
   readonly differenceLabel: string
-  /** One line: "36 h 45 / 36 h 45". Keeps the grid rows short. */
+  /** One explicit line separating planned, sector target and employment contract. */
   readonly hoursLabel: string
+  readonly targetKind: "contract" | "sector-allocation" | "filtered-selection"
+  /** False when only part of a multi-sector contract is visible. */
+  readonly comparisonAvailable: boolean
   /** Only set when the contract is actually missed, so it can stay hidden. */
   readonly deviationLabel: string | null
   /** True when planned equals contracted: the grid shows a tick instead. */
@@ -242,12 +269,40 @@ export function buildPlanningBoard(
   // union — the multiselect states its choice explicitly, no "null means all".
   const selectedSectors = new Set(selection.sectorIds)
   const inSelection = (sectorId: string) => selectedSectors.has(sectorId)
-  const days = [...input.days].sort((left, right) => left.date.localeCompare(right.date))
+  const days = daysForSelection(input, selectedSectors)
+    .sort((left, right) => left.date.localeCompare(right.date))
   const openDays = days.filter((day) => !day.closed)
   const date = selection.date ?? openDays[0]?.date ?? days[0]?.date ?? null
 
   // ONE filtered set. Both views read it; neither re-filters.
-  const shifts = input.shifts.filter((shift) => inSelection(shift.sectorId))
+  const shifts = input.shifts.flatMap((shift) => {
+    // Ouvrir et fermer sont des faits DU BLOC, pas du shift : dans une zone
+    // marché la même personne peut ouvrir un comptoir sans toucher l'autre.
+    const sectorAssignments = sectorAssignmentsOf(shift)
+      .filter((block) => inSelection(block.sectorId))
+      .map((block) => ({
+        ...block,
+        opens: sectorBoundary(input, shift.date, block.sectorId, "open") === block.startMinutes,
+        closes: sectorBoundary(input, shift.date, block.sectorId, "close") === block.endMinutes,
+      }))
+    if (sectorAssignments.length === 0) return []
+    const workedMinutes = sectorAssignments.reduce(
+      (sum, block) => sum + block.endMinutes - block.startMinutes,
+      0
+    )
+    const startMinutes = Math.min(...sectorAssignments.map((block) => block.startMinutes))
+    const endMinutes = Math.max(...sectorAssignments.map((block) => block.endMinutes))
+    return [{
+      ...shift,
+      sectorAssignments,
+      segments: sectorAssignments.map(({ startMinutes, endMinutes }) => ({ startMinutes, endMinutes })),
+      startMinutes,
+      endMinutes,
+      workedMinutes,
+      opensDay: sectorAssignments.some((block) => block.opens),
+      closesDay: sectorAssignments.some((block) => block.closes),
+    }]
+  })
   const employees = input.employees.filter((employee) =>
     employee.sectorIds.some(inSelection)
   )
@@ -260,8 +315,10 @@ export function buildPlanningBoard(
 
   const shiftVMs = new Map<string, BoardShiftVM>()
   for (const shift of shifts) {
-    shiftVMs.set(shift.id, toShiftVM(shift, shift.date === date ? open : null, shift.date === date ? span : 0))
+    shiftVMs.set(shift.id, toShiftVM(shift, shift.date === date ? open : null, shift.date === date ? span : 0, input.sectors))
   }
+
+  const completeSectorSelection = input.sectors.every((sector) => selectedSectors.has(sector.id))
 
   return {
     toolbar: {
@@ -279,6 +336,7 @@ export function buildPlanningBoard(
         id: sector.id,
         name: sector.name,
         selected: inSelection(sector.id),
+        marketZone: sector.marketZone,
       })),
       days: days.map((item) => ({
         date: item.date,
@@ -288,10 +346,24 @@ export function buildPlanningBoard(
         selected: item.date === date,
       })),
     },
-    sectorView: buildSectorView(employees, days, shifts, shiftVMs, selection.employeeId),
-    dayView: buildDayView(employees, day, shifts, demand, open, span, selection.employeeId),
-    employeeView: buildEmployeeView(employees, days, shifts, selection.employeeId),
-    summary: buildSummary(input, days, employees, shifts, demand),
+    sectorView: buildSectorView(
+      employees,
+      days,
+      shifts,
+      shiftVMs,
+      selection.employeeId,
+      completeSectorSelection
+    ),
+    dayView: buildDayView(employees, day, shifts, demand, open, span, selection.employeeId, input.sectors),
+    employeeView: buildEmployeeView(
+      employees,
+      days,
+      shifts,
+      selection.employeeId,
+      completeSectorSelection,
+      input.sectors
+    ),
+    summary: buildSummary(input, days, employees, shifts, demand, completeSectorSelection),
   }
 }
 
@@ -301,7 +373,9 @@ function buildEmployeeView(
   employees: PlanningBoardInput["employees"],
   days: readonly BoardDay[],
   shifts: readonly BoardShift[],
-  employeeId: EmployeeId | null
+  employeeId: EmployeeId | null,
+  completeSectorSelection: boolean,
+  sectors: PlanningBoardInput["sectors"] = []
 ): BoardEmployeeViewVM | null {
   if (employees.length === 0) return null
   const employee = employees.find((item) => item.id === employeeId) ?? employees[0]
@@ -322,7 +396,9 @@ function buildEmployeeView(
 
   const own = shifts.filter((shift) => shift.employeeId === employee.id)
   const planned = own.reduce((sum, shift) => sum + shift.workedMinutes, 0)
-  const difference = planned - employee.contractMinutes
+  const target = employee.weeklyTargetMinutes ?? employee.contractMinutes
+  const difference = planned - target
+  const comparisonAvailable = completeSectorSelection || employee.weeklyTargetMinutes !== undefined
   const openings = own.filter((shift) => shift.opensDay).length
   const closings = own.filter((shift) => shift.closesDay).length
   const saturdays = new Set(days.filter((d) => d.weekDay === "saturday").map((d) => d.date))
@@ -334,12 +410,19 @@ function buildEmployeeView(
     initials: initialsOf(employee.name),
     general: [
       { label: "Contrat hebdomadaire", value: durationLabel(employee.contractMinutes), level: "neutral" },
+      ...(employee.weeklyTargetMinutes !== undefined
+        ? [{
+            label: "Objectif de cette génération",
+            value: durationLabel(employee.weeklyTargetMinutes),
+            level: "neutral" as const,
+          }]
+        : []),
       { label: "Heures planifiées", value: durationLabel(planned), level: "neutral" },
-      {
-        label: "Écart",
+      ...(comparisonAvailable ? [{
+        label: employee.weeklyTargetMinutes === undefined ? "Écart" : "Écart à l’objectif",
         value: signedDurationLabel(difference),
-        level: difference === 0 ? "ok" : difference > 0 ? "over" : "under",
-      },
+        level: difference === 0 ? "ok" as const : difference > 0 ? "over" as const : "under" as const,
+      }] : []),
     ],
     stats: [
       { label: "Ouvertures", value: String(openings), level: "neutral" },
@@ -350,7 +433,7 @@ function buildEmployeeView(
     days: days.map((day) => {
       const onDay = own
         .filter((shift) => shift.date === day.date)
-        .map((shift) => toShiftVM(shift, open, span))
+        .map((shift) => toShiftVM(shift, open, span, sectors))
         .sort((left, right) => left.leftPercent - right.leftPercent)
       const total = own
         .filter((shift) => shift.date === day.date)
@@ -382,23 +465,35 @@ function buildSummary(
   days: readonly BoardDay[],
   employees: PlanningBoardInput["employees"],
   shifts: readonly BoardShift[],
-  demand: PlanningBoardInput["demand"]
+  demand: PlanningBoardInput["demand"],
+  completeSectorSelection: boolean
 ): BoardSummaryVM {
   // Deficits are recomputed from demand versus shifts, so the table always
   // matches the grid rather than echoing an engine message that may describe a
   // different period or sector.
+  //
+  // Presence is a CONCURRENCY question, not a per-shift containment one. This
+  // used to count only the shifts that spanned the whole slot on their own,
+  // which reported an hour as short whenever it was covered by a hand-over: one
+  // person until 12:15, another from 12:15, both present throughout, and the
+  // table announced a single body on the floor. The « Présents » row above it
+  // has always counted concurrency, so the two disagreed on the same screen —
+  // and the row was the one telling the truth.
   const deficits: BoardDeficitRowVM[] = []
   for (const slot of [...demand].sort(
     (left, right) => left.date.localeCompare(right.date) || left.startMinutes - right.startMinutes
   )) {
-    const present = shifts.filter(
-      (shift) =>
-        shift.date === slot.date &&
-        shift.segments.some(
-          (segment) =>
-            segment.startMinutes <= slot.startMinutes && segment.endMinutes >= slot.endMinutes
-        )
-    ).length
+    const present = minimumConcurrentPresence(
+      { startMinutes: slot.startMinutes, endMinutes: slot.endMinutes },
+      shifts
+        .filter((shift) => shift.date === slot.date)
+        .flatMap((shift) => sectorAssignmentsOf(shift)
+          .filter((block) => block.sectorId === slot.sectorId)
+          .map((segment) => ({
+          startMinutes: segment.startMinutes,
+          endMinutes: segment.endMinutes,
+        })))
+    )
     if (present >= slot.requiredEmployees) continue
     const day = days.find((item) => item.date === slot.date)
     deficits.push({
@@ -410,11 +505,19 @@ function buildSummary(
     })
   }
 
-  const offContract = employees.filter((employee) => {
+  const offContract = completeSectorSelection ? employees.filter((employee) => {
+    if (employee.weeklyTargetMinutes !== undefined) return false
     const planned = shifts
       .filter((shift) => shift.employeeId === employee.id)
       .reduce((sum, shift) => sum + shift.workedMinutes, 0)
     return planned !== employee.contractMinutes
+  }).length : 0
+  const scopedEmployees = employees.filter((employee) => employee.weeklyTargetMinutes !== undefined)
+  const offScopeTarget = scopedEmployees.filter((employee) => {
+    const planned = shifts
+      .filter((shift) => shift.employeeId === employee.id)
+      .reduce((sum, shift) => sum + shift.workedMinutes, 0)
+    return planned !== employee.weeklyTargetMinutes
   }).length
 
   const blocking = input.diagnostics?.blocking ?? false
@@ -436,12 +539,27 @@ function buildSummary(
       level: "under",
     })
   }
+  if (offScopeTarget > 0) {
+    const plural = offScopeTarget > 1
+    facts.push({
+      label: `${offScopeTarget} objectif${plural ? "s" : ""} de rayon non atteint${plural ? "s" : ""}`,
+      level: "under",
+    })
+  }
   if (requiresAcceptance && !blocking) {
     facts.push({ label: "Acceptation requise avant publication", level: "over" })
   }
   if (facts.length === 0) {
     facts.push({ label: "Tous les besoins sont couverts", level: "ok" })
-    facts.push({ label: "Tous les contrats sont respectés", level: "ok" })
+    facts.push({
+      label:
+        scopedEmployees.length > 0
+          ? "Toutes les affectations prévues dans ce rayon sont réalisées"
+          : !completeSectorSelection
+          ? "Les contrats complets sont contrôlés dans la vue de tous les secteurs"
+          : "Tous les contrats sont respectés",
+      level: "ok",
+    })
   }
 
   return {
@@ -471,7 +589,8 @@ function buildSectorView(
   days: PlanningBoardInput["days"],
   shifts: readonly BoardShift[],
   shiftVMs: ReadonlyMap<string, BoardShiftVM>,
-  selectedEmployeeId: EmployeeId | null
+  selectedEmployeeId: EmployeeId | null,
+  completeSectorSelection: boolean
 ): BoardSectorViewVM {
   const columns: BoardSectorColumnVM[] = days.map((day) => ({
     date: day.date,
@@ -479,12 +598,21 @@ function buildSectorView(
     shortLabel: WEEK_DAY_LABELS[day.weekDay].slice(0, 3),
     dateLabel: formatDate(day.date),
     closed: day.closed,
+    totalLabel: day.closed
+      ? null
+      : durationLabel(
+          shifts
+            .filter((shift) => shift.date === day.date)
+            .reduce((sum, shift) => sum + shift.workedMinutes, 0)
+        ),
   }))
 
   const rows: BoardSectorRowVM[] = employees.map((employee) => {
     const own = shifts.filter((shift) => shift.employeeId === employee.id)
     const planned = own.reduce((sum, shift) => sum + shift.workedMinutes, 0)
-    const difference = planned - employee.contractMinutes
+    const comparisonAvailable = completeSectorSelection || employee.weeklyTargetMinutes !== undefined
+    const target = employee.weeklyTargetMinutes ?? employee.contractMinutes
+    const difference = planned - target
 
     const shiftsByDate: Record<string, BoardShiftVM[]> = {}
     for (const shift of own) {
@@ -502,11 +630,21 @@ function buildSectorView(
       initials: initialsOf(employee.name),
       plannedLabel: durationLabel(planned),
       contractLabel: durationLabel(employee.contractMinutes),
-      differenceLabel: signedDurationLabel(difference),
-      hoursLabel: `${durationLabel(planned)} / ${durationLabel(employee.contractMinutes)}`,
-      deviationLabel: difference === 0 ? null : signedDurationLabel(difference),
-      onTarget: difference === 0,
-      level: difference === 0 ? "ok" : difference > 0 ? "over" : "under",
+      differenceLabel: comparisonAvailable ? signedDurationLabel(difference) : "—",
+      hoursLabel:
+        !comparisonAvailable
+          ? `${durationLabel(planned)} dans la sélection · contrat ${durationLabel(employee.contractMinutes)}`
+          : employee.weeklyTargetMinutes === undefined
+          ? `${durationLabel(planned)} planifiées · contrat ${durationLabel(employee.contractMinutes)}`
+          : `${durationLabel(planned)} dans ce rayon · contrat ${durationLabel(employee.contractMinutes)}`,
+      targetKind:
+        !comparisonAvailable
+          ? "filtered-selection"
+          : employee.weeklyTargetMinutes === undefined ? "contract" : "sector-allocation",
+      comparisonAvailable,
+      deviationLabel: !comparisonAvailable || difference === 0 ? null : signedDurationLabel(difference),
+      onTarget: comparisonAvailable && difference === 0,
+      level: !comparisonAvailable ? "neutral" : difference === 0 ? "ok" : difference > 0 ? "over" : "under",
       selected: employee.id === selectedEmployeeId,
       shiftsByDate,
     }
@@ -524,7 +662,8 @@ function buildDayView(
   demand: PlanningBoardInput["demand"],
   open: number | null,
   span: number,
-  selectedEmployeeId: EmployeeId | null
+  selectedEmployeeId: EmployeeId | null,
+  sectors: PlanningBoardInput["sectors"] = []
 ): BoardDayViewVM {
   if (!day || open === null || span <= 0) {
     return {
@@ -555,12 +694,19 @@ function buildDayView(
   const presentRow: BoardCoverageCellVM[] = []
   for (const hour of hours) {
     const hourEnd = hour.startMinutes + HOUR
-    const required = demand
+    const requiredBySector = demand
       .filter(
         (slot) =>
           slot.date === day.date && slot.startMinutes < hourEnd && slot.endMinutes > hour.startMinutes
       )
-      .reduce((max, slot) => Math.max(max, slot.requiredEmployees), 0)
+      .reduce((bySector, slot) => {
+        bySector.set(
+          slot.sectorId,
+          Math.max(bySector.get(slot.sectorId) ?? 0, slot.requiredEmployees)
+        )
+        return bySector
+      }, new Map<string, number>())
+    const required = [...requiredBySector.values()].reduce((sum, value) => sum + value, 0)
     // The worst concurrent headcount inside the hour, not the count of shifts
     // that each individually span it. Two or three staggered shifts routinely
     // keep the floor staffed throughout an hour without any of them
@@ -568,7 +714,7 @@ function buildDayView(
     // hour thin exactly when it wasn't.
     const present = minimumConcurrentPresence(
       { startMinutes: hour.startMinutes, endMinutes: hourEnd },
-      onDay.flatMap((shift) => shift.segments)
+      onDay.flatMap((shift) => sectorAssignmentsOf(shift))
     )
 
     requiredRow.push({
@@ -588,7 +734,7 @@ function buildDayView(
   const rows: BoardDayRowVM[] = employees.map((employee) => {
     const own = onDay
       .filter((shift) => shift.employeeId === employee.id)
-      .map((shift) => toShiftVM(shift, open, span))
+      .map((shift) => toShiftVM(shift, open, span, sectors))
       .sort((left, right) => left.leftPercent - right.leftPercent)
     return {
       employeeId: employee.id,
@@ -613,7 +759,12 @@ function buildDayView(
 
 // ── Formatting and geometry ──────────────────────────────────────────────────
 
-function toShiftVM(shift: BoardShift, open: number | null, span: number): BoardShiftVM {
+function toShiftVM(
+  shift: BoardShift,
+  open: number | null,
+  span: number,
+  sectors: PlanningBoardInput["sectors"] = []
+): BoardShiftVM {
   const geometry = (start: number, end: number) =>
     open === null || span <= 0
       ? { leftPercent: 0, widthPercent: 0 }
@@ -638,7 +789,76 @@ function toShiftVM(shift: BoardShift, open: number | null, span: number): BoardS
     kindLabel: KIND_LABELS[kindOf(shift)],
     ...geometry(shift.startMinutes, shift.endMinutes),
     segments: shift.segments.map((segment) => geometry(segment.startMinutes, segment.endMinutes)),
+    sectorBlocks: sectorAssignmentsOf(shift).map((block) => ({
+      sectorId: block.sectorId,
+      sectorName: sectors.find((sector) => sector.id === block.sectorId)?.name ?? block.sectorId,
+      color: sectors.find((sector) => sector.id === block.sectorId)?.color ?? null,
+      opens: "opens" in block ? Boolean(block.opens) : false,
+      closes: "closes" in block ? Boolean(block.closes) : false,
+      startLabel: clockLabel(block.startMinutes),
+      endLabel: clockLabel(block.endMinutes),
+      durationLabel: durationLabel(block.endMinutes - block.startMinutes),
+      ...geometry(block.startMinutes, block.endMinutes),
+    })),
   }
+}
+
+function sectorAssignmentsOf(shift: BoardShift): readonly (BoardShift["segments"][number] & { readonly sectorId: string })[] {
+  return shift.sectorAssignments ?? shift.segments.map((segment) => ({ ...segment, sectorId: shift.sectorId }))
+}
+
+/** Rebuild the visible day window from the sectors currently selected. */
+function daysForSelection(
+  input: PlanningBoardInput,
+  selectedSectors: ReadonlySet<string>
+): BoardDay[] {
+  const sectors = input.sectors.filter((sector) => selectedSectors.has(sector.id))
+  return input.days.map((fallback) => {
+    if (sectors.length === 0) {
+      return { ...fallback, closed: true, opensAtMinutes: null, closesAtMinutes: null }
+    }
+    const candidates = sectors.map((sector) => {
+      const hours = sector.hours?.find((entry) => entry.day === fallback.weekDay)
+      if (!hours) return fallback.closed ? null : fallback
+      if (hours.closed || !hours.opensAt || !hours.closesAt) return null
+      return {
+        opensAtMinutes: parseClock(hours.opensAt),
+        closesAtMinutes: parseClock(hours.closesAt),
+      }
+    }).filter((hours): hours is { opensAtMinutes: number; closesAtMinutes: number } =>
+      hours !== null && hours.opensAtMinutes !== null && hours.closesAtMinutes !== null
+    )
+    if (candidates.length === 0) {
+      return { ...fallback, closed: true, opensAtMinutes: null, closesAtMinutes: null }
+    }
+    return {
+      ...fallback,
+      closed: false,
+      opensAtMinutes: Math.min(...candidates.map((hours) => hours.opensAtMinutes)),
+      closesAtMinutes: Math.max(...candidates.map((hours) => hours.closesAtMinutes)),
+    }
+  })
+}
+
+function sectorBoundary(
+  input: PlanningBoardInput,
+  date: IsoDate,
+  sectorId: string,
+  side: "open" | "close"
+): number | null {
+  const day = input.days.find((entry) => entry.date === date)
+  if (!day) return null
+  const hours = input.sectors
+    .find((sector) => sector.id === sectorId)
+    ?.hours?.find((entry) => entry.day === day.weekDay)
+  if (!hours) return side === "open" ? day.opensAtMinutes : day.closesAtMinutes
+  if (hours.closed) return null
+  return parseClock(side === "open" ? hours.opensAt : hours.closesAt)
+}
+
+function parseClock(value: string): number | null {
+  const [hour, minute] = value.split(":").map(Number)
+  return Number.isFinite(hour) && Number.isFinite(minute) ? hour * 60 + minute : null
 }
 
 const KIND_LABELS: Record<BoardShiftKind, string> = {

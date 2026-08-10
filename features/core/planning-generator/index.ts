@@ -1,28 +1,22 @@
 /**
- * Planning Generator — public API.
+ * Planning evaluation — public API.
  *
- * Produces a deterministic planning through the business pipeline, then
- * orchestrates the existing Core evaluation engines.
+ * What remains of the old Planning Generator after the V2 business pipeline was
+ * deleted: the EVALUATION half, and the input/settings vocabulary the V3
+ * pipeline is built on.
  *
- * Pipeline:
- *   Demand (input) → Planning Generator → Constraint Engine → Coverage (Demand
- *   Engine) → Fairness Engine → Scoring Engine
+ * The module no longer produces a schedule. `v3-highs-fast` does that, through
+ * the solve contract. What lives here is everything that reads one:
  *
- * Typical use:
- *   const registry = createConstraintRegistry()
- *   registerBuiltInConstraints(registry)
- *   const result = planningGenerator.generate({ store, employees, demand, registry, settings })
- *   // swap the algorithm without touching the generator:
- *   planningGenerator.generate(input, { strategy: myStrategy })
+ *   Assignments + Shifts → Constraint Engine → Coverage (Demand Engine)
+ *                        → Fairness Engine → Scoring Engine
  *
- * The generator holds NO business rule — every rule lives in the injected
- * constraint registry and the downstream engines.
+ * It is kept under this name rather than renamed because the types it exports —
+ * `PlanningGenerationInput`, `GenerationSettings`, `GenerationContext` — are the
+ * vocabulary the V3 problem builder consumes, and moving them would be a rename
+ * across the whole core for no behavioural gain.
  */
 export * from "@/features/core/planning-generator/types"
 export * from "@/features/core/planning-generator/utils"
 export * from "@/features/core/planning-generator/builders"
-export * from "@/features/core/planning-generator/validators"
-export * from "@/features/core/planning-generator/ranking"
-export * from "@/features/core/planning-generator/strategies"
-export * from "@/features/core/planning-generator/pipeline"
 export * from "@/features/core/planning-generator/generator"

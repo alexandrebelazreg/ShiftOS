@@ -87,3 +87,12 @@ export type PlanningMode = (typeof PLANNING_MODES)[number]
 /** Allowed time granularity (in minutes) for dynamic shift generation. */
 export const TIME_GRANULARITIES = [15, 30, 60] as const
 export type TimeGranularity = (typeof TIME_GRANULARITIES)[number]
+
+/**
+ * The canonical time step every time of day entered in ShiftOS must land on.
+ *
+ * Distinct from `TIME_GRANULARITIES`, which is how coarsely a sector may
+ * GENERATE shifts: a sector planning on the hour still expresses "ne commence
+ * pas avant 08:15", and a bound off this step could never be honoured exactly.
+ */
+export const CANONICAL_TIME_STEP_MINUTES = 15

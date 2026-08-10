@@ -113,7 +113,9 @@ function diagnoseOneSector(
   // Budget: an open day with a 0 % share receives no minutes at all, so the
   // day is open with nobody to staff it. This is the single most common way a
   // freshly created sector is incomplete.
-  const withoutBudget = openDays.filter((day) => (sector.weeklyDistribution[day] ?? 0) <= 0)
+  const withoutBudget = sector.weeklyDistributionEnabled === false
+    ? []
+    : openDays.filter((day) => (sector.weeklyDistribution[day] ?? 0) <= 0)
   if (withoutBudget.length > 0) {
     add(
       "missing_daily_budget",

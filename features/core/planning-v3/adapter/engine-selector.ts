@@ -11,37 +11,24 @@ import {
  * variable or a React context — a Core that discovers its own configuration is
  * a Core that can silently change behaviour, which is exactly the failure mode
  * Planning V3 exists to remove.
+ *
+ * There is one engine today, so the selector always resolves to it. It is kept
+ * rather than deleted because it is the seam the injection rule is written on:
+ * remove it and the first module that needs to know its engine will reach for a
+ * global instead.
  */
 export interface PlanningEngineSelector {
   readonly version: PlanningEngineVersion
-  /**
-   * True when a V3-generation engine is what the manager sees — CP-SAT or the
-   * decomposed engine alike.
-   *
-   * One boolean, not two. While a shadow mode existed, "does V3 run" and "is V3
-   * published" were different questions; without it they are the same question
-   * and keeping both would only invite a caller to check the wrong one.
-   *
-   * It answers "does this go through the V3 problem/solve/validate pipeline",
-   * NOT "which solver runs". Callers that need the latter read `version`, and
-   * only the composition layer is allowed to act on it.
-   */
+  /** True when the V3 problem/solve/validate pipeline is what the manager sees. */
   readonly usesV3: boolean
 }
 
 export function createPlanningEngineSelector(
   version: PlanningEngineVersion = CURRENT_PLANNING_ENGINE_VERSION
 ): PlanningEngineSelector {
-  return { version, usesV3: version === "v3" || version === "v3-decomposed" }
+  return { version, usesV3: true }
 }
 
-/**
- * The selector in force when nobody has chosen.
- *
- * It resolves to `v2`, so the planning the application publishes by default is
- * still the one Sprint 3D.1 produces. Choosing `v3` is an explicit, per-session
- * act in the UI, and there is NO automatic movement between versions: a failed
- * V3 run never falls back, it reports and waits for the manager to decide.
- */
+/** The selector in force when nobody has chosen. */
 export const defaultPlanningEngineSelector: PlanningEngineSelector =
-  createPlanningEngineSelector("v2")
+  createPlanningEngineSelector()

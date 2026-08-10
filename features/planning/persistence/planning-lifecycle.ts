@@ -28,14 +28,26 @@ export function isReadOnly(record: PlanningRecord): boolean {
   return !canEdit(record)
 }
 
-/** Create a fresh draft record wrapping the given editor state. */
-export function createDraft(state: EditorState, now: string, id: string): PlanningRecord {
+/**
+ * Create a fresh draft record wrapping the given editor state.
+ *
+ * `sectorIds` is recorded at creation because it is the only moment it is
+ * known: nothing inside an `EditorState` names a sector, so a record that does
+ * not capture it here can never be attributed to one afterwards.
+ */
+export function createDraft(
+  state: EditorState,
+  now: string,
+  id: string,
+  sectorIds?: readonly string[]
+): PlanningRecord {
   return {
     id,
     status: "draft",
     label: buildPlanningLabel(state),
     periodStart: state.planning.periodStart,
     periodEnd: state.planning.periodEnd,
+    ...(sectorIds === undefined ? {} : { sectorIds: [...sectorIds] }),
     state,
     createdAt: now,
     updatedAt: now,
@@ -47,12 +59,20 @@ export function createDraft(state: EditorState, now: string, id: string): Planni
 export function withSavedState(
   record: PlanningRecord,
   state: EditorState,
-  now: string
+  now: string,
+  sectorIds?: readonly string[]
 ): PlanningRecord {
   if (!canEdit(record)) {
     throw new Error(`Cannot save a ${record.status} planning; it is read-only.`)
   }
-  return { ...record, state, label: buildPlanningLabel(state), updatedAt: now, savedAt: now }
+  return {
+    ...record,
+    state,
+    label: buildPlanningLabel(state),
+    ...(sectorIds === undefined ? {} : { sectorIds: [...sectorIds] }),
+    updatedAt: now,
+    savedAt: now,
+  }
 }
 
 /** Publish a draft. Published planning becomes read-only; never modified after. */
@@ -83,5 +103,5 @@ export function draftFromPublished(
   if (record.status !== "published") {
     throw new Error(`Only a published planning can be edited into a new draft.`)
   }
-  return { ...createDraft(record.state, now, id), label: `${record.label} (edited)` }
+  return { ...createDraft(record.state, now, id, record.sectorIds), label: `${record.label} (edited)` }
 }

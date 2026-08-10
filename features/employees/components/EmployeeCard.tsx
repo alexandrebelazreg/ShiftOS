@@ -5,7 +5,10 @@ import Link from "next/link"
 
 import { CapabilityBadges } from "@/features/employees/components/CapabilityBadges"
 import { EmployeeStatusBadge } from "@/features/employees/components/EmployeeStatusBadge"
-import type { EmployeeRecord } from "@/features/employees/types/employee.types"
+import type {
+  EmployeeRecord,
+  EmployeeScheduleType,
+} from "@/features/employees/types/employee.types"
 import {
   formatContractSummary,
   formatContractMinutes,
@@ -23,11 +26,14 @@ import { cn } from "@/lib/utils"
  */
 export function EmployeeCard({
   employee,
+  onScheduleTypeChange,
 }: {
   employee: EmployeeRecord
+  onScheduleTypeChange: (value: EmployeeScheduleType) => void | Promise<unknown>
 }) {
   const isInactive = employee.status === "inactive"
   const sectors = employee.sectors ?? []
+  const scheduleType = employee.scheduleType ?? "variable"
 
   return (
     <Card className={cn("gap-0", isInactive && "opacity-70")}>
@@ -52,10 +58,25 @@ export function EmployeeCard({
 
         {/* Contract + working days */}
         <dl className="grid gap-2 text-sm">
-          <div className="flex items-center gap-2 text-muted-foreground">
+          <div className="flex flex-wrap items-center justify-between gap-2 text-muted-foreground">
             <Clock className="size-4 shrink-0" />
             <dt className="sr-only">Contrat hebdomadaire</dt>
             <dd>{formatContractMinutes(employee.weeklyMinutes ?? Math.round(employee.weeklyHours * 60))} / semaine</dd>
+            <fieldset className="ml-auto flex items-center gap-2 rounded-md border px-2 py-1 text-[11px]" disabled={isInactive}>
+              <legend className="sr-only">Type d’horaire</legend>
+              {(["variable", "fixed"] as const).map((value) => (
+                <label key={value} className="flex cursor-pointer items-center gap-1 whitespace-nowrap">
+                  <input
+                    type="radio"
+                    name={`schedule-type-${employee.id}`}
+                    value={value}
+                    checked={scheduleType === value}
+                    onChange={() => void onScheduleTypeChange(value)}
+                  />
+                  {value === "variable" ? "Variable" : "Fixe"}
+                </label>
+              ))}
+            </fieldset>
           </div>
           <div className="flex items-center gap-2 text-muted-foreground">
             <CalendarDays className="size-4 shrink-0" />
@@ -66,7 +87,7 @@ export function EmployeeCard({
                 : "Aucun jour travaillé"}
             </dd>
           </div>
-          <div className="flex items-start gap-2 text-muted-foreground"><MapPin className="mt-0.5 size-4 shrink-0" /><dt className="sr-only">Secteurs maîtrisés</dt><dd>{sectors.length > 0 ? sectors.join(", ") : "Secteurs à renseigner"}</dd></div>
+          <div className="flex items-start gap-2 text-muted-foreground"><MapPin className="mt-0.5 size-4 shrink-0" /><dt className="sr-only">Secteurs maîtrisés par priorité</dt><dd>{sectors.length > 0 ? sectors.map((sector, index) => `${index + 1}. ${sector}`).join(" · ") : "Secteurs à renseigner"}</dd></div>
         </dl>
 
         {/* Capabilities */}

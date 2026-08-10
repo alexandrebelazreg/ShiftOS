@@ -220,16 +220,12 @@ describe("validateur V3 — détection des corruptions", () => {
     expect(report.violations[0].expected).toBe(2)
   })
 
-  it("10. fermeture excédentaire", () => {
-    // Chloé now also finishes at 20:00 on Monday, so the day has two closers
-    // where the rules call for exactly one.
+  it("10. autorise davantage de fermeurs que le minimum", () => {
+    // Chloé termine aussi à 20:00 le lundi : deux fermeurs restent légaux
+    // lorsque le minimum bloquant est un seul.
     const solution = withDay(baseline, "chloe", MONDAY, seg(840, 1_200))
     const report = validate(problem, solution)
-    expect(brokenRules(report)).toContain("closing-count")
-    const count = report.violations.find((v) => v.rule === "closing-count")
-    expect(count?.date).toBe(MONDAY)
-    expect(count?.actual).toBe(2)
-    expect(count?.expected).toBe(1)
+    expect(brokenRules(report)).not.toContain("closing-count")
   })
 
   it("11. budget du mardi supérieur de 15 minutes", () => {
@@ -252,6 +248,21 @@ describe("validateur V3 — détection des corruptions", () => {
     const friday = report.violations.find((v) => v.date === FRIDAY)
     expect(friday?.actual).toBe(1_425)
     expect(friday?.expected).toBe(1_440)
+  })
+
+  it("12b. traite la répartition journalière comme une cible flexible", () => {
+    let solution = withDay(baseline, "alice", TUESDAY, seg(360, 645))
+    solution = withDay(solution, "alice", WEDNESDAY, seg(600, 855))
+    const flexible = {
+      ...problem,
+      days: problem.days.map((day) => ({ ...day, budgetMode: "target" as const })),
+    }
+
+    const report = validate(flexible, {
+      ...solution,
+      problemFingerprint: fingerprintProblem(flexible),
+    })
+    expect(brokenRules(report)).toEqual([])
   })
 
   it("13. déficit de couverture samedi à 06:00", () => {

@@ -1,5 +1,6 @@
 export {
   buildPlanningProblemV3,
+  closingFairnessActive,
   employeeDayOf,
   type PlanningProblemBuildResultV3,
 } from "@/features/core/planning-v3/problem-builder/build-problem"

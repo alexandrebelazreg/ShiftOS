@@ -34,25 +34,45 @@ export function adaptEditorStateToBoard(
     sectors.length > 0 ? sectors : [{ id: "all", name: "Tous les secteurs" }]
   const defaultSectorId = sectorList[0].id
 
-  const openingByDay = new Map(
-    state.coreInput.store.openingHours.map((entry) => [entry.day, entry])
-  )
+  // ── Whose hours the grid is drawn against ──────────────────────────────
+  //
+  // The SECTOR's, whenever it declares them. A sector may run wider than the
+  // store — a Drive opening before the shop, an Accueil closing after it — so
+  // reading the store's window would put the day's edges in the wrong place and
+  // paint the real opener and closer as ordinary days.
+  //
+  const storeByDay = new Map(state.coreInput.store.openingHours.map((entry) => [entry.day, entry]))
 
   const days: BoardDay[] = datesOf(state).map((date) => {
     const weekDay = weekDayOf(date)
-    const hours = openingByDay.get(weekDay)
-    const closed = !hours || hours.closed || !hours.opensAt || !hours.closesAt
+    const candidates = sectorList.map(
+      (sector) => sector.hours?.find((entry) => entry.day === weekDay) ?? storeByDay.get(weekDay)
+    )
+    const openCandidates = candidates.filter(
+      (hours): hours is NonNullable<typeof hours> =>
+        Boolean(hours && !hours.closed && hours.opensAt && hours.closesAt)
+    )
+    const closed = openCandidates.length === 0
     return {
       date,
       weekDay,
       closed,
-      opensAtMinutes: closed ? null : minutesOf(hours!.opensAt!),
-      closesAtMinutes: closed ? null : minutesOf(hours!.closesAt!),
+      opensAtMinutes: closed ? null : Math.min(...openCandidates.map((hours) => minutesOf(hours.opensAt!))),
+      closesAtMinutes: closed ? null : Math.max(...openCandidates.map((hours) => minutesOf(hours.closesAt!))),
     }
   })
 
   const contractByEmployee = new Map(
     state.coreInput.contracts.map((contract) => [contract.employeeId, contract])
+  )
+  const weeklyTargetByEmployee = new Map(
+    (state.weeklyTargets ?? []).map((target) => [target.employeeId, target.minutes])
+  )
+  const sectorsByEmployee = new Map(
+    (state.sectorScope?.employees ?? []).map((entry) => [String(entry.employeeId), entry.sectorIds])
+  )
+  const sectorByRequirement = new Map(
+    (state.sectorScope?.demand ?? []).map((entry) => [entry.requirementId, entry.sectorId])
   )
 
   const employees: BoardEmployee[] = state.coreInput.employees.map((employee) => {
@@ -60,15 +80,16 @@ export function adaptEditorStateToBoard(
     return {
       id: employee.id,
       name: `${employee.firstName} ${employee.lastName}`.trim(),
-      sectorIds: sectorList.map((sector) => sector.id),
+      sectorIds: sectorsByEmployee.get(String(employee.id)) ?? sectorList.map((sector) => sector.id),
       contractMinutes: contract ? contractualMinutes(contract) : 0,
+      ...(weeklyTargetByEmployee.has(employee.id)
+        ? { weeklyTargetMinutes: weeklyTargetByEmployee.get(employee.id)! }
+        : {}),
       rules: rulesOf(state, employee.id),
     }
   })
 
   const shiftById = new Map<Shift["id"], Shift>(state.shifts.map((shift) => [shift.id, shift]))
-  const dayByDate = new Map(days.map((day) => [day.date, day]))
-
   const shifts: BoardShift[] = state.assignments
     .map((assignment) => ({ assignment, shift: shiftById.get(assignment.shiftId) }))
     .filter((entry): entry is { assignment: Assignment; shift: Shift } => entry.shift !== undefined)
@@ -81,25 +102,37 @@ export function adaptEditorStateToBoard(
             (intervalMinutes(segment.startTime, segment.endTime, segment.endDayOffset) ?? 0),
         }))
         .sort((left, right) => left.startMinutes - right.startMinutes)
-      const day = dayByDate.get(shift.date)
       const start = segments[0]?.startMinutes ?? 0
       const end = segments[segments.length - 1]?.endMinutes ?? 0
+      const sectorAssignments = (shift.sectorAssignments ?? shift.segments.map((segment) => ({
+        sectorId: defaultSectorId,
+        startTime: segment.startTime,
+        endTime: segment.endTime,
+        endDayOffset: segment.endDayOffset,
+      }))).map((block) => ({
+        sectorId: block.sectorId,
+        startMinutes: minutesOf(block.startTime),
+        endMinutes: minutesOf(block.startTime) + (intervalMinutes(block.startTime, block.endTime, block.endDayOffset) ?? 0),
+      }))
       return {
         id: assignment.id,
         employeeId: assignment.employeeId,
-        sectorId: defaultSectorId,
+        sectorId: sectorAssignments[0]?.sectorId ?? defaultSectorId,
+        sectorAssignments,
         date: shift.date,
         startMinutes: start,
         endMinutes: end,
         workedMinutes: segments.reduce((sum, s) => sum + (s.endMinutes - s.startMinutes), 0),
         segments,
-        opensDay: day?.opensAtMinutes === start,
-        closesDay: day?.closesAtMinutes === end,
+        opensDay: sectorAssignments.some((block) => sectorBoundary(sectorList, storeByDay, shift.date, block.sectorId, "open") === block.startMinutes),
+        closesDay: sectorAssignments.some((block) => sectorBoundary(sectorList, storeByDay, shift.date, block.sectorId, "close") === block.endMinutes),
       }
     })
 
   const demand: BoardDemandSlot[] = state.coreInput.demand.requirements.map((requirement) => ({
-    sectorId: sectorIdOf(String(requirement.id), sectorList, defaultSectorId),
+    sectorId:
+      sectorByRequirement.get(String(requirement.id))
+      ?? sectorIdOf(String(requirement.id), sectorList, defaultSectorId),
     date: requirement.window.date,
     startMinutes: minutesOf(requirement.window.start),
     endMinutes:
@@ -118,6 +151,22 @@ export function adaptEditorStateToBoard(
     demand,
     diagnostics,
   }
+}
+
+function sectorBoundary(
+  sectors: readonly BoardSector[],
+  storeByDay: ReadonlyMap<string, { readonly opensAt: string | null; readonly closesAt: string | null }>,
+  date: string,
+  sectorId: string,
+  side: "open" | "close"
+): number | null {
+  const weekDay = weekDayOf(date)
+  const sector = sectors.find((entry) => entry.id === sectorId)
+  const own = sector?.hours?.find((entry) => entry.day === weekDay)
+  const hours = own ?? storeByDay.get(weekDay)
+  if (!hours || ("closed" in hours && hours.closed)) return null
+  const value = side === "open" ? hours.opensAt : hours.closesAt
+  return value ? minutesOf(value) : null
 }
 
 /** Demand ids are minted as `req_<sectorId>_<date>_<time>` by the flow. */

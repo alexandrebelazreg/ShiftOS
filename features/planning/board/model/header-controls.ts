@@ -16,6 +16,8 @@ export interface SectorChoice {
   readonly id: string
   readonly name: string
   readonly selected: boolean
+  /** Allows the menu to expose the configured group without name matching. */
+  readonly marketZone?: boolean
 }
 
 /**
@@ -33,6 +35,25 @@ export function summarizeSectorSelection(sectors: readonly SectorChoice[]): stri
   if (selected.length === 1) return selected[0].name
   if (selected.length === 2) return `${selected[0].name} + ${selected[1].name}`
   return `${selected.length} secteurs`
+}
+
+export interface MarketZoneSelectionState {
+  readonly count: number
+  readonly selected: boolean
+}
+
+/** Group checkbox state, kept out of the presentational menu. */
+export function marketZoneSelectionState(
+  sectors: readonly SectorChoice[]
+): MarketZoneSelectionState {
+  let count = 0
+  let selectedCount = 0
+  for (const sector of sectors) {
+    if (!sector.marketZone) continue
+    count += 1
+    if (sector.selected) selectedCount += 1
+  }
+  return { count, selected: count > 0 && selectedCount === count }
 }
 
 // ── Primary action ───────────────────────────────────────────────────────────

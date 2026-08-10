@@ -28,9 +28,49 @@ export interface SectorPlanningRules {
   readonly name: string
   readonly active: boolean
   readonly weeklyDistribution: Readonly<Record<WeekDay, number>>
+  /**
+   * Per-day targets used when percentages are disabled.
+   *
+   * Percentages cannot express six identical days exactly (16.67 % each), so
+   * the application may supply the quarter-hour totals derived from coverage.
+   * Legacy and manually configured sectors omit this field and keep the
+   * percentage computation unchanged.
+   */
+  readonly dailyBudgetMinutes?: Readonly<Record<WeekDay, number>>
+  /**
+   * `target` makes the percentage distribution an optimisation preference.
+   * Absent preserves the historical exact-budget contract for old callers.
+   */
+  readonly dailyBudgetMode?: "exact" | "target"
   readonly minimumShiftDuration: number
   readonly splitShiftAllowed: boolean
   readonly maximumSplitDuration: number | null
+  /**
+   * Default weekly caps every employee of the sector inherits, unless they
+   * declare their own. Absent (or null) means the sector sets no default, which
+   * is NOT zero: an employee with neither an individual cap nor a sector one is
+   * simply uncapped.
+   */
+  readonly maximumOpeningsPerWeek?: number | null
+  readonly maximumClosingsPerWeek?: number | null
+  /**
+   * Advanced scheduling rules. All optional: a caller that predates the
+   * « Contraintes avancées » block omits them, and the builder then keeps the
+   * behaviour that caller was written against rather than inventing a rule.
+   */
+  readonly maximumDailyDuration?: number | null
+  readonly maximumContinuousDuration?: number | null
+  readonly minimumSplitDuration?: number | null
+  readonly maximumSplitsPerDay?: number | null
+  readonly minimumOpeningsPerDay?: number | null
+  readonly requiredClosingsPerDay?: number | null
+  readonly minimumRestMinutes?: number | null
+  /** Soft closing-fairness policy. Absent means the sector declares none. */
+  readonly closingFairness?: {
+    readonly balanceClosings: boolean
+    readonly balanceSaturdayClosings: boolean
+    readonly lookbackWeeks: number
+  } | null
   readonly assignedEmployeeIds: readonly EmployeeId[]
   readonly requirementIds: readonly string[]
   readonly workEveryNonFixedRestDay?: boolean
@@ -46,6 +86,8 @@ export interface SectorPlanningRules {
 export interface EmployeePlanningPreference {
   readonly employeeId: EmployeeId
   readonly prefersClosing: boolean
+  /** Identifiants des rayons, dans l'ordre de priorité de la fiche salarié. */
+  readonly sectorIds?: readonly string[]
 }
 
 export interface BusinessPlanningContext {

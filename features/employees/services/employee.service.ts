@@ -1,5 +1,5 @@
 import type { EmployeeDraft } from "@/features/employees/schemas/employee.schema"
-import type { EmployeeRecord } from "@/features/employees/types/employee.types"
+import type { EmployeeRecord, EmployeeScheduleType } from "@/features/employees/types/employee.types"
 import { WEEK_DAYS } from "@/features/core/models"
 
 /**
@@ -60,6 +60,7 @@ export const employeeService = {
       schemaVersion: 2,
       weeklyMinutes: draft.weeklyMinutes ?? Math.round(draft.weeklyHours * 60),
       contractMinuteConfirmationRequired: false,
+      scheduleType: draft.scheduleType ?? "variable",
       workingDays: WEEK_DAYS.filter((day) => !draft.fixedDaysOff.includes(day)),
       id: nextId(),
       createdAt: timestamp,
@@ -82,6 +83,7 @@ export const employeeService = {
       schemaVersion: 2,
       weeklyMinutes: draft.weeklyMinutes ?? Math.round(draft.weeklyHours * 60),
       contractMinuteConfirmationRequired: false,
+      scheduleType: draft.scheduleType ?? employees[index].scheduleType ?? "variable",
       workingDays: WEEK_DAYS.filter((day) => !draft.fixedDaysOff.includes(day)),
       id,
       updatedAt: nowIso(),
@@ -107,11 +109,23 @@ export const employeeService = {
     persist()
     return { ...updated }
   },
+
+  /** Small card-level mutation: changing this classification edits no contract. */
+  async setScheduleType(id: string, scheduleType: EmployeeScheduleType): Promise<EmployeeRecord> {
+    hydrate()
+    const index = employees.findIndex((employee) => employee.id === id)
+    if (index === -1) throw new Error(`Employee not found: ${id}`)
+    const updated = { ...employees[index], scheduleType, updatedAt: nowIso() }
+    employees = employees.map((employee, current) => (current === index ? updated : employee))
+    persist()
+    return { ...updated }
+  },
 }
 
 export function normalizeContract(employee: EmployeeRecord): EmployeeRecord {
-  if (typeof employee.weeklyMinutes === "number") return { ...employee, schemaVersion: 2, weeklyHours: employee.weeklyMinutes / 60, contractMinuteConfirmationRequired: false }
-  if (employee.weeklyHours === 36.5) return { ...employee, schemaVersion: 1, weeklyMinutes: null, contractMinuteConfirmationRequired: true }
+  const scheduleType = employee.scheduleType ?? "variable"
+  if (typeof employee.weeklyMinutes === "number") return { ...employee, scheduleType, schemaVersion: 2, weeklyHours: employee.weeklyMinutes / 60, contractMinuteConfirmationRequired: false }
+  if (employee.weeklyHours === 36.5) return { ...employee, scheduleType, schemaVersion: 1, weeklyMinutes: null, contractMinuteConfirmationRequired: true }
   const weeklyMinutes = Math.round(employee.weeklyHours * 60)
-  return { ...employee, schemaVersion: 2, weeklyMinutes, weeklyHours: weeklyMinutes / 60, contractMinuteConfirmationRequired: false }
+  return { ...employee, scheduleType, schemaVersion: 2, weeklyMinutes, weeklyHours: weeklyMinutes / 60, contractMinuteConfirmationRequired: false }
 }

@@ -5,6 +5,7 @@ import { useCallback, useEffect, useState } from "react"
 import type { EmployeeDraft } from "@/features/employees/schemas/employee.schema"
 import { employeeService } from "@/features/employees/services/employee.service"
 import type { EmployeeRecord } from "@/features/employees/types/employee.types"
+import type { EmployeeScheduleType } from "@/features/employees/types/employee.types"
 
 /**
  * React state wrapper around `employeeService`. Holds the list as the single
@@ -59,11 +60,21 @@ export function useEmployees() {
     [refresh]
   )
 
+  const setEmployeeScheduleType = useCallback(
+    async (id: string, scheduleType: EmployeeScheduleType) => {
+      const updated = await employeeService.setScheduleType(id, scheduleType)
+      await refresh()
+      return updated
+    },
+    [refresh]
+  )
+
   return {
     employees,
     isLoading,
     createEmployee,
     updateEmployee,
     disableEmployee,
+    setEmployeeScheduleType,
   }
 }

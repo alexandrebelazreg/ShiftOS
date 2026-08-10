@@ -4,12 +4,13 @@ import { useState } from "react"
 
 import { cn } from "@/lib/utils"
 
-import { summarizeSectorSelection, type SectorChoice } from "@/features/planning/board/model/header-controls"
+import { marketZoneSelectionState, summarizeSectorSelection, type SectorChoice } from "@/features/planning/board/model/header-controls"
 
 interface PlanningSectorMenuProps {
   readonly sectors: readonly SectorChoice[]
   readonly onToggleSector: (sectorId: string) => void
   readonly onToggleAll: (selectAll: boolean) => void
+  readonly onToggleMarketZone?: (selectAll: boolean) => void
 }
 
 /**
@@ -21,9 +22,10 @@ interface PlanningSectorMenuProps {
  * master toggle plus one checkbox per sector; nothing is hard-coded to a known
  * set, so a new sector needs no change here.
  */
-export function PlanningSectorMenu({ sectors, onToggleSector, onToggleAll }: PlanningSectorMenuProps) {
+export function PlanningSectorMenu({ sectors, onToggleSector, onToggleAll, onToggleMarketZone }: PlanningSectorMenuProps) {
   const [open, setOpen] = useState(false)
   const allSelected = sectors.length > 0 && sectors.every((sector) => sector.selected)
+  const marketZone = marketZoneSelectionState(sectors)
   const label = summarizeSectorSelection(sectors)
 
   return (
@@ -62,6 +64,14 @@ export function PlanningSectorMenu({ sectors, onToggleSector, onToggleAll }: Pla
               onChange={() => onToggleAll(!allSelected)}
               strong
             />
+            {marketZone.count > 0 && onToggleMarketZone ? (
+              <MenuOption
+                label={`Zone marché (${marketZone.count} secteurs)`}
+                checked={marketZone.selected}
+                onChange={() => onToggleMarketZone(!marketZone.selected)}
+                strong
+              />
+            ) : null}
             <div className="my-1 border-t" />
             {sectors.map((sector) => (
               <MenuOption

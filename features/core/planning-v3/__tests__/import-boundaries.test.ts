@@ -116,9 +116,14 @@ describe("frontière d'import de Planning V3", () => {
     expect(offences).toEqual([])
   })
 
-  it("couvre bien le moteur décomposé", () => {
-    const decomposed = files.filter((path) => path.includes("solver-decomposed"))
-    expect(decomposed.length).toBeGreaterThanOrEqual(8)
+  it("ne contient plus aucun solveur", () => {
+    // Le socle porte le modèle, le constructeur, l'équité et le validateur —
+    // et aucun moteur. C'est ce qui lui permet d'être importé partout, navigateur
+    // compris, sans traîner une recherche ni un sous-processus.
+    const solvers = files.filter(
+      (path) => path.includes("solver-decomposed") || path.includes(join("planning-v3", "solver"))
+    )
+    expect(solvers).toEqual([])
   })
 
   it("n'autorise le générateur V2 que comme types d'entrée du constructeur", () => {

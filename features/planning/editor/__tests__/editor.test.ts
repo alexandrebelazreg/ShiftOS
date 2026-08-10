@@ -5,11 +5,10 @@ import type { EmployeeId, ShiftId } from "@/features/core/models"
 import type { StoreConfig } from "@/features/store/schemas/store.schema"
 import type { EmployeeRecord } from "@/features/employees/types/employee.types"
 
-import { runPlanningFlow } from "@/features/planning/flow"
+import { editorStateFixture } from "@/features/planning/__tests__/editor-state-fixture"
 import {
   buildEmployeeSummary,
   buildSectorGrid,
-  createEditorState,
   deleteShift,
   editShiftTime,
   evaluateEditor,
@@ -82,15 +81,7 @@ const SCOPE = { planningId: "planning_1", period: { start: MON, end: "2026-07-12
 
 /** Generate a planning and open it in the editor. */
 function openEditor(employees: EmployeeRecord[]): EditorState {
-  const result = runPlanningFlow({ store: storeConfig(), employees, scope: SCOPE })
-  if (result.status !== "success") throw new Error("generation failed")
-  return createEditorState({
-    coreInput: result.coreInput,
-    configuration: result.configuration,
-    planning: result.generation.planning,
-    shifts: result.generation.shifts,
-    assignments: result.generation.assignments,
-  })
+  return editorStateFixture({ store: storeConfig(), employees, scope: SCOPE })
 }
 
 const brand = <T>(v: string): T => v as unknown as T

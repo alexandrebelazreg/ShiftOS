@@ -4,22 +4,23 @@ import type { ConstraintEvaluationReport } from "@/features/core/constraint-engi
 import type { Coverage } from "@/features/core/demand-engine"
 import type { FairnessReport } from "@/features/core/fairness-engine"
 import type { PlanningScore } from "@/features/core/scoring-engine"
-import type { GenerationStatistics } from "@/features/core/planning-generator/types/generation-statistics"
-import type { AssignmentRanking } from "@/features/core/planning-generator/types/assignment-ranking"
-import type { PlanningExplanation, PlanningIssue, PipelinePhaseName, RepairAttemptStatistics } from "@/features/core/planning-generator/types/business-pipeline"
-import type { WeeklyMinuteAllocation } from "@/features/core/planning-generator/pipeline/weekly-minute-allocator"
 
 /**
- * PlanningGenerationResult — the complete output of a generation run. It bundles
- * the generated planning with the verdict of EVERY downstream engine, so a
- * caller gets one artifact to display, compare or persist.
+ * PlanningEvaluationResult — the verdict of every evaluation engine on one
+ * schedule.
  *
- * Nothing here is recomputed by the generator: each field is produced by the
- * engine that owns it (constraint / demand / fairness / scoring).
+ * It used to be `PlanningGenerationResult`, the output of the V2 pipeline, and
+ * carried that pipeline's own bookkeeping alongside the verdicts: ranking
+ * explanations, phase traces, repair statistics, the weekly minute allocation.
+ * All of it described HOW V2 built a week, and all of it went with V2.
+ *
+ * What is left is the part that describes a week rather than the making of one,
+ * which is why the editor's live indicators are built on it and why it survives
+ * an engine change.
  */
-export interface PlanningGenerationResult {
+export interface PlanningEvaluationResult {
   readonly planning: Planning
-  /** Shifts created to host the assignments. */
+  /** Shifts hosting the assignments. */
   readonly shifts: readonly Shift[]
   readonly assignments: readonly Assignment[]
 
@@ -31,14 +32,4 @@ export interface PlanningGenerationResult {
   readonly fairness: FairnessReport
   /** Scoring Engine structured score. */
   readonly score: PlanningScore
-
-  readonly statistics: GenerationStatistics
-  /** Per-assignment ranking explanations (empty for non-ranking strategies). */
-  readonly assignmentRankings: readonly AssignmentRanking[]
-  readonly status: "complete" | "degraded" | "blocked"
-  readonly explanations: readonly PlanningExplanation[]
-  readonly issues: readonly PlanningIssue[]
-  readonly phaseTrace: readonly PipelinePhaseName[]
-  readonly repairAttempts: readonly RepairAttemptStatistics[]
-  readonly weeklyAllocation: WeeklyMinuteAllocation | null
 }

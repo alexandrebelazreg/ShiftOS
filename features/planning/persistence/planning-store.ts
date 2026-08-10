@@ -18,8 +18,8 @@ import * as lifecycle from "@/features/planning/persistence/planning-lifecycle"
  * React.
  */
 export interface PlanningStore {
-  createDraft(state: EditorState): Promise<PlanningRecord>
-  save(id: string, state: EditorState): Promise<PlanningRecord>
+  createDraft(state: EditorState, sectorIds?: readonly string[]): Promise<PlanningRecord>
+  save(id: string, state: EditorState, sectorIds?: readonly string[]): Promise<PlanningRecord>
   publish(id: string): Promise<PlanningRecord>
   archive(id: string): Promise<PlanningRecord>
   /** Clone a published planning into a fresh, editable draft (originals stay). */
@@ -52,13 +52,13 @@ export function createPlanningStore(
   }
 
   return {
-    async createDraft(state) {
-      const record = lifecycle.createDraft(state, now(), generateId())
+    async createDraft(state, sectorIds) {
+      const record = lifecycle.createDraft(state, now(), generateId(), sectorIds)
       await repository.save(record)
       return record
     },
-    async save(id, state) {
-      const updated = lifecycle.withSavedState(await require(id), state, now())
+    async save(id, state, sectorIds) {
+      const updated = lifecycle.withSavedState(await require(id), state, now(), sectorIds)
       await repository.save(updated)
       return updated
     },

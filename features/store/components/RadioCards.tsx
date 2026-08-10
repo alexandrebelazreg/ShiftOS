@@ -1,6 +1,7 @@
 "use client"
 
-import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group"
+import { useId } from "react"
+
 import { cn } from "@/lib/utils"
 
 export type RadioCardOption<T extends string> = {
@@ -18,25 +19,27 @@ export function RadioCards<T extends string>({
   onChange,
   options,
   invalid,
+  className,
 }: {
   value: T
   onChange: (value: T) => void
   options: readonly RadioCardOption<T>[]
   invalid?: boolean
+  className?: string
 }) {
+  const groupName = useId()
+
   return (
-    <RadioGroup
-      value={value}
-      onValueChange={(next) => onChange(next as T)}
+    <div
+      role="radiogroup"
       aria-invalid={invalid || undefined}
-      className="gap-2"
+      className={cn("gap-2", className)}
     >
       {options.map((option) => {
         const selected = value === option.value
         return (
-          <div
+          <label
             key={option.value}
-            onClick={() => onChange(option.value)}
             className={cn(
               "flex cursor-pointer items-start gap-3 rounded-lg border p-3 transition-colors",
               selected
@@ -44,10 +47,14 @@ export function RadioCards<T extends string>({
                 : "border-input hover:bg-muted/50"
             )}
           >
-            <RadioGroupItem
+            <input
+              type="radio"
+              name={groupName}
               value={option.value}
               aria-label={option.label}
-              className="mt-0.5"
+              checked={selected}
+              onChange={() => onChange(option.value)}
+              className="mt-0.5 size-4 shrink-0 accent-primary"
             />
             <div className="grid gap-0.5">
               <span className="text-sm font-medium">{option.label}</span>
@@ -57,9 +64,9 @@ export function RadioCards<T extends string>({
                 </span>
               ) : null}
             </div>
-          </div>
+          </label>
         )
       })}
-    </RadioGroup>
+    </div>
   )
 }

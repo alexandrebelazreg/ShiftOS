@@ -27,6 +27,10 @@ export function mapStore(input: StoreInput, now: IsoDateTime): Store {
       granularity: config.planning.granularity,
       minShiftDuration: config.planning.minShiftDuration,
       maxShiftDuration: config.planning.maxShiftDuration,
+      // La configuration porte les DEUX depuis toujours ; ce pont n'en exposait
+      // qu'une, et le traducteur V3 devait donc faire d'une traite un plafond
+      // de journée. « 8 h d'affilée, 10 h avec coupure » ne pouvait pas être dit.
+      maxDailyDuration: config.shift.maxDailyDuration,
     },
     splitShiftPolicy: {
       kind: split.enabled ? "allowed" : "forbidden",

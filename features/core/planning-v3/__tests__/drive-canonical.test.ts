@@ -46,7 +46,22 @@ import {
  * `hardMinimumEmployees` blindness this pin caught before, and the reason the
  * pin exists at all.
  */
-export const DRIVE_CANONICAL_FINGERPRINT = "p3_b114fe2b5b80e957"
+/*
+ * Re-pinned twice, both times because a rule stopped living only in this file.
+ *
+ * First when « ne commence pas avant » became a real `EARLIEST_START`
+ * constraint. Then when the sector gained its « Contraintes avancées » block:
+ * `maximumContinuousMinutes`, `minimumSplitMinutes` and `maximumSplitsPerDay`
+ * are now declared by the configuration and translated by the builder, so the
+ * last post-build override is gone. Only `maximumSplitsPerDay` actually changed
+ * value — from `null`, meaning unlimited, to the 1 the Drive has always run on.
+ *
+ * Moved a third time when closing fairness landed: `PlanningRulesV3` gained a
+ * `closingFairness` policy (null here — this Drive declares none) and the
+ * objective vector gained `saturday-closing-fairness`. Both are hashed, so the
+ * digest moves even where no rule of this problem changed.
+ */
+export const DRIVE_CANONICAL_FINGERPRINT = "p3_773bce83cf527f2f"
 
 const problem = buildDriveCanonicalProblem()
 
@@ -345,8 +360,10 @@ describe("Drive canonique — stabilité", () => {
  * Set `UPDATE_DRIVE_CANONICAL=1` to rewrite the snapshots after an intended
  * change.
  */
-describe("Drive canonique — instantanés partagés avec le spike Python", () => {
-  const root = join(process.cwd(), "experiments", "planning-v3-cpsat", "fixtures")
+describe("Drive canonique — instantanés partagés avec le moteur Python", () => {
+  // Ces instantanés vivaient sous l'expérience CP-SAT, supprimée avec son
+  // moteur. Ils appartenaient au problème, pas au solveur qui le lisait.
+  const root = join(process.cwd(), "experiments", "planning-v3-highs", "fixtures")
   const problemPath = join(root, "drive-canonical-problem.json")
   const solutionPath = join(root, "drive-canonical-reference-solution.json")
 

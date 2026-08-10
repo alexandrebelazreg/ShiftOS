@@ -7,6 +7,8 @@ import {
 } from "@/features/core/planning-contract/adapters/highs-fast"
 import { buildAccueilCanonicalProblem } from "@/features/core/planning-v3/__tests__/accueil-canonical"
 import { buildDriveCanonicalProblem } from "@/features/core/planning-v3/__tests__/drive-canonical"
+import { buildMarketZoneCanonicalProblem } from "@/features/core/planning-v3/__tests__/market-zone-canonical"
+import { validatePlanningSolutionV3 } from "@/features/core/planning-v3/validator"
 import type { SolvePlanningRequest } from "@/features/core/planning-contract/types/solve-request"
 
 /**
@@ -86,6 +88,31 @@ describe("v3-highs-fast — bout en bout, vrai sous-processus", () => {
       const response = await createHighsFastAdapter({ timeoutSeconds: 60 })(request(problem))
       // Deux choix heuristiques précèdent la seule étape exacte.
       expect(response.outcome).not.toBe("optimal")
+    },
+    180_000
+  )
+
+  it.skipIf(!available)(
+    "résout Zone marché en respectant couverture, contrats et priorités secteur",
+    async () => {
+      const problem = buildMarketZoneCanonicalProblem()
+      const response = await createHighsFastAdapter({ timeoutSeconds: 60 })(request(problem))
+
+      expect(response.outcome).not.toBe("backend-error")
+      expect(response.solution).not.toBeNull()
+      const report = validatePlanningSolutionV3(problem, response.solution!)
+      expect(report.validHardConstraints).toBe(true)
+      expect(report.underCoveredSlots).toBe(0)
+      expect(report.metrics.totalDeficitMinutes).toBe(0)
+
+      const employeeById = new Map(problem.employees.map((person) => [String(person.id), person]))
+      const nonPrimaryBlocks = response.solution!.assignments.flatMap((assignment) => {
+        const primary = employeeById.get(String(assignment.employeeId))?.allowedSectorIds?.[0]
+        return (assignment.sectorAssignments ?? []).flatMap((block) =>
+          block.sectorId === primary ? [] : [{ employeeId: String(assignment.employeeId), date: assignment.date, primary, block }]
+        )
+      })
+      expect(nonPrimaryBlocks).toEqual([])
     },
     180_000
   )

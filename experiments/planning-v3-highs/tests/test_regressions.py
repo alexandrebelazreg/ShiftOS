@@ -282,6 +282,16 @@ class UnplacedAnchorTests(unittest.TestCase):
             sorted(self.problem["employees"], key=lambda item: str(item["id"]))
         ):
             self.assertEqual(sum(neighbour.minutes[index]), employee["contractMinutes"])
+        for day_index, day in enumerate(
+            sorted(
+                [entry for entry in self.problem["days"] if not entry["closed"]],
+                key=lambda entry: entry["date"],
+            )
+        ):
+            self.assertEqual(
+                sum(row[day_index] for row in neighbour.minutes),
+                day["budgetMinutes"],
+            )
 
     def test_the_pipeline_reports_every_couple_it_placed(self) -> None:
         """End to end, and the anchor bookkeeping still has to be honest.

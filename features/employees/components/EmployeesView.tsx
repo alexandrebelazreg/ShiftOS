@@ -12,7 +12,7 @@ import { Button } from "@/components/ui/button"
  * drawer. Owns the drawer state and wires form submissions to the data hook.
  */
 export function EmployeesView() {
-  const { employees, isLoading } = useEmployees()
+  const { employees, isLoading, setEmployeeScheduleType } = useEmployees()
   const router = useRouter()
   const openCreate = () => router.push("/configuration/employes/nouveau")
 
@@ -53,6 +53,7 @@ export function EmployeesView() {
             <EmployeeCard
               key={employee.id}
               employee={employee}
+              onScheduleTypeChange={(scheduleType) => setEmployeeScheduleType(employee.id, scheduleType)}
             />
           ))}
         </div>

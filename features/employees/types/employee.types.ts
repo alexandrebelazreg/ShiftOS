@@ -15,6 +15,9 @@ import type {
   WeekDay,
 } from "@/features/core/models"
 
+export const EMPLOYEE_SCHEDULE_TYPES = ["variable", "fixed"] as const
+export type EmployeeScheduleType = (typeof EMPLOYEE_SCHEDULE_TYPES)[number]
+
 /** Flat employee record backing the UI and the mock service. */
 export interface EmployeeRecord {
   /** Persistence schema v2 makes weeklyMinutes authoritative. */
@@ -35,6 +38,8 @@ export interface EmployeeRecord {
   contractMinuteConfirmationRequired?: boolean
   workingDays: WeekDay[]
   contractType: ContractType
+  /** Classification chosen on the employee card. Legacy records are variable. */
+  scheduleType?: EmployeeScheduleType
 
   /** Product metadata used to present the employee's mastered sectors. */
   sectors?: string[]
@@ -49,6 +54,29 @@ export interface EmployeeRecord {
   forbiddenDays: WeekDay[]
   maxOpenings: number | null
   maxClosings: number | null
+
+  /**
+   * Contraintes avancées — optionnelles, et absentes de tous les employés
+   * enregistrés avant leur introduction. `null` et `undefined` disent la même
+   * chose : aucune restriction, l'employé hérite de la fenêtre du secteur.
+   * Jamais "00:00", qui serait une borne réelle.
+   */
+  earliestStartTime?: string | null
+  latestEndTime?: string | null
+  /**
+   * L'heure ci-dessus est-elle IMPOSÉE plutôt qu'une borne ?
+   *
+   * Un drapeau plutôt qu'un second champ : « ne commence pas avant 07:00 »
+   * et « commence à 07:00 » portent la même heure et ne diffèrent que par
+   * leur fermeté. Deux champs auraient permis de les remplir tous les deux
+   * avec des heures différentes, et il aurait fallu inventer laquelle gagne.
+   */
+  startTimeIsExact?: boolean
+  endTimeIsExact?: boolean
+  /** Jours où ce salarié ouvre, quel que soit le rayon qu'il sert. */
+  openingDays?: WeekDay[]
+  /** Jours où il ferme. */
+  closingDays?: WeekDay[]
 
   // Préférences (optional)
   preferOpening: boolean
@@ -78,6 +106,7 @@ export interface EmployeeFormValues {
   contractConfirmationRequired: boolean
   legacyContractMinutes: "" | "2190" | "2205"
   contractType: ContractType
+  scheduleType: EmployeeScheduleType
   sectors: string[]
   competencies: Record<string, string[]>
 
@@ -89,6 +118,13 @@ export interface EmployeeFormValues {
   forbiddenDays: WeekDay[]
   maxOpenings: string
   maxClosings: string
+  /** "HH:mm" or "" — the empty string is the form's way of saying "no bound". */
+  earliestStartTime: string
+  latestEndTime: string
+  startTimeIsExact: boolean
+  endTimeIsExact: boolean
+  openingDays: WeekDay[]
+  closingDays: WeekDay[]
 
   // Préférences
   preferOpening: boolean

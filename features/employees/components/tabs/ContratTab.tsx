@@ -95,6 +95,29 @@ export function ContratTab() {
         </div>
       ) : null}
 
+      <FormRow label="Type d’horaire" description="Variable est sélectionné par défaut. Le mode fixe classe l’employé sans modifier son contrat.">
+        <Controller
+          control={control}
+          name="scheduleType"
+          render={({ field }) => (
+            <div className="flex flex-wrap gap-3">
+              {(["variable", "fixed"] as const).map((value) => (
+                <label key={value} className="flex items-center gap-2 rounded-lg border px-3 py-2 text-sm">
+                  <input
+                    type="radio"
+                    name={field.name}
+                    value={value}
+                    checked={field.value === value}
+                    onChange={() => field.onChange(value)}
+                  />
+                  Horaire {value === "variable" ? "variable" : "fixe"}
+                </label>
+              ))}
+            </div>
+          )}
+        />
+      </FormRow>
+
       <p className="rounded-lg border border-dashed p-4 text-sm text-muted-foreground">Les jours travaillés sont automatiquement déduits des repos fixes.</p>
     </div>
   )
