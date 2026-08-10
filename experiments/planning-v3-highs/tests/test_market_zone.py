@@ -732,6 +732,93 @@ class NarrowingAnUnsolvableSpaceTests(unittest.TestCase):
         self.assertLess(len(shifts.shifts), MAXIMUM_SHIFTS_BEFORE_NARROWING)
 
 
+class TheCounterHasAHolderTests(unittest.TestCase):
+    """Qui tient un comptoir de bout en bout, quand la réponse est forcée."""
+
+    @staticmethod
+    def _only_available(problem: dict, keep: set[str]) -> dict:
+        for entry in problem["employeeDays"]:
+            if str(entry["employeeId"]) not in keep:
+                entry.update({"available": False, "mandatory": False, "maximumMinutes": 0})
+        return problem
+
+    def test_the_only_authorised_person_still_holds_both_ends(self) -> None:
+        """La déduction historique, qui ne doit pas être perdue en chemin."""
+        from shiftos_highs_fast.shifts import sole_server_duties
+
+        problem = self._only_available(_zone(counters=3), {"c0-1"})
+        duties = sole_server_duties(problem)
+        # Elle sert aussi c1 en second choix, et y est également seule.
+        self.assertIn(("c0", 540, 1020), duties[("c0-1", "2026-07-20")])
+
+    def test_the_only_person_whose_first_counter_it_is_holds_it(self) -> None:
+        """L'élargissement demandé par le métier.
+
+        Les autres l'ont en deuxième choix : ils viendront en renfort, mais
+        tenir le comptoir d'un bout à l'autre revient à celui dont c'est le
+        rayon. Sans cette lecture, un comptoir de douze heures servi par une
+        titulaire et un renfort restait sans titulaire désigné, et le moteur
+        donnait huit heures à la première puis laissait quatre heures éteintes.
+        """
+        from shiftos_highs_fast.shifts import sole_server_duties
+
+        # c2-1 et c2-2 servent c0 en SECOND choix ; seule c0-1 l'a en premier.
+        problem = self._only_available(_zone(counters=3), {"c0-1", "c2-1", "c2-2"})
+        duties = sole_server_duties(problem, designate_holders=True)
+        self.assertIn(("c0", 540, 1020), duties[("c0-1", "2026-07-20")])
+
+    def test_two_holders_designate_nobody(self) -> None:
+        """Rien n'est forcé quand rien n'est déduit : deux titulaires, pas de règle."""
+        from shiftos_highs_fast.shifts import sole_server_duties
+
+        problem = self._only_available(_zone(counters=3), {"c0-1", "c0-2"})
+        duties = sole_server_duties(problem, designate_holders=True)
+        self.assertNotIn(("c0-1", "2026-07-20"), duties)
+        self.assertNotIn(("c0-2", "2026-07-20"), duties)
+
+    def test_a_holder_who_cannot_split_only_owes_the_opening(self) -> None:
+        """L'arbitrage du métier, mot pour mot.
+
+        On ne va pas exiger d'une personne qui ne coupe pas qu'elle couvre une
+        amplitude plus longue que sa traite — ni la priver du comptoir pour
+        autant. Elle ouvre, et fait ses heures à partir de là.
+        """
+        from shiftos_highs_fast.shifts import sole_server_duties
+
+        problem = self._only_available(_zone(counters=3), {"c0-1"})
+        for sector in problem["sectors"]:
+            if sector["id"] == "c0":
+                sector["days"][0]["closesAtMinutes"] = 1_140  # neuf heures d'amplitude
+        for entry in problem["employeeDays"]:
+            entry["latestEndMinutes"] = 1_140
+        # Seule autorisée, elle garde les deux bouts : personne d'autre ne peut
+        # fermer, et une impossibilité doit remonter plutôt que disparaître.
+        problem["employees"].append({
+            **problem["employees"][0], "id": "renfort", "allowedSectorIds": ["c1", "c0"],
+        })
+        problem["employeeDays"].append({
+            "employeeId": "renfort", "date": "2026-07-20", "available": True,
+            "mandatory": True, "fixedRest": False, "earliestStartMinutes": 540,
+            "latestEndMinutes": 1_140, "maximumMinutes": 480,
+        })
+        duties = sole_server_duties(problem, designate_holders=True)
+        self.assertIn(("c0", 540, None), duties[("c0-1", "2026-07-20")])
+
+    def test_someone_who_cannot_be_there_at_opening_is_never_designated(self) -> None:
+        """Une déduction ne doit jamais rendre une cellule impossible.
+
+        Lui imposer le comptoir ne produirait aucune forme légale : la cellule
+        serait déclarée morte par un raisonnement, pas par une règle.
+        """
+        from shiftos_highs_fast.shifts import sole_server_duties
+
+        problem = self._only_available(_zone(counters=3), {"c0-1"})
+        for entry in problem["employeeDays"]:
+            if str(entry["employeeId"]) == "c0-1":
+                entry["earliestStartMinutes"] = 600
+        self.assertNotIn(("c0-1", "2026-07-20"), sole_server_duties(problem))
+
+
 class OpeningLateIsWorseThanAQuietGapTests(unittest.TestCase):
     """Toutes les heures manquantes ne se valent pas."""
 

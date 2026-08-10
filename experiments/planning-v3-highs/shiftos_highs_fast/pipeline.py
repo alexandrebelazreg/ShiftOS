@@ -64,6 +64,7 @@ from .shifts import (
     MIXED_PATTERNS_WHEN_NARROWED,
     generate_shifts,
     role_implied_by_demand,
+    sole_server_duties,
 )
 from .skeleton import Skeleton, generate_skeletons, generate_skeletons_from_capacity
 from .skeleton_allocation import (
@@ -1168,6 +1169,7 @@ def solve_fast(
 
     # ── 1. Demand rescaling and hard floors ─────────────────────────────────
     demand = build_demand_model(problem)
+    demand_step = int(problem["timeStepMinutes"])
     if demand.infeasible_days:
         infeasible_days = []
         for date in demand.infeasible_days:
@@ -1225,6 +1227,59 @@ def solve_fast(
                 "proof": "structural",
             },
         }
+
+    # ── Les titulaires désignés : une VARIANTE, jamais une vérité ───────────
+    #
+    # Quand un comptoir n'a qu'une personne dont c'est le rayon principal, la
+    # tenir d'un bout à l'autre est souvent la bonne réponse : mesuré sur une
+    # semaine réelle, le déficit tombe de 345 à 135 minutes et un comptoir qui
+    # restait éteint quatre heures ne l'est plus que quinze minutes.
+    #
+    # Souvent, pas toujours. La même règle appliquée d'office à une zone tendue
+    # multiplie le déficit par deux et demi et laisse une variante sans aucun
+    # planning : épingler un titulaire consomme sa journée, et quand les heures
+    # manquent c'est un luxe qui se paie ailleurs. Le partage semble être
+    # celui-ci — la désignation aide quand la semaine a des heures en trop, elle
+    # coûte quand elle n'en a pas assez.
+    #
+    # On tranche donc avant de chercher, sur un critère qui ne coûte rien.
+    duties: dict[tuple[str, str], tuple[tuple[str, int, int | None], ...]] | None = None
+    if multi_sector:
+        without = sole_server_duties(problem, designate_holders=False)
+        with_holders = sole_server_duties(problem, designate_holders=True)
+        if with_holders != without:
+            # Le critère est gratuit et connu avant tout calcul : la semaine
+            # a-t-elle plus d'heures que sa demande n'en réclame ?
+            #
+            # Construire les deux espaces et garder le meilleur serait plus
+            # robuste, mais pas gratuit : le second espace se paie sur le budget
+            # de recherche, et la semaine tendue y perdait 75 minutes de plus.
+            # Puisque la mesure sépare franchement les deux régimes, autant
+            # choisir.
+            spare = sum(
+                day.available_worked_minutes
+                - sum(cell.reference_required for cell in day.sector_intervals) * demand_step
+                for day in demand.days.values()
+            )
+            # Les deux branches passent un jeu EXPLICITE. `None` ne veut pas dire
+            # « aucune désignation », il veut dire « calcule-les toi-même » — et
+            # ce calcul les active par défaut. Le laisser dans la branche du
+            # refus faisait exactement l'inverse de ce que le diagnostic
+            # annonçait : les désignations s'appliquaient sur une semaine tendue,
+            # une variante n'y rendait plus aucun planning, et la note disait
+            # « NON désignés ».
+            if spare >= 0:
+                duties = with_holders
+                counters.notes.append(
+                    f"titulaires désignés sur {len(with_holders)} journée(s) : "
+                    f"la semaine a {spare} minutes de marge"
+                )
+            else:
+                duties = without
+                counters.notes.append(
+                    f"titulaires NON désignés : la semaine manque de {-spare} minutes, "
+                    "et épingler un titulaire y coûte plus qu'il ne rapporte"
+                )
 
     # ── 2. Allocation — several deterministic roots, never one ──────────────
     model = build_allocation_model(problem)
@@ -1322,6 +1377,11 @@ def solve_fast(
         skeleton fixed the roles, the allocation chose durations those roles can
         actually work, and the placement is left with the single question it is
         good at — where inside the window each shift starts.
+
+        Les devoirs imposés se lisent dans la fermeture, sans passer par un
+        paramètre : la réparation et le complément appellent cette fonction eux
+        aussi, et un paramètre par défaut y aurait silencieusement rétabli des
+        désignations que la semaine venait de refuser.
         """
         nonlocal zero_coverage_tie_placements
         counters.allocations_tested += 1
@@ -1335,6 +1395,7 @@ def solve_fast(
                 demand,
                 cache=shift_cache,
                 deadline=deadline,
+                duties=duties,
             )
             # ── Un espace que le placement ne sait pas résoudre ne sert pas ──
             #
@@ -1659,6 +1720,7 @@ def solve_fast(
                 skeleton,
                 cache=duration_cache,
                 deadline=deadline,
+                duties=duties,
             )
         except TimeoutError:
             counters.notes.append("budget épuisé pendant la construction des domaines de durées")

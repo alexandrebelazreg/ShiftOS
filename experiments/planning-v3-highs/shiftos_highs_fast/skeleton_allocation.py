@@ -62,6 +62,29 @@ from .skeleton import Skeleton
 #: enumeration. Probing is a ranking device, not the placement.
 SHAPE_PROBE_CAP = 400
 
+#: Ce que coûte une journée dont les minutes IMPOSENT une coupure.
+#:
+#: Mille, quand le meilleur gain de couverture vaut dix : ce n'est pas une
+#: préférence, c'est un veto — aucune couverture, si grande soit-elle, ne peut
+#: acheter une coupure.
+#:
+#: ABAISSÉ À TROIS PUIS RÉTABLI, mesuré sur une vraie semaine à cinq comptoirs.
+#: Le raisonnement semblait imparable : un comptoir ouvert de 8h à 20h ne peut
+#: pas être tenu d'un bout à l'autre par une personne dont la traite est
+#: plafonnée à huit heures, le rayon autorisait la coupure, le salarié la
+#: portait, et dix heures en deux fois cinq couvraient tout sauf deux. La
+#: mesure a dit non : déficit 345 → 390 minutes et deux journées coupées de
+#: plus, pour quinze minutes gagnées sur le comptoir visé et un trou NEUF créé
+#: le lendemain.
+#:
+#: Pourquoi : `covered_demand` est un PROXY, la meilleure position possible de
+#: cette durée-là. Donner dix heures à quelqu'un n'oblige personne à les poser
+#: sur le comptoir qui en manque — le placement, lui, arbitre ensuite avec ses
+#: propres contraintes, et le budget journalier exact fait payer ces minutes par
+#: quelqu'un d'autre. Allonger une journée ne couvre donc pas ce qu'on croyait
+#: allonger.
+FORCED_SPLIT_PENALTY = 1_000.0
+
 
 @dataclass(frozen=True, slots=True)
 class DurationOption:
@@ -230,6 +253,7 @@ def build_duration_space(
     *,
     cache: DurationOptionCache | None = None,
     deadline: float | None = None,
+    duties: dict[tuple[str, str], tuple[tuple[str, int, int | None], ...]] | None = None,
 ) -> DurationSpace:
     """Which durations each cell can actually work, given its role.
 
@@ -274,7 +298,8 @@ def build_duration_space(
     # le dire ICI. Sinon il annonce une durée que le générateur laissera vide,
     # et le pipeline compte cette divergence comme une recherche pilotée par un
     # mensonge sur ce qui est plaçable.
-    duties = sole_server_duties(problem)
+    if duties is None:
+        duties = sole_server_duties(problem)
 
     for day_index, day in enumerate(days):
         _check_deadline(deadline)
@@ -373,7 +398,11 @@ def build_duration_space(
             # dix secondes et demie sur une semaine réelle, contre deux dixièmes
             # pour tout le travail restant.
             must_start_by = min((opens for _s, opens, _c in duty), default=None)
-            must_end_after = max((closes for _s, _o, closes in duty), default=None)
+            # Une obligation peut ne porter QUE sur l'ouverture : la titulaire
+            # qui ne coupe pas ouvre et fait ses heures, sans devoir fermer.
+            must_end_after = max(
+                (closes for _s, _o, closes in duty if closes is not None), default=None
+            )
 
             def shapes_into_sectors(segments: tuple[Segment, ...]) -> bool:
                 """La forme admet-elle une lecture par rayon ?
@@ -679,7 +708,7 @@ def solve_for_skeleton(
             score += freedom_weight * (min(option.starts, 20) / 20.0)
             objective[column] = -score
             if option.splits:
-                objective[column] += 1_000.0
+                objective[column] += FORCED_SPLIT_PENALTY
 
     result = milp(
         objective,

@@ -264,7 +264,9 @@ def role_implied_by_demand(
     return reach >= closes_at
 
 
-def sole_server_duties(problem: dict[str, Any]) -> dict[tuple[str, str], tuple[tuple[str, int, int], ...]]:
+def sole_server_duties(
+    problem: dict[str, Any], *, designate_holders: bool = False
+) -> dict[tuple[str, str], tuple[tuple[str, int, int | None], ...]]:
     """Comptoirs dont une seule personne peut tenir l'ouverture et la fermeture.
 
     Ce n'est pas une préférence de parcours, c'est une DÉDUCTION. Si un comptoir
@@ -279,6 +281,13 @@ def sole_server_duties(problem: dict[str, Any]) -> dict[tuple[str, str], tuple[t
     candidats — et laissait le MILP de placement redécouvrir, à chaque fois, la
     seule qui pouvait convenir. Fixer ces comptoirs d'abord, c'est retirer de
     l'espace de recherche ce qui n'y a jamais eu sa place.
+
+    `designate_holders` élargit la déduction en choix : quand plusieurs personnes
+    peuvent tenir le comptoir mais qu'une seule l'a en rayon principal, on la
+    désigne. Ce n'est plus une impossibilité, c'est une politique — elle gagne
+    sur une semaine qui a des heures en trop et coûte cher sur une semaine qui
+    n'en a pas assez. Elle se demande donc explicitement, et le défaut reste la
+    déduction : personne ne l'active par distraction.
     """
     sectors = problem.get("sectors") or []
     if not sectors:
@@ -300,19 +309,123 @@ def sole_server_duties(problem: dict[str, Any]) -> dict[tuple[str, str], tuple[t
             if int(sector_day.get("exactClosings") or 0) < 1:
                 continue
             date = sector_day["date"]
-            eligible = [
-                str(employee["id"])
+            available = [
+                employee
                 for employee in employees
                 if sector_id in [str(value) for value in employee.get("allowedSectorIds") or []]
                 and (entry := entries.get((str(employee["id"]), date))) is not None
                 and bool(entry["available"])
             ]
-            if len(eligible) != 1:
+            server, alone = _designated_server(available, sector_id, designate_holders)
+            if server is None:
                 continue
-            duties.setdefault((eligible[0], date), []).append(
-                (sector_id, int(sector_day["opensAtMinutes"]), int(sector_day["closesAtMinutes"]))
+            opens_at = int(sector_day["opensAtMinutes"])
+            closes_at = int(sector_day["closesAtMinutes"])
+            entry = entries[(str(server["id"]), date)]
+            # ── Une déduction ne doit jamais FABRIQUER l'impossible ──────────
+            #
+            # Désigner quelqu'un qui n'a pas le droit d'ouvrir, ou qui ne peut
+            # pas être là à l'heure, ne produit aucune forme légale : la cellule
+            # meurt, l'allocation entière tombe, et le moteur ne rend rien. Un
+            # test l'a attrapé — la règle plaçait à l'ouverture d'un comptoir
+            # une personne dont la fiche interdit précisément d'ouvrir.
+            #
+            # Ce n'est pas au raisonnement de trancher ce qu'aucune règle ne
+            # permet. Si personne ne peut ouvrir ce comptoir, c'est le préflight
+            # des rôles qui doit le dire, avec le nom et la raison.
+            if not bool(server.get("canOpen")):
+                continue
+            if int(entry["earliestStartMinutes"]) > opens_at:
+                continue
+            # Quand elle est la SEULE autorisée, tenir les deux bouts n'est pas
+            # une préférence : personne d'autre ne peut fermer. On ne l'assouplit
+            # donc que si la fermeture lui est matériellement possible — sinon
+            # la semaine est réellement impossible, et c'est au préflight des
+            # rôles de le dire plutôt qu'à cette déduction de le cacher.
+            brackets = _can_bracket(problem, server, entry, opens_at, closes_at) or (
+                alone and bool(server.get("canClose"))
+            )
+            duties.setdefault((str(server["id"]), date), []).append(
+                (sector_id, opens_at, closes_at if brackets else None)
             )
     return {key: tuple(sorted(value)) for key, value in duties.items()}
+
+
+def _designated_server(
+    available: list[dict[str, Any]], sector_id: str, designate_holders: bool
+) -> tuple[dict[str, Any] | None, bool]:
+    """Qui tient ce comptoir ce jour-là, et si c'est faute de quiconque d'autre.
+
+    Deux déductions, la seconde étant l'élargissement demandé par le métier et
+    commandée par `designate_holders` :
+
+    - une seule personne AUTORISÉE et disponible : c'est elle, quel que soit le
+      rang qu'elle donne à ce rayon. Personne d'autre ne peut y aller, donc rien
+      ne s'assouplit — le second membre du couple le dit ;
+    - une seule personne dont c'est le rayon PRINCIPAL : c'est elle aussi, mais
+      des renforts existent. Les autres l'ont en deuxième ou troisième choix ;
+      ils viendront pendant sa coupure, et pourront fermer si elle ne le peut
+      pas. Sans cette seconde lecture, un comptoir de douze heures servi par une
+      titulaire et un renfort restait sans titulaire désigné, et le moteur
+      donnait huit heures à la première puis laissait quatre heures éteintes.
+    """
+    if not available:
+        return None, False
+    if len(available) == 1:
+        return available[0], True
+    if not designate_holders:
+        return None, False
+    holders = [
+        employee
+        for employee in available
+        if [str(value) for value in employee["allowedSectorIds"]][0] == sector_id
+    ]
+    return (holders[0], False) if len(holders) == 1 else (None, False)
+
+
+def _can_bracket(
+    problem: dict[str, Any],
+    employee: dict[str, Any],
+    entry: dict[str, Any],
+    opens_at: int,
+    closes_at: int,
+) -> bool:
+    """Cette personne peut-elle tenir les DEUX bouts de ce comptoir ?
+
+    Sinon la déduction s'arrête à l'ouverture : elle ouvre et fait ses heures à
+    partir de là. C'est l'arbitrage du métier — on ne va pas exiger d'une
+    personne qui ne coupe pas qu'elle couvre treize heures d'amplitude, ni la
+    priver du comptoir pour autant.
+    """
+    rules = problem["rules"]
+    span = closes_at - opens_at
+    if not bool(employee.get("canClose")):
+        return False
+    if int(entry["latestEndMinutes"]) < closes_at:
+        return False
+    ceiling = min(
+        int(employee["maximumDailyMinutes"]),
+        int(entry["maximumMinutes"]),
+        int(rules["maximumShiftMinutes"]),
+    )
+    continuous = int(rules.get("maximumContinuousMinutes") or ceiling)
+    if span <= min(ceiling, continuous):
+        return True
+
+    own = employee.get("splitRules") if isinstance(employee.get("splitRules"), dict) else rules
+    if not bool(rules.get("splitShiftAllowed")) or not bool(employee.get("canSplitShift")):
+        return False
+    if int(own.get("maximumSplitsPerDay") or 1) < 1:
+        return False
+    segment = int(rules["minimumShiftMinutes"])
+    minimum_gap = int(own.get("minimumSplitMinutes") or 0)
+    maximum_gap = own.get("maximumSplitMinutes")
+    maximum_gap = span if maximum_gap is None else int(maximum_gap)
+    # Les minutes travaillées possibles, vues des deux côtés : ce que les règles
+    # de durée permettent, et ce que la coupure impose une fois l'amplitude fixée.
+    lowest = max(2 * segment, span - maximum_gap)
+    highest = min(ceiling, 2 * continuous, span - minimum_gap)
+    return lowest <= highest
 
 
 def demand_by_cell(problem: dict[str, Any]) -> dict[tuple[str, str, int], int]:
@@ -370,13 +483,21 @@ def _sector_patterns(
         return own if isinstance(own, dict) else problem["rules"]
 
     def honours_forced(blocks: tuple[SectorAssignment, ...]) -> bool:
-        """La plage tenue sur un comptoir forcé va-t-elle bien d'un bout à l'autre ?"""
+        """La plage tenue sur un comptoir forcé va-t-elle bien d'un bout à l'autre ?
+
+        `closes_at` à `None` : l'obligation ne porte que sur l'OUVERTURE. C'est
+        le cas d'une titulaire qui ne coupe pas et dont l'amplitude du comptoir
+        dépasse ce qu'elle tient d'une traite — elle ouvre et fait ses heures,
+        on ne lui demande pas de fermer douze heures plus tard.
+        """
         for sector_id, opens_at, closes_at in forced:
             own = [block for block in blocks if block.sector_id == sector_id]
             if not own:
                 return False
             if min(block.start for block in own) != opens_at:
                 return False
+            if closes_at is None:
+                continue
             own_day = sector_day(sector_id)
             latest = latest_close(own_day) if own_day else closes_at
             # Elle doit tenir le comptoir JUSQU'À sa fermeture nominale ; qu'elle
@@ -524,6 +645,7 @@ def generate_shifts(
     cache: ShiftShapeCache | None = None,
     deadline: float | None = None,
     mixed_cap: int | None = None,
+    duties: dict[tuple[str, str], tuple[tuple[str, int, int | None], ...]] | None = None,
 ) -> ShiftSpace:
     step = model.step
     rules = problem["rules"]
@@ -543,8 +665,11 @@ def generate_shifts(
     impossible: list[tuple[int, int]] = []
     # Construite une fois pour la semaine, et seulement si elle peut servir.
     demand_lookup = demand_by_cell(problem) if mixed_cap is not None else None
-    # Les comptoirs à serveur unique, résolus AVANT toute énumération.
-    duties = sole_server_duties(problem)
+    # Les comptoirs à serveur unique, résolus AVANT toute énumération. Le
+    # pipeline peut en imposer un jeu, parce que lui seul sait si la semaine a
+    # les heures qu'une désignation coûte.
+    if duties is None:
+        duties = sole_server_duties(problem)
     entry_of = {
         (str(entry["employeeId"]), entry["date"]): entry
         for entry in problem["employeeDays"]
@@ -610,7 +735,11 @@ def generate_shifts(
             # Une forme qui n'enveloppe pas la plage forcée ne peut produire
             # aucune lecture légale : inutile de la construire.
             must_start_by = min((opens for _s, opens, _c in duty), default=None)
-            must_end_after = max((closes for _s, _o, closes in duty), default=None)
+            # Une obligation peut ne porter QUE sur l'ouverture : la titulaire
+            # qui ne coupe pas ouvre et fait ses heures, sans devoir fermer.
+            must_end_after = max(
+                (closes for _s, _o, closes in duty if closes is not None), default=None
+            )
 
             def emit(segments: tuple[Segment, ...]) -> None:
                 if must_start_by is not None and segments[0].start > must_start_by:
