@@ -763,9 +763,41 @@ class TheCounterHasAHolderTests(unittest.TestCase):
         from shiftos_highs_fast.shifts import sole_server_duties
 
         # c2-1 et c2-2 servent c0 en SECOND choix ; seule c0-1 l'a en premier.
-        problem = self._only_available(_zone(counters=3), {"c0-1", "c2-1", "c2-2"})
+        # c1-1 est gardée disponible pour que c0-1 ne soit pas la SEULE à
+        # pouvoir servir c1 — sinon la nécessité la retiendrait là-bas et ce
+        # test mesurerait cette autre règle au lieu de celle-ci.
+        problem = self._only_available(
+            _zone(counters=3), {"c0-1", "c1-1", "c2-1", "c2-2"}
+        )
         duties = sole_server_duties(problem, designate_holders=True)
         self.assertIn(("c0", 540, 1020), duties[("c0-1", "2026-07-20")])
+
+    def test_a_holder_the_necessity_keeps_elsewhere_is_not_counted(self) -> None:
+        """La règle qui a débloqué une vraie semaine.
+
+        Deux personnes déclarent ce comptoir en n° 1, donc rien n'était désigné
+        — mais l'une des deux est la SEULE à pouvoir tenir le comptoir voisin ce
+        jour-là. Elle y sera, faute de quiconque d'autre : ce n'est pas une
+        titulaire disponible ici, elle est déjà prise. La retirer du compte ne
+        force rien de nouveau et laisse apparaître la seule réellement libre.
+
+        Mesuré sur le magasin qui l'a demandée : déficit 135 → 105 minutes,
+        comptoir éteint 105 → 75, et le titulaire ouvre enfin à l'heure au lieu
+        de prendre son poste à 12 h 45.
+        """
+        from shiftos_highs_fast.shifts import sole_server_duties
+
+        # c0-1 et c0-2 ont c0 en n° 1 ; c0-2 est la seule disponible sur c1.
+        problem = self._only_available(_zone(counters=3), {"c0-1", "c0-2"})
+        for employee in problem["employees"]:
+            if str(employee["id"]) == "c0-1":
+                employee["allowedSectorIds"] = ["c0"]
+
+        duties = sole_server_duties(problem, designate_holders=True)
+
+        # c0-2 est retenue par c1, donc c0 revient à c0-1.
+        self.assertIn(("c0", 540, 1020), duties[("c0-1", "2026-07-20")])
+        self.assertIn(("c1", 540, 1020), duties[("c0-2", "2026-07-20")])
 
     def test_two_holders_designate_nobody(self) -> None:
         """Rien n'est forcé quand rien n'est déduit : deux titulaires, pas de règle."""

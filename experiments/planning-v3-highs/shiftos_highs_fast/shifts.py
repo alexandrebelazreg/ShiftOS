@@ -299,6 +299,7 @@ def sole_server_duties(
         for entry in problem["employeeDays"]
     }
     duties: dict[tuple[str, str], list[tuple[str, int, int]]] = {}
+    claimed = _claimed_elsewhere(sectors, employees, entries)
     for sector in sectors:
         sector_id = str(sector["id"])
         for sector_day in sector["days"]:
@@ -316,7 +317,12 @@ def sole_server_duties(
                 and (entry := entries.get((str(employee["id"]), date))) is not None
                 and bool(entry["available"])
             ]
-            server, alone = _designated_server(available, sector_id, designate_holders)
+            server, alone, by_reduction = _designated_server(
+                available,
+                sector_id,
+                designate_holders,
+                claimed=claimed.get(date, {}),
+            )
             if server is None:
                 continue
             opens_at = int(sector_day["opensAtMinutes"])
@@ -342,9 +348,25 @@ def sole_server_duties(
             # donc que si la fermeture lui est matériellement possible — sinon
             # la semaine est réellement impossible, et c'est au préflight des
             # rôles de le dire plutôt qu'à cette déduction de le cacher.
+            # L'exclusivité n'impose que l'OUVERTURE, et c'est une mesure, pas
+            # une prudence : lui faire tenir les deux bouts épingle dix-neuf
+            # journées au lieu de douze — dont deux où l'amplitude moins la
+            # coupure maximale égale le maximum quotidien, ne laissant qu'UNE
+            # durée légale — et la semaine ne rend alors plus aucun planning,
+            # même avec trois minutes de budget. Le comptoir s'allume à l'heure,
+            # et sa fermeture revient aux renforts, qui ont le droit d'y être.
             brackets = _can_bracket(problem, server, entry, opens_at, closes_at) or (
                 alone and bool(server.get("canClose"))
             )
+            # Écarter un titulaire retenu ailleurs est une POLITIQUE, pas une
+            # nécessité : on ne la paie que si elle rend ce qu'elle promet, un
+            # comptoir tenu d'un bout à l'autre. Quand la personne ainsi
+            # dégagée ne peut pas boucler l'amplitude, la déduction n'ancre
+            # qu'un début — mesuré sur une zone tendue, cela suffit à ne plus
+            # rendre aucun planning, trois fois sur trois, pour un comptoir qui
+            # restait de toute façon éteint le soir.
+            if by_reduction and not brackets:
+                continue
             duties.setdefault((str(server["id"]), date), []).append(
                 (sector_id, opens_at, closes_at if brackets else None)
             )
@@ -352,7 +374,11 @@ def sole_server_duties(
 
 
 def _designated_server(
-    available: list[dict[str, Any]], sector_id: str, designate_holders: bool
+    available: list[dict[str, Any]],
+    sector_id: str,
+    designate_holders: bool,
+    *,
+    claimed: dict[str, str],
 ) -> tuple[dict[str, Any] | None, bool]:
     """Qui tient ce comptoir ce jour-là, et si c'est faute de quiconque d'autre.
 
@@ -367,20 +393,77 @@ def _designated_server(
       ils viendront pendant sa coupure, et pourront fermer si elle ne le peut
       pas. Sans cette seconde lecture, un comptoir de douze heures servi par une
       titulaire et un renfort restait sans titulaire désigné, et le moteur
-      donnait huit heures à la première puis laissait quatre heures éteintes.
+      donnait huit heures à la première puis laissait quatre heures éteintes ;
+    Le compte des titulaires ignore ceux que la NÉCESSITÉ retient ailleurs
+    (`claimed`). Mesuré sur un vrai magasin : trois personnes y déclarent la
+    charcuterie en n° 1, la règle ne désignait donc personne, et celui qui ne
+    sert que ce comptoir faisait 12 h 45 – 20 h. Mais l'une des trois est la
+    SEULE à pouvoir tenir le poisson ce jour-là : elle n'est pas un titulaire
+    disponible pour la charcuterie, elle est déjà prise. La retirer du compte ne
+    force rien de nouveau — elle était déjà clouée — et laisse apparaître le
+    seul titulaire réellement libre.
     """
     if not available:
-        return None, False
+        return None, False, False
     if len(available) == 1:
-        return available[0], True
+        return available[0], True, False
     if not designate_holders:
-        return None, False
+        return None, False, False
     holders = [
         employee
         for employee in available
         if [str(value) for value in employee["allowedSectorIds"]][0] == sector_id
     ]
-    return (holders[0], False) if len(holders) == 1 else (None, False)
+    if len(holders) == 1:
+        return holders[0], False, False
+    free = [
+        employee
+        for employee in holders
+        if claimed.get(str(employee["id"]), sector_id) == sector_id
+    ]
+    return (free[0], False, True) if len(free) == 1 else (None, False, False)
+
+
+def _claimed_elsewhere(
+    sectors: list[dict[str, Any]],
+    employees: list[dict[str, Any]],
+    entries: dict[tuple[str, str], dict[str, Any]],
+) -> dict[str, dict[str, str]]:
+    """``{date: {salarié: comptoir}}`` pour les comptoirs sans alternative.
+
+    Uniquement la déduction DURE — un comptoir ouvert dont une seule personne
+    autorisée est disponible. Ce n'est pas une politique et ça ne dépend
+    d'aucun réglage : cette personne y sera, faute de quiconque d'autre. C'est
+    précisément ce qui permet de s'en servir pour compter les titulaires d'un
+    autre comptoir sans raisonnement circulaire.
+
+    Un salarié retenu par DEUX comptoirs sans alternative est une impossibilité
+    que le préflight des rôles nomme ; ici on n'en retient qu'un, la déduction
+    aval n'ayant qu'à savoir qu'il est pris.
+    """
+    claimed: dict[str, dict[str, str]] = {}
+    for sector in sectors:
+        sector_id = str(sector["id"])
+        for sector_day in sector["days"]:
+            if sector_day["closed"]:
+                continue
+            if int(sector_day.get("minimumOpenings") or 0) < 1:
+                continue
+            if int(sector_day.get("exactClosings") or 0) < 1:
+                continue
+            date = sector_day["date"]
+            available = [
+                employee
+                for employee in employees
+                if sector_id in [str(value) for value in employee.get("allowedSectorIds") or []]
+                and (entry := entries.get((str(employee["id"]), date))) is not None
+                and bool(entry["available"])
+            ]
+            if len(available) == 1:
+                claimed.setdefault(date, {}).setdefault(
+                    str(available[0]["id"]), sector_id
+                )
+    return claimed
 
 
 def _can_bracket(
