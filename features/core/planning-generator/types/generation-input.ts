@@ -6,6 +6,7 @@ import type {
   Contract,
   Employee,
   Holiday,
+  HolidayPlanEntry,
   Store,
 } from "@/features/core/models"
 
@@ -40,6 +41,14 @@ export interface PlanningGenerationInput {
   readonly availabilityRules?: readonly AvailabilityRule[]
   readonly absences?: readonly Absence[]
   readonly holidays?: readonly Holiday[]
+  /**
+   * Ce que le magasin fait de chaque jour férié, et qui s'y est porté volontaire.
+   *
+   * Absent, rien ne change : chaque date non couverte retombe sur `holidays`,
+   * exactement comme avant. C'est ce qui permet d'ajouter les fériés sans
+   * toucher au planning que la production mono-secteur produit déjà.
+   */
+  readonly holidayPlan?: readonly HolidayPlanEntry[]
   /** Core employee-constraint records (fixed day off / forbidden day, …). */
   readonly employeeConstraints?: readonly EmployeeConstraintRecord[]
   /** Optional app-supplied business metadata not owned by the Data Bridge. */

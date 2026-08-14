@@ -128,3 +128,56 @@
     @apply font-sans;
   }
 }
+/* ── L'affichage officiel ──────────────────────────────────────────────────
+ *
+ * Une seule chose atteint le papier : la feuille de publication. Le reste de
+ * l'application — barre latérale, en-tête, aperçu, boutons du dialogue — reste
+ * monté et fonctionnel à l'écran, et disparaît à l'impression.
+ *
+ * La règle se lit à l'envers : on efface tout ce qui n'est NI la feuille, NI
+ * son contenu, NI un de ses ancêtres. Une liste de « print:hidden » posés un
+ * par un aurait laissé passer le premier conteneur ajouté plus tard, et un
+ * planning affiché avec la navigation du logiciel autour n'est pas un document
+ * qu'on punaise dans une réserve.
+ */
+@page {
+  size: A4 landscape;
+  margin: 8mm;
+}
+
+@media print {
+  body:has([data-publication-document])
+    *:not(:has([data-publication-document])):not([data-publication-document]):not(
+      [data-publication-document] *
+    ) {
+    display: none !important;
+  }
+
+  /* Les ancêtres survivent — sinon la feuille avec eux — donc leurs marges,
+   * leurs largeurs et leurs débordements survivent aussi. On les neutralise
+   * pour que la feuille parte du bord de la page et ne soit pas rognée par le
+   * conteneur défilant de l'aperçu. */
+  body:has([data-publication-document]),
+  body:has([data-publication-document]) *:has([data-publication-document]) {
+    display: block !important;
+    position: static !important;
+    inset: auto !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    border: 0 !important;
+    width: auto !important;
+    max-width: none !important;
+    height: auto !important;
+    max-height: none !important;
+    overflow: visible !important;
+    background: none !important;
+    box-shadow: none !important;
+  }
+
+  /* La couleur d'un rayon EST l'information : sans elle, deux comptoirs
+   * deviennent la même case grise. Les navigateurs la retirent par défaut. */
+  [data-publication-document] {
+    print-color-adjust: exact;
+    -webkit-print-color-adjust: exact;
+  }
+}

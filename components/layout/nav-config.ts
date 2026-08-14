@@ -1,6 +1,8 @@
 import {
   LayoutDashboard,
   CalendarDays,
+  Printer,
+  CalendarHeart,
   Palmtree,
   UserRoundX,
   Settings,
@@ -21,6 +23,12 @@ export type NavItem = {
 export const navItems: NavItem[] = [
   { title: "Tableau de bord", href: "/dashboard", icon: LayoutDashboard },
   { title: "Planning", href: "/planning", icon: CalendarDays },
+  // Juste après le planning, parce que c'est ce qui vient après : on planifie,
+  // on publie, on affiche. L'écran ne connaît que les semaines publiées.
+  { title: "Affichage", href: "/affichage", icon: Printer },
+  // Avant les congés : un férié se règle pour toute l'année, alors qu'un congé
+  // se traite au fil de l'eau.
+  { title: "Jours fériés", href: "/feries", icon: CalendarHeart },
   { title: "Congés", href: "/conges", icon: Palmtree },
   { title: "Absences", href: "/absences", icon: UserRoundX },
 ]

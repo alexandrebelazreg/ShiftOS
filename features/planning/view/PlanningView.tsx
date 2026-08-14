@@ -47,6 +47,10 @@ import {
   weekPeriod,
   type WeekOption,
 } from "@/features/planning/board"
+import { weekDayOf } from "@/features/core/shared"
+import { createHolidayRepository } from "@/features/planning/holidays/holiday.repository"
+import { frenchHolidaysOf } from "@/features/planning/holidays/model/french-holidays"
+import { holidayPlanForPeriod } from "@/features/planning/holidays/model/holiday-plan"
 import { evaluateSetupReadiness, useSetupReadiness } from "@/features/onboarding"
 import {
   planningStore,
@@ -220,6 +224,51 @@ export function PlanningView({
       }),
     [initialStore, employees, pickableSectors, selection]
   )
+  /**
+   * Ce que la grille doit savoir des fériés de la semaine affichée.
+   *
+   * Lu au rendu et non gardé en état : le gérant peut régler un férié dans
+   * l'onglet voisin, revenir ici, et la grille doit dire son dernier réglage
+   * sans qu'il ait à régénérer.
+   */
+  const holidayContext = useMemo(() => {
+    if (!editorState) return undefined
+    const period = {
+      start: editorState.planning.periodStart,
+      end: editorState.planning.periodEnd,
+    }
+    const stored =
+      typeof window === "undefined" ? {} : createHolidayRepository(window.localStorage).read()
+    const holidays = holidayPlanForPeriod(period, stored, (date) => {
+      const day = initialStore?.openingHours.find((hours) => hours.day === weekDayOf(date))
+      return day && !day.closed && day.opensAt && day.closesAt
+        ? { opensAt: day.opensAt, closesAt: day.closesAt }
+        : null
+    })
+    if (holidays.length === 0) return undefined
+    const sunday = initialStore?.openingHours.find((hours) => hours.day === "sunday")
+    return {
+      holidays: holidays.map((entry) => ({
+        date: entry.date,
+        name: holidayNameOf(entry.date),
+        opening: entry.opening,
+        volunteerIds: entry.volunteerIds,
+      })),
+      storeOpensSundays: sunday !== undefined && !sunday.closed,
+      profiles: Object.fromEntries(
+        employees.map((employee) => [
+          employee.id,
+          {
+            scheduleType: employee.scheduleType,
+            student: employee.student,
+            forfaitJour: employee.forfaitJour,
+            fixedRestDays: employee.fixedDaysOff,
+          },
+        ])
+      ),
+    }
+  }, [editorState, employees, initialStore])
+
   const boardInput = useMemo(
     () =>
       editorState
@@ -233,10 +282,11 @@ export function PlanningView({
                 return planned.includes(sector.id)
               })
               .map((sector) => ({ id: sector.id, name: sector.name, marketZone: sector.marketZone, hours: sector.hours, color: sector.color })),
-            buildV3BoardDiagnostics(v3)
+            buildV3BoardDiagnostics(v3),
+            holidayContext
           )
         : null,
-    [editorState, record?.sectorIds, selection, setup.sectors, v3]
+    [editorState, record?.sectorIds, selection, setup.sectors, v3, holidayContext]
   )
   // The publish dialog restates the reserves, so it reads the same summary the
   // banner under the schedule does — one computation, no second wording.
@@ -256,6 +306,9 @@ export function PlanningView({
   )
   const [publishDialogOpen, setPublishDialogOpen] = useState(false)
   const [publishBlocked, setPublishBlocked] = useState(false)
+  // L'affichage papier n'est PAS ici : il vit dans son propre écran, et ne
+  // connaît que les semaines publiées. Un brouillon change encore ; l'imprimer
+  // depuis cette page ferait venir quelqu'un un jour où il n'est plus attendu.
   // Raised by the board when local shift edits break a contract or produce an
   // impossible schedule: saving and publishing stay barred until they are fixed.
   const [editsBlockPersistence, setEditsBlockPersistence] = useState(false)
@@ -346,11 +399,28 @@ export function PlanningView({
     // Only the selected sector and only the people eligible for it. Passing the
     // whole configuration here is what made an unselected sector able to break
     // a selected one.
+    // Les fériés de LA SEMAINE générée, lus au moment de générer. Le dépôt est
+    // consulté ici plutôt que gardé en état : le gérant peut régler un férié
+    // dans l'autre onglet et revenir générer, et c'est son dernier réglage qui
+    // doit valoir.
+    const scope = scopeForWeek(targetWeek)
+    const holidayPlan = holidayPlanForPeriod(
+      scope.period,
+      typeof window === "undefined" ? {} : createHolidayRepository(window.localStorage).read(),
+      (date) => {
+        const day = initialStore.openingHours.find((hours) => hours.day === weekDayOf(date))
+        return day && !day.closed && day.opensAt && day.closesAt
+          ? { opensAt: day.opensAt, closesAt: day.closesAt }
+          : null
+      }
+    )
+
     const prepared = preparePlanningGeneration({
       store: initialStore,
       employees: generationScope.employees,
       sectors: generationScope.sectors,
-      scope: scopeForWeek(targetWeek),
+      scope,
+      holidayPlan,
     })
     if (prepared.status === "error") {
       setV3({
@@ -820,6 +890,12 @@ export function PlanningView({
  * independent validator found no hard violation. A blocking V3 answer never
  * becomes a planning at all — it becomes the error card.
  */
+/** Le nom du férié qui tombe à cette date, ou la date à défaut. */
+function holidayNameOf(date: string): string {
+  const year = Number(date.slice(0, 4))
+  return frenchHolidaysOf(year).find((holiday) => holiday.date === date)?.name ?? date
+}
+
 function buildV3BoardDiagnostics(v3: V3State) {
   if (v3.status !== "accepted") return undefined
   const { response, problem, acceptance } = v3.outcome

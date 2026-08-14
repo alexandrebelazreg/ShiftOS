@@ -1,13 +1,34 @@
-import type { EmployeeId, IsoDate, WeekDay } from "@/features/core/models"
+import type { EmployeeId, IsoDate } from "@/features/core/models"
 import { minimumConcurrentPresence } from "@/features/core/shared"
 
 import type {
   BoardDay,
+  BoardHoliday,
   BoardShift,
   PlanningBoardInput,
   PlanningBoardSelection,
 } from "@/features/planning/board/model/board-input"
+import {
+  clockLabel,
+  durationLabel,
+  formatDate,
+  initialsOf,
+  longDate,
+  signedDurationLabel,
+  weekLabel,
+  WEEK_DAY_LABELS,
+} from "@/features/planning/board/model/labels"
 import { isoWeekNumber } from "@/features/planning/board/model/week"
+import { holidayProfileOf } from "@/features/planning/holidays/model/employee-holiday-profile"
+import {
+  describeDayCodes,
+  holidayTreatment,
+} from "@/features/planning/holidays/model/holiday-treatment"
+
+// Les libellés vivent désormais dans `labels.ts`, partagés avec la feuille
+// d'affichage. Réexportés ici parce que c'est de ce module que le reste du board
+// les importe depuis toujours : déplacer un fichier n'est pas changer une API.
+export { clockLabel, durationLabel } from "@/features/planning/board/model/labels"
 
 /**
  * The complete ViewModel the planning board renders.
@@ -51,23 +72,47 @@ export interface BoardShiftVM {
   /** Position inside the day timeline, in percent of the open window. */
   readonly leftPercent: number
   readonly widthPercent: number
-  /** One block per continuous segment, for split shifts. */
-  readonly segments: readonly { readonly leftPercent: number; readonly widthPercent: number }[]
-  readonly sectorBlocks: readonly {
-    readonly sectorId: string
-    readonly sectorName: string
-    /** La couleur du rayon, ou `null` s'il n'en déclare pas. */
-    readonly color: string | null
-    /** Ce bloc ouvre-t-il SON comptoir ? Rendu comme un ombrage à gauche. */
-    readonly opens: boolean
-    /** Le ferme-t-il ? Ombrage à droite. */
-    readonly closes: boolean
-    readonly startLabel: string
-    readonly endLabel: string
-    readonly durationLabel: string
+  /**
+   * One block per CONTINUOUS segment — deux rayons enchaînés sans interruption
+   * font un seul segment, comme sur la fiche du salarié.
+   *
+   * Chaque segment porte les rayons qu'il traverse, positionnés en pourcentage
+   * DE LUI-MÊME. C'est ce qui permet de peindre les rayons à l'intérieur d'une
+   * barre déplaçable : la barre suit les minutes, les rayons suivent la barre.
+   */
+  readonly segments: readonly {
     readonly leftPercent: number
     readonly widthPercent: number
+    readonly sectors: readonly (BoardSectorBlockVM & {
+      readonly offsetPercent: number
+    })[]
   }[]
+  readonly sectorBlocks: readonly BoardSectorBlockVM[]
+}
+
+export interface BoardSectorBlockVM {
+  readonly sectorId: string
+  readonly sectorName: string
+  /** La couleur du rayon, ou `null` s'il n'en déclare pas. */
+  readonly color: string | null
+  /** Ce bloc ouvre-t-il SON comptoir ? Rendu comme un ombrage à gauche. */
+  readonly opens: boolean
+  /** Le ferme-t-il ? Ombrage à droite. */
+  readonly closes: boolean
+  readonly startLabel: string
+  readonly endLabel: string
+  readonly durationLabel: string
+  /**
+   * Les minutes brutes du bloc, en plus de leurs libellés.
+   *
+   * Une feuille d'affichage additionne et ordonne des blocs — le total d'un
+   * comptoir sur la journée, les postes rangés par heure de prise. Le faire en
+   * relisant « 06:00 » serait reparser ce que ce ViewModel vient d'écrire.
+   */
+  readonly startMinutes: number
+  readonly endMinutes: number
+  readonly leftPercent: number
+  readonly widthPercent: number
 }
 
 // ── Toolbar ──────────────────────────────────────────────────────────────────
@@ -100,6 +145,8 @@ export interface BoardSectorColumnVM {
   readonly shortLabel: string
   readonly dateLabel: string
   readonly closed: boolean
+  /** Le nom du férié, quand ce jour en est un. « Fête Nationale ». */
+  readonly holidayName: string | null
   /**
    * Everyone's hours on this day, added up.
    *
@@ -131,6 +178,14 @@ export interface BoardSectorRowVM {
   readonly selected: boolean
   /** Shifts per date, aligned with `columns`. */
   readonly shiftsByDate: Readonly<Record<string, readonly BoardShiftVM[]>>
+  /**
+   * Ce que dit un jour férié pour CE salarié, en toutes lettres.
+   *
+   * « Férié non travaillé », « Jour férié », « Repos »… jamais un sigle : ces
+   * cases se lisent par-dessus l'épaule de quelqu'un, et « HF » ne veut rien
+   * dire pour la personne concernée.
+   */
+  readonly holidayLabelByDate: Readonly<Record<string, string>>
 }
 
 export interface BoardSectorViewVM {
@@ -160,6 +215,8 @@ export interface BoardDayRowVM {
   readonly initials: string
   readonly selected: boolean
   readonly restLabel: string | null
+  /** Le traitement du férié, en toutes lettres, même quand la personne travaille. */
+  readonly holidayLabel: string | null
   readonly shifts: readonly BoardShiftVM[]
 }
 
@@ -167,6 +224,14 @@ export interface BoardDayViewVM {
   readonly date: IsoDate | null
   readonly dateLabel: string
   readonly closed: boolean
+  /**
+   * L'amplitude réellement ouverte ce jour-là — « 06:00 – 20:30 ».
+   *
+   * Celle des rayons SÉLECTIONNÉS, pas celle du magasin : c'est la fenêtre sur
+   * laquelle la grille est dessinée. Les heures ci-dessous sont arrondies à
+   * l'heure pleine pour servir de règle, donc elles ne peuvent pas la dire.
+   */
+  readonly windowLabel: string | null
   readonly hours: readonly BoardHourVM[]
   readonly requiredRow: readonly BoardCoverageCellVM[]
   readonly presentRow: readonly BoardCoverageCellVM[]
@@ -241,17 +306,52 @@ export interface PlanningBoardViewModel {
   readonly summary: BoardSummaryVM
 }
 
-const WEEK_DAY_LABELS: Record<WeekDay, string> = {
-  monday: "Lundi",
-  tuesday: "Mardi",
-  wednesday: "Mercredi",
-  thursday: "Jeudi",
-  friday: "Vendredi",
-  saturday: "Samedi",
-  sunday: "Dimanche",
-}
-
 const HOUR = 60
+
+/**
+ * Ce qu'un jour férié dit d'un salarié, en toutes lettres.
+ *
+ * Calculé ICI, une seule fois, pour les trois vues — sinon la grille de la
+ * semaine, la journée et la fiche du salarié pourraient décrire la même
+ * journée de trois façons différentes.
+ *
+ * La PRÉSENCE est déduite du planning : quelqu'un qui a des plages ce jour-là
+ * travaille, les autres non. C'est la seule lecture possible ici, et c'est la
+ * bonne — le férié se lit APRÈS que le moteur a tranché.
+ */
+function holidayLabelsFor(
+  input: PlanningBoardInput,
+  shifts: readonly BoardShift[]
+): Map<string, string> {
+  const labels = new Map<string, string>()
+  const holidays = input.holidays ?? []
+  if (holidays.length === 0) return labels
+
+  for (const holiday of holidays) {
+    const day = input.days.find((entry) => entry.date === holiday.date)
+    if (!day) continue
+    for (const employee of input.employees) {
+      const worked = shifts.some(
+        (shift) => shift.date === holiday.date && shift.employeeId === employee.id
+      )
+      const profile = holidayProfileOf(employee)
+      const label = describeDayCodes(
+        holidayTreatment({
+          opening: holiday.opening,
+          scheduleType: profile.scheduleType,
+          forfaitJour: profile.forfaitJour,
+          sunday: day.weekDay === "sunday",
+          storeOpensSundays: input.storeOpensSundays ?? false,
+          usuallyWorksSundays: !(employee.fixedRestDays ?? []).includes("sunday"),
+          usualRestDay: (employee.fixedRestDays ?? []).includes(day.weekDay),
+          presence: worked ? "full" : "none",
+        }).codes
+      )
+      if (label) labels.set(`${employee.id}_${holiday.date}`, label)
+    }
+  }
+  return labels
+}
 
 /**
  * Build the whole board.
@@ -295,7 +395,13 @@ export function buildPlanningBoard(
     return [{
       ...shift,
       sectorAssignments,
-      segments: sectorAssignments.map(({ startMinutes, endMinutes }) => ({ startMinutes, endMinutes })),
+      // Les blocs CONTIGUS se recollent. Un segment est une plage travaillée
+      // sans interruption : changer de rayon à midi n'est pas une coupure, et
+      // le compter comme telle affichait « journée coupée » sur une journée qui
+      // ne l'est pas, et surtout désalignait la barre éditable — celle-ci suit
+      // les segments RÉELS du shift, donc une barre unique se peignait avec le
+      // seul premier rayon.
+      segments: mergeContiguous(sectorAssignments),
       startMinutes,
       endMinutes,
       workedMinutes,
@@ -319,6 +425,8 @@ export function buildPlanningBoard(
   }
 
   const completeSectorSelection = input.sectors.every((sector) => selectedSectors.has(sector.id))
+  // Une seule lecture des fériés, partagée par les trois vues.
+  const holidayLabels = holidayLabelsFor(input, shifts)
 
   return {
     toolbar: {
@@ -352,16 +460,19 @@ export function buildPlanningBoard(
       shifts,
       shiftVMs,
       selection.employeeId,
-      completeSectorSelection
+      completeSectorSelection,
+      input.holidays ?? [],
+      holidayLabels
     ),
-    dayView: buildDayView(employees, day, shifts, demand, open, span, selection.employeeId, input.sectors),
+    dayView: buildDayView(employees, day, shifts, demand, open, span, selection.employeeId, input.sectors, holidayLabels),
     employeeView: buildEmployeeView(
       employees,
       days,
       shifts,
       selection.employeeId,
       completeSectorSelection,
-      input.sectors
+      input.sectors,
+      holidayLabels
     ),
     summary: buildSummary(input, days, employees, shifts, demand, completeSectorSelection),
   }
@@ -375,7 +486,8 @@ function buildEmployeeView(
   shifts: readonly BoardShift[],
   employeeId: EmployeeId | null,
   completeSectorSelection: boolean,
-  sectors: PlanningBoardInput["sectors"] = []
+  sectors: PlanningBoardInput["sectors"] = [],
+  holidayLabels: ReadonlyMap<string, string> = new Map()
 ): BoardEmployeeViewVM | null {
   if (employees.length === 0) return null
   const employee = employees.find((item) => item.id === employeeId) ?? employees[0]
@@ -443,7 +555,12 @@ function buildEmployeeView(
         dayLabel: WEEK_DAY_LABELS[day.weekDay],
         dateLabel: formatDate(day.date),
         closed: day.closed,
-        restLabel: day.closed ? "Fermé" : onDay.length === 0 ? "Repos" : null,
+        // Le férié prime sur « Repos » : il dit pourquoi la journée est vide.
+        restLabel: day.closed
+          ? "Fermé"
+          : onDay.length === 0
+            ? holidayLabels.get(`${employee.id}_${day.date}`) ?? "Repos"
+            : null,
         totalLabel: total > 0 ? durationLabel(total) : "",
         shifts: onDay,
       }
@@ -590,14 +707,18 @@ function buildSectorView(
   shifts: readonly BoardShift[],
   shiftVMs: ReadonlyMap<string, BoardShiftVM>,
   selectedEmployeeId: EmployeeId | null,
-  completeSectorSelection: boolean
+  completeSectorSelection: boolean,
+  holidays: readonly BoardHoliday[] = [],
+  holidayLabels: ReadonlyMap<string, string> = new Map()
 ): BoardSectorViewVM {
+  const holidayNames = new Map(holidays.map((holiday) => [holiday.date, holiday.name]))
   const columns: BoardSectorColumnVM[] = days.map((day) => ({
     date: day.date,
     label: `${WEEK_DAY_LABELS[day.weekDay]} ${formatDate(day.date)}`,
     shortLabel: WEEK_DAY_LABELS[day.weekDay].slice(0, 3),
     dateLabel: formatDate(day.date),
     closed: day.closed,
+    holidayName: holidayNames.get(day.date) ?? null,
     totalLabel: day.closed
       ? null
       : durationLabel(
@@ -647,6 +768,12 @@ function buildSectorView(
       level: !comparisonAvailable ? "neutral" : difference === 0 ? "ok" : difference > 0 ? "over" : "under",
       selected: employee.id === selectedEmployeeId,
       shiftsByDate,
+      holidayLabelByDate: Object.fromEntries(
+        [...holidayNames.keys()].flatMap((date) => {
+          const label = holidayLabels.get(`${employee.id}_${date}`)
+          return label ? [[date, label] as const] : []
+        })
+      ),
     }
   })
 
@@ -663,13 +790,15 @@ function buildDayView(
   open: number | null,
   span: number,
   selectedEmployeeId: EmployeeId | null,
-  sectors: PlanningBoardInput["sectors"] = []
+  sectors: PlanningBoardInput["sectors"] = [],
+  holidayLabels: ReadonlyMap<string, string> = new Map()
 ): BoardDayViewVM {
   if (!day || open === null || span <= 0) {
     return {
       date: day?.date ?? null,
       dateLabel: day ? `${WEEK_DAY_LABELS[day.weekDay]} ${formatDate(day.date)}` : "",
       closed: true,
+      windowLabel: null,
       hours: [],
       requiredRow: [],
       presentRow: [],
@@ -736,12 +865,15 @@ function buildDayView(
       .filter((shift) => shift.employeeId === employee.id)
       .map((shift) => toShiftVM(shift, open, span, sectors))
       .sort((left, right) => left.leftPercent - right.leftPercent)
+    // Un férié dit POURQUOI la journée est vide ; « Repos » ne le dit pas.
+    const holiday = holidayLabels.get(`${employee.id}_${day.date}`) ?? null
     return {
       employeeId: employee.id,
       name: employee.name,
       initials: initialsOf(employee.name),
       selected: employee.id === selectedEmployeeId,
-      restLabel: own.length === 0 ? "Repos" : null,
+      restLabel: own.length === 0 ? holiday ?? "Repos" : null,
+      holidayLabel: holiday,
       shifts: own,
     }
   })
@@ -750,6 +882,7 @@ function buildDayView(
     date: day.date,
     dateLabel: `${WEEK_DAY_LABELS[day.weekDay]} ${formatDate(day.date)}`,
     closed: false,
+    windowLabel: `${clockLabel(open)} – ${clockLabel(open + span)}`,
     hours,
     requiredRow,
     presentRow,
@@ -773,6 +906,21 @@ function toShiftVM(
           widthPercent: ((end - start) / span) * 100,
         }
 
+  const blocks = sectorAssignmentsOf(shift)
+  const describe = (block: (typeof blocks)[number]): BoardSectorBlockVM => ({
+    sectorId: block.sectorId,
+    sectorName: sectors.find((sector) => sector.id === block.sectorId)?.name ?? block.sectorId,
+    color: sectors.find((sector) => sector.id === block.sectorId)?.color ?? null,
+    opens: "opens" in block ? Boolean(block.opens) : false,
+    closes: "closes" in block ? Boolean(block.closes) : false,
+    startLabel: clockLabel(block.startMinutes),
+    endLabel: clockLabel(block.endMinutes),
+    durationLabel: durationLabel(block.endMinutes - block.startMinutes),
+    startMinutes: block.startMinutes,
+    endMinutes: block.endMinutes,
+    ...geometry(block.startMinutes, block.endMinutes),
+  })
+
   return {
     id: shift.id,
     employeeId: shift.employeeId,
@@ -788,23 +936,50 @@ function toShiftVM(
     kind: kindOf(shift),
     kindLabel: KIND_LABELS[kindOf(shift)],
     ...geometry(shift.startMinutes, shift.endMinutes),
-    segments: shift.segments.map((segment) => geometry(segment.startMinutes, segment.endMinutes)),
-    sectorBlocks: sectorAssignmentsOf(shift).map((block) => ({
-      sectorId: block.sectorId,
-      sectorName: sectors.find((sector) => sector.id === block.sectorId)?.name ?? block.sectorId,
-      color: sectors.find((sector) => sector.id === block.sectorId)?.color ?? null,
-      opens: "opens" in block ? Boolean(block.opens) : false,
-      closes: "closes" in block ? Boolean(block.closes) : false,
-      startLabel: clockLabel(block.startMinutes),
-      endLabel: clockLabel(block.endMinutes),
-      durationLabel: durationLabel(block.endMinutes - block.startMinutes),
-      ...geometry(block.startMinutes, block.endMinutes),
-    })),
+    segments: shift.segments.map((segment) => {
+      const span = segment.endMinutes - segment.startMinutes
+      return {
+        ...geometry(segment.startMinutes, segment.endMinutes),
+        sectors: blocks
+          .filter(
+            (block) =>
+              block.startMinutes < segment.endMinutes
+              && block.endMinutes > segment.startMinutes
+          )
+          .map((block) => {
+            const start = Math.max(block.startMinutes, segment.startMinutes)
+            const end = Math.min(block.endMinutes, segment.endMinutes)
+            return {
+              ...describe(block),
+              offsetPercent: span > 0 ? ((start - segment.startMinutes) / span) * 100 : 0,
+              widthPercent: span > 0 ? ((end - start) / span) * 100 : 0,
+            }
+          }),
+      }
+    }),
+    sectorBlocks: blocks.map(describe),
   }
 }
 
 function sectorAssignmentsOf(shift: BoardShift): readonly (BoardShift["segments"][number] & { readonly sectorId: string })[] {
   return shift.sectorAssignments ?? shift.segments.map((segment) => ({ ...segment, sectorId: shift.sectorId }))
+}
+
+/** Les plages travaillées sans interruption, rayons confondus. */
+function mergeContiguous(
+  blocks: readonly { readonly startMinutes: number; readonly endMinutes: number }[]
+): { readonly startMinutes: number; readonly endMinutes: number }[] {
+  const ordered = [...blocks].sort((left, right) => left.startMinutes - right.startMinutes)
+  const merged: { startMinutes: number; endMinutes: number }[] = []
+  for (const block of ordered) {
+    const last = merged[merged.length - 1]
+    if (last && block.startMinutes <= last.endMinutes) {
+      last.endMinutes = Math.max(last.endMinutes, block.endMinutes)
+      continue
+    }
+    merged.push({ startMinutes: block.startMinutes, endMinutes: block.endMinutes })
+  }
+  return merged
 }
 
 /** Rebuild the visible day window from the sectors currently selected. */
@@ -875,45 +1050,3 @@ function kindOf(shift: BoardShift): BoardShiftKind {
   return "day"
 }
 
-const MONTHS = [
-  "janvier", "février", "mars", "avril", "mai", "juin",
-  "juillet", "août", "septembre", "octobre", "novembre", "décembre",
-]
-
-function longDate(date: IsoDate): string {
-  const [, month, day] = date.split("-")
-  return `${Number(day)} ${MONTHS[Number(month) - 1]}`
-}
-
-export function clockLabel(minutes: number): string {
-  return `${String(Math.floor(minutes / 60)).padStart(2, "0")}:${String(minutes % 60).padStart(2, "0")}`
-}
-
-export function durationLabel(minutes: number): string {
-  const hours = Math.floor(Math.abs(minutes) / 60)
-  const rest = Math.abs(minutes) % 60
-  return `${minutes < 0 ? "-" : ""}${hours}h${rest ? String(rest).padStart(2, "0") : ""}`
-}
-
-function signedDurationLabel(minutes: number): string {
-  if (minutes === 0) return "0h"
-  return `${minutes > 0 ? "+" : ""}${durationLabel(minutes)}`
-}
-
-function formatDate(date: IsoDate): string {
-  const [, month, day] = date.split("-")
-  return `${day}/${month}`
-}
-
-function weekLabel(start: IsoDate, end: IsoDate): string {
-  return `Semaine du ${formatDate(start)} au ${formatDate(end)}`
-}
-
-function initialsOf(name: string): string {
-  return name
-    .split(/\s+/)
-    .filter(Boolean)
-    .slice(0, 2)
-    .map((part) => part[0]?.toUpperCase() ?? "")
-    .join("")
-}

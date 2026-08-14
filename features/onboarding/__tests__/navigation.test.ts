@@ -4,7 +4,16 @@ import { DEFAULT_STORE_CONFIGURATION } from "@/features/store/defaults"
 
 describe("navigation alpha", () => {
   it("limite la navigation principale aux opérations quotidiennes", () => {
-    expect(navItems.map((item) => item.title)).toEqual(["Tableau de bord", "Planning", "Congés", "Absences"])
+    // « Affichage » suit « Planning » : on planifie, on publie, on affiche.
+    // « Jours fériés » se règle pour l'année, avant les congés au fil de l'eau.
+    expect(navItems.map((item) => item.title)).toEqual([
+      "Tableau de bord",
+      "Planning",
+      "Affichage",
+      "Jours fériés",
+      "Congés",
+      "Absences",
+    ])
     expect(configurationItem).toMatchObject({ title: "Configuration", href: "/configuration" })
   })
 

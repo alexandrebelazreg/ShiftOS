@@ -40,6 +40,16 @@ export interface EmployeeRecord {
   contractType: ContractType
   /** Classification chosen on the employee card. Legacy records are variable. */
   scheduleType?: EmployeeScheduleType
+  /**
+   * Étudiant — décide du traitement des jours fériés, et de lui seul.
+   *
+   * Un étudiant est toujours traité en horaires FIXES, même si sa fiche dit
+   * variable : la déduction vit dans `holidayProfileOf`, pas dans ce champ, pour
+   * qu'une fiche ancienne n'ait pas besoin d'être rouverte pour devenir juste.
+   */
+  student?: boolean
+  /** Cadre au forfait jour : ni heures fériées ni plages, seulement JF ou PJ. */
+  forfaitJour?: boolean
 
   /** Product metadata used to present the employee's mastered sectors. */
   sectors?: string[]
@@ -107,6 +117,8 @@ export interface EmployeeFormValues {
   legacyContractMinutes: "" | "2190" | "2205"
   contractType: ContractType
   scheduleType: EmployeeScheduleType
+  student: boolean
+  forfaitJour: boolean
   sectors: string[]
   competencies: Record<string, string[]>
 

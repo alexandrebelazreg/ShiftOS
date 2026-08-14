@@ -52,6 +52,13 @@ export function PlanningSectorView({ sectorView, onSelectEmployee }: PlanningSec
                 <span className="block text-xs font-normal text-muted-foreground">
                   {column.dateLabel}
                 </span>
+                {/* Le nom du férié en tête de colonne : sans lui, une journée
+                    pleine de « Jour férié » ne dit pas DE QUEL férié il s'agit. */}
+                {column.holidayName ? (
+                  <span className="mt-0.5 block truncate text-[10px] font-medium text-amber-700 dark:text-amber-400">
+                    {column.holidayName}
+                  </span>
+                ) : null}
               </th>
             ))}
           </tr>
@@ -100,13 +107,24 @@ export function PlanningSectorView({ sectorView, onSelectEmployee }: PlanningSec
               </td>
               {sectorView.columns.map((column) => {
                 const shifts = row.shiftsByDate[column.date] ?? []
+                const holiday = row.holidayLabelByDate[column.date] ?? null
                 return (
                   <td key={column.date} className="px-1 py-1 align-top">
                     {column.closed ? (
                       <span className="block py-2 text-center text-xs text-muted-foreground/60">—</span>
                     ) : shifts.length === 0 ? (
-                      <span className="block py-2 text-center text-xs italic text-muted-foreground/60">
-                        Repos
+                      // Un férié dit POURQUOI la journée est vide, en toutes
+                      // lettres. « Repos » ne distingue pas un jour de congé
+                      // d'un férié que le magasin a décidé de ne pas ouvrir.
+                      <span
+                        className={cn(
+                          "block py-2 text-center text-xs",
+                          holiday
+                            ? "font-medium text-amber-700 dark:text-amber-400"
+                            : "italic text-muted-foreground/60"
+                        )}
+                      >
+                        {holiday ?? "Repos"}
                       </span>
                     ) : (
                       // UNE BARRE PAR RAYON, pas une par journée.

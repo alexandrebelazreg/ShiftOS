@@ -1,4 +1,10 @@
-import type { DateRange, IsoDate, OrganizationId, PlanningId } from "@/features/core/models"
+import type {
+  DateRange,
+  HolidayPlanEntry,
+  IsoDate,
+  OrganizationId,
+  PlanningId,
+} from "@/features/core/models"
 
 import type { BridgeInput, PlanningInput } from "@/features/core/data-bridge"
 import { dataBridge } from "@/features/core/data-bridge"
@@ -12,6 +18,9 @@ import { storeConfigurationService } from "@/features/store/services/store-confi
 import type { EmployeeRecord } from "@/features/employees/types/employee.types"
 import type { SectorDemandConfiguration } from "@/features/sectors"
 import { effectiveMinimumShiftDuration, effectiveWeeklyDistribution } from "@/features/sectors"
+import { holidayImpact, weeklyTargetAfterHolidays } from "@/features/planning/holidays/model/holiday-plan"
+import { isSunday } from "@/features/planning/holidays/model/holiday-schedule"
+import { weekDayOf } from "@/features/core/shared"
 import type { EmployeeId } from "@/features/core/models"
 
 import type { FlowError } from "@/features/planning/flow/flow-errors"
@@ -50,6 +59,14 @@ export interface PlanningFlowRequest {
    * Absent means no history — every employee starts level.
    */
   readonly savedPlannings?: readonly PlanningRecord[]
+  /**
+   * Les jours fériés de la période, tels que le magasin les a réglés.
+   *
+   * Fourni plutôt que lu, comme l'historique des fermetures : le flux orchestre,
+   * il ne possède aucun dépôt. Absent, rien ne change — ni la disponibilité, ni
+   * les objectifs, ni le problème construit.
+   */
+  readonly holidayPlan?: readonly HolidayPlanEntry[]
 }
 
 /**
@@ -139,11 +156,41 @@ export function preparePlanningGeneration(
     }
     // Integer minutes are authoritative. Legacy decimal hours remain only as a
     // compatibility projection for frozen consumers.
+    // Les fériés de la période, ramenés à ce que chaque contrat doit encore
+    // porter. Un jour férié retire une journée à ce que le moteur a À PLACER,
+    // que ces heures soient perdues (JF, horaires variables) ou dues en heures
+    // fériées (HF, horaires fixes) : dans les deux cas elles ne se planifient
+    // pas, et les laisser dans l'objectif tasserait un contrat entier sur six
+    // jours. Ce que la paie en fait se lit dans les codes, pas ici.
+    const holidayPlan = (request.holidayPlan ?? []).filter(
+      (entry) =>
+        entry.date >= request.scope.period.start && entry.date <= request.scope.period.end
+    )
+
     const coreInput = {
       ...bridged.value,
       contracts: bridged.value.contracts.map((contract) => {
         const employee = planningEmployees.find((item) => item.id === contract.employeeId)
-        const weeklyMinutes = employee?.weeklyMinutes ?? Math.round(contract.weeklyHours * 60)
+        const contractMinutes = employee?.weeklyMinutes ?? Math.round(contract.weeklyHours * 60)
+        const weeklyMinutes = weeklyTargetAfterHolidays(
+          contractMinutes,
+          holidayPlan.map((entry) =>
+            holidayImpact({
+              entry,
+              employeeId: String(contract.employeeId),
+              profile: {
+                scheduleType: employee?.scheduleType,
+                student: employee?.student,
+                forfaitJour: employee?.forfaitJour,
+              },
+              contractMinutes,
+              sunday: isSunday(entry.date),
+              storeOpensSundays: storeOpensSundays(request.store),
+              usuallyWorksSundays: !(employee?.fixedDaysOff ?? []).includes("sunday"),
+              usualRestDay: (employee?.fixedDaysOff ?? []).includes(weekDayOf(entry.date)),
+            })
+          )
+        )
         return { ...contract, weeklyMinutes, weeklyHours: weeklyMinutes / 60 }
       }),
     }
@@ -173,6 +220,9 @@ export function preparePlanningGeneration(
       availabilityRules: planningCoreInput.availabilityRules,
       absences: planningCoreInput.absences,
       holidays: planningCoreInput.holidays,
+      // Absent, le constructeur retombe sur `holidays` et construit exactement
+      // le problème qu'il construisait avant.
+      ...(holidayPlan.length > 0 ? { holidayPlan } : {}),
       employeeConstraints: planningCoreInput.employeeConstraints,
       // Reduced here, from records the caller supplied, and handed to the core
       // as integers. The builder owns no repository and neither does any solver.
@@ -278,6 +328,18 @@ export function preparePlanningGeneration(
  * Une série indépendante par rayon : un salarié partagé qui ferme Fruits
  * n'est pas enregistré comme fermeur de Charcuterie au même instant.
  */
+/**
+ * Le magasin ouvre-t-il HABITUELLEMENT le dimanche ?
+ *
+ * L'ouverture ordinaire, pas celle du dimanche férié lui-même : c'est elle que
+ * le second tableau de la documentation interroge pour décider entre un repos
+ * hebdomadaire et des heures fériées.
+ */
+function storeOpensSundays(store: StoreConfig): boolean {
+  const sunday = store.openingHours.find((hours) => hours.day === "sunday")
+  return sunday !== undefined && !sunday.closed
+}
+
 function closingHistoryFor(request: PlanningFlowRequest) {
   const sectors = (request.sectors ?? []).filter((sector) => sector.status === "active")
   return sectors.flatMap((sector) => {

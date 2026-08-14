@@ -1,4 +1,4 @@
-import type { Assignment, Shift } from "@/features/core/models"
+import type { Assignment, Shift, WeekDay } from "@/features/core/models"
 import { contractualMinutes } from "@/features/core/models"
 import { intervalMinutes, weekDayOf } from "@/features/core/shared"
 
@@ -8,6 +8,7 @@ import type {
   BoardDiagnosticsInput,
   BoardDemandSlot,
   BoardEmployee,
+  BoardHoliday,
   BoardSector,
   BoardShift,
   PlanningBoardInput,
@@ -25,10 +26,29 @@ import type {
  * sector the product supports today every shift is attributed to it. Once
  * shifts become sector-aware the mapping below is the one line to change.
  */
+/**
+ * Ce que la grille doit savoir des jours fériés, fourni par l'appelant.
+ *
+ * Fourni et non lu, pour la même raison que partout ailleurs : cet adaptateur
+ * ne possède aucun dépôt. Absent, la grille se comporte exactement comme avant.
+ */
+export interface BoardHolidayContext {
+  readonly holidays?: readonly BoardHoliday[]
+  readonly storeOpensSundays?: boolean
+  /** Les statuts qui décident du traitement, par identifiant de salarié. */
+  readonly profiles?: Readonly<Record<string, {
+    readonly scheduleType?: "variable" | "fixed"
+    readonly student?: boolean
+    readonly forfaitJour?: boolean
+    readonly fixedRestDays?: readonly WeekDay[]
+  }>>
+}
+
 export function adaptEditorStateToBoard(
   state: EditorState,
   sectors: readonly BoardSector[],
-  diagnostics?: BoardDiagnosticsInput
+  diagnostics?: BoardDiagnosticsInput,
+  holidayContext?: BoardHolidayContext
 ): PlanningBoardInput {
   const sectorList: readonly BoardSector[] =
     sectors.length > 0 ? sectors : [{ id: "all", name: "Tous les secteurs" }]
@@ -86,6 +106,9 @@ export function adaptEditorStateToBoard(
         ? { weeklyTargetMinutes: weeklyTargetByEmployee.get(employee.id)! }
         : {}),
       rules: rulesOf(state, employee.id),
+      // Les statuts qui décident du traitement d'un férié. Absents, la grille
+      // n'en dit rien plutôt que d'inventer un horaire variable par défaut.
+      ...(holidayContext?.profiles?.[String(employee.id)] ?? {}),
     }
   })
 
@@ -149,6 +172,12 @@ export function adaptEditorStateToBoard(
     days,
     shifts,
     demand,
+    ...(holidayContext?.holidays?.length
+      ? {
+          holidays: holidayContext.holidays,
+          storeOpensSundays: holidayContext.storeOpensSundays ?? false,
+        }
+      : {}),
     diagnostics,
   }
 }

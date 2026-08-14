@@ -20,6 +20,8 @@ export function createEmptyEmployeeFormValues(): EmployeeFormValues {
     legacyContractMinutes: "",
     contractType: "full_time",
     scheduleType: "variable",
+    student: false,
+    forfaitJour: false,
     sectors: [],
     competencies: {},
 
@@ -63,6 +65,8 @@ export function employeeToFormValues(employee: EmployeeRecord): EmployeeFormValu
     legacyContractMinutes: "",
     contractType: employee.contractType,
     scheduleType: employee.scheduleType ?? "variable",
+    student: employee.student === true,
+    forfaitJour: employee.forfaitJour === true,
     sectors: [...(employee.sectors ?? [])],
     competencies: { ...(employee.competencies ?? {}) },
 

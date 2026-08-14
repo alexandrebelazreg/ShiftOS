@@ -1,5 +1,5 @@
 import type { EmployeeId, IsoDate, PlanningId, WeekDay } from "@/features/core/models"
-import { WEEK_DAYS } from "@/features/core/models"
+import { holidayBlocksEmployee, WEEK_DAYS } from "@/features/core/models"
 import { enumerateDates, intervalMinutes, isoWeekKey, weekDayOf } from "@/features/core/shared"
 
 import type { PlanningGenerationInput } from "@/features/core/planning-generator/types/generation-input"
@@ -310,6 +310,12 @@ export function buildPlanningProblemV3(
     )
   }
 
+  // Les fériés réglés par le magasin, par date. Vide tant que personne n'a
+  // ouvert l'écran des fériés — et alors rien de ce qui suit ne s'active.
+  const holidayPlanByDate = new Map(
+    (input.holidayPlan ?? []).map((entry) => [entry.date, entry] as const)
+  )
+
   const days: PlanningDayV3[] = []
   for (const date of dates) {
     const weekDay = weekDayOf(date)
@@ -369,14 +375,35 @@ export function buildPlanningProblemV3(
       })
     }
 
+    // ── Un jour férié réglé remplace la journée ordinaire ──────────────────
+    //
+    // Le réglage d'un férié est plus précis que l'horaire du jour de la
+    // semaine : il a été saisi POUR cette date. Un férié chômé ferme donc la
+    // journée — et sans passer par `budget_on_closed_day`, qui traque une
+    // contradiction de configuration (un secteur fermé le lundi avec du budget
+    // le lundi) et non une fermeture exceptionnelle parfaitement légitime.
+    //
+    // Sans plan férié, chacune de ces expressions retombe sur la valeur
+    // précédente : le problème construit est le même, à l'octet près.
+    const holidayEntry = holidayPlanByDate.get(date)
+    const holidayClosed = holidayEntry?.opening === "chome"
+    const holidayWindow =
+      holidayEntry !== undefined
+      && !holidayClosed
+      && holidayEntry.opensAtMinutes !== null
+      && holidayEntry.closesAtMinutes !== null
+      && holidayEntry.closesAtMinutes > holidayEntry.opensAtMinutes
+        ? holidayEntry
+        : null
+
     days.push({
       date,
       weekDay,
       weekKey: isoWeekKey(date),
-      closed,
-      opensAtMinutes,
-      closesAtMinutes,
-      budgetMinutes,
+      closed: closed || holidayClosed === true,
+      opensAtMinutes: holidayClosed ? null : holidayWindow?.opensAtMinutes ?? opensAtMinutes,
+      closesAtMinutes: holidayClosed ? null : holidayWindow?.closesAtMinutes ?? closesAtMinutes,
+      budgetMinutes: holidayClosed ? 0 : budgetMinutes,
       ...(sector.dailyBudgetMode ? { budgetMode: sector.dailyBudgetMode } : {}),
     })
   }
@@ -419,7 +446,15 @@ export function buildPlanningProblemV3(
           day.date >= absence.range.start &&
           day.date <= absence.range.end
       )
-      const holiday = holidays.has(day.date)
+      // Un férié réglé décide À LA PLACE de la liste historique : chômé, il
+      // ferme la journée pour tout le monde ; ouvert, il ne laisse entrer que
+      // les volontaires. Une date absente du plan retombe sur l'ancienne règle,
+      // qui bloquait indistinctement — c'est ce qui rend l'ajout invisible pour
+      // un magasin qui n'a rien réglé.
+      const plannedHoliday = holidayPlanByDate.get(day.date)
+      const holiday = plannedHoliday
+        ? holidayBlocksEmployee(plannedHoliday, String(employee.id))
+        : holidays.has(day.date)
       const available = !day.closed && contracted && !fixedRest && !absent && !holiday
 
       // The employee's own window for this day: the sector's hours narrowed by

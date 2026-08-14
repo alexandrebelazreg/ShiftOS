@@ -62,6 +62,10 @@ export const employeeSchema = z.object({
   legacyContractMinutes: z.union([z.literal(""), z.literal("2190"), z.literal("2205")]).default(""),
   contractType: z.enum(CONTRACT_TYPES),
   scheduleType: z.enum(EMPLOYEE_SCHEDULE_TYPES).default("variable"),
+  // `.default(false)` : toute fiche enregistrée avant les jours fériés doit
+  // continuer à se relire, et l'absence de statut veut dire « ni l'un ni l'autre ».
+  student: z.boolean().default(false),
+  forfaitJour: z.boolean().default(false),
   sectors: z.array(z.string().trim().min(1)).default([]),
   competencies: z.record(z.string(), z.array(z.string())).default({}),
 
@@ -143,10 +147,15 @@ export type EmployeeDraft = Omit<
   | "openingDays"
   | "closingDays"
   | "scheduleType"
+  | "student"
+  | "forfaitJour"
 > & {
   weeklyMinutes?: number | null
   /** Optional for callers and persisted drafts created before this preference existed. */
   scheduleType?: "variable" | "fixed"
+  /** Idem : un brouillon écrit avant les jours fériés reste valide. */
+  student?: boolean
+  forfaitJour?: boolean
   /** Optional so every draft written before the advanced constraints still compiles. */
   earliestStartTime?: string | null
   latestEndTime?: string | null

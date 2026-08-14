@@ -10,6 +10,8 @@ export default defineConfig({
   },
   test: {
     environment: "node",
-    include: ["features/**/*.test.ts"],
+    // `.tsx` aussi : les feuilles d'affichage se vérifient en les RENDANT, la
+    // mise en page étant précisément ce qu'un ViewModel ne peut pas prouver.
+    include: ["features/**/*.test.ts", "features/**/*.test.tsx"],
   },
 })

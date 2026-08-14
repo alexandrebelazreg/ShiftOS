@@ -65,17 +65,24 @@ export function PlanningShiftBar({
 
   // The geometry to draw: the live preview while dragging, the committed minutes
   // when editing, and — outside the editable view — the ViewModel's own percents.
+  //
+  // UNE BARRE PAR SEGMENT, jamais par rayon. Les deux comptes divergeaient dès
+  // qu'un salarié enchaînait deux comptoirs sans coupure : la barre éditable
+  // suivait le segment réel (un seul), et tout ce qui s'indexait sur les rayons
+  // ne montrait que le premier. Les rayons se peignent maintenant DANS la barre.
   const geometry =
     editing && (preview ?? editable)
       ? segmentGeometry(preview ?? editable!, bounds!)
-      : shift.sectorBlocks.length > 0
-        ? shift.sectorBlocks
-        : shift.segments
+      : shift.segments
 
-  // La peinture du bloc, quand le rayon en déclare une.
+  // Les rayons traversés par ce segment, en pourcentage de la barre. Pendant un
+  // glissement on garde les proportions : la barre bouge, le partage la suit.
+  const sectorsOf = (index: number) => shift.segments[index]?.sectors ?? []
+
+  // La peinture d'un rayon, quand il en déclare une.
   const paintOf = (index: number) => {
-    const block = shift.sectorBlocks[index]
-    return block ? sectorBarPaint(block.color, block) : null
+    const parts = sectorsOf(index)
+    return parts.length === 1 ? sectorBarPaint(parts[0].color, parts[0]) : null
   }
 
   const cancel = useCallback(() => {
@@ -143,9 +150,12 @@ export function PlanningShiftBar({
     cancel()
   }
 
+  // Le nom du rayon vaut mieux qu'une heure que la barre montre déjà — y
+  // compris en édition, où il était tu alors que c'est là qu'on déplace les
+  // blocs d'un comptoir à l'autre.
   const bodyLabel = (index: number) => {
-    const block = !editing ? shift.sectorBlocks[index] : undefined
-    if (block) return `${block.sectorName} · ${block.startLabel}–${block.endLabel}`
+    const parts = sectorsOf(index)
+    if (parts.length === 1) return `${parts[0].sectorName} · ${parts[0].startLabel}–${parts[0].endLabel}`
     return index === 0 ? `${shift.startLabel} – ${shift.endLabel}` : "suite"
   }
 
@@ -180,25 +190,56 @@ export function PlanningShiftBar({
             // couleur : sinon les classes lutteraient contre le style calculé.
             paintOf(index)
               ? "border"
-              : shift.sectorBlocks[index]
-                ? SECTOR_SURFACES[sectorColorIndex(shift.sectorBlocks[index].sectorId)]
+              : sectorsOf(index).length === 1
+                ? SECTOR_SURFACES[sectorColorIndex(sectorsOf(index)[0].sectorId)]
                 : KIND_SURFACE[shift.kind]
           )}
           title={sectorBarTitle({
-            sectorName: shift.sectorBlocks[index]?.sectorName,
+            sectorName: sectorsOf(index).map((part) => part.sectorName).join(" → ") || undefined,
             kindLabel: shift.kindLabel,
-            role: shift.sectorBlocks[index] ?? { opens: false, closes: false },
+            role: sectorsOf(index).length === 1
+              ? sectorsOf(index)[0]
+              : {
+                  opens: sectorsOf(index).some((part) => part.opens),
+                  closes: sectorsOf(index).some((part) => part.closes),
+                },
             label: shift.label,
             durationLabel: shift.durationLabel,
             locked,
           })}
         >
+          {/* Plusieurs comptoirs dans une seule plage : ils se partagent la
+              barre au prorata de leurs minutes. Sans ça, seul le premier était
+              visible — le reste de la journée se lisait sous son nom. */}
+          {sectorsOf(index).length > 1
+            ? sectorsOf(index).map((part) => (
+                <span
+                  key={`${part.sectorId}-${part.startLabel}`}
+                  style={{
+                    left: `${part.offsetPercent}%`,
+                    width: `${part.widthPercent}%`,
+                    ...(sectorBarPaint(part.color, part) ?? {}),
+                  }}
+                  className={cn(
+                    "absolute inset-y-0 flex items-center justify-center overflow-hidden px-1",
+                    "border-r border-white/60 text-[10px] leading-none last:border-r-0",
+                    sectorBarPaint(part.color, part)
+                      ? null
+                      : SECTOR_SURFACES[sectorColorIndex(part.sectorId)]
+                  )}
+                >
+                  <span className="truncate">{part.sectorName}</span>
+                </span>
+              ))
+            : null}
           {locked && index === 0 ? (
-            <span className="mr-1 shrink-0 text-[10px] leading-none" aria-label="Verrouillé">
+            <span className="relative z-10 mr-1 shrink-0 text-[10px] leading-none" aria-label="Verrouillé">
               🔒
             </span>
           ) : null}
-          <span className="truncate tabular-nums">{bodyLabel(index)}</span>
+          {sectorsOf(index).length > 1 ? null : (
+            <span className="truncate tabular-nums">{bodyLabel(index)}</span>
+          )}
         </button>
       ))}
 

@@ -708,4 +708,76 @@ describe("la couleur et le rôle voyagent jusqu'à la barre", () => {
     expect(blocks.map((block) => block.opens)).toEqual([true, false])
     expect(blocks.map((block) => block.closes)).toEqual([false, false])
   })
+
+  it("garde UN segment continu et y loge les deux rayons", () => {
+    // Ce que la vue par jour montrait : un seul rayon. La barre déplaçable suit
+    // les segments RÉELS du shift — un seul ici, puisque changer de comptoir à
+    // midi n'interrompt pas la journée — alors que le ViewModel en fabriquait un
+    // par rayon. Tout ce qui s'indexait dessus ne voyait donc que le premier.
+    const problem = input()
+    const multiSectorShift = {
+      ...shift("multi", "luca", "2026-07-20", 360, 840),
+      sectorAssignments: [
+        { sectorId: "drive", startMinutes: 360, endMinutes: 600 },
+        { sectorId: "caisse", startMinutes: 600, endMinutes: 840 },
+      ],
+    }
+    const board = buildPlanningBoard(
+      {
+        ...problem,
+        sectors: [
+          { id: "drive", name: "Drive", color: "#2563eb" },
+          { id: "caisse", name: "Caisse", color: "#facc15" },
+        ],
+        shifts: [multiSectorShift],
+      },
+      selection({ view: "day", sectorIds: ["drive", "caisse"], date: "2026-07-20" })
+    )
+
+    const bar = board.dayView.rows.flatMap((row) => row.shifts)[0]
+    expect(bar.segments).toHaveLength(1)
+    // Une journée continue n'est pas une journée coupée, même à deux comptoirs.
+    expect(bar.isSplit).toBe(false)
+    expect(bar.segments[0].sectors.map((part) => part.sectorName)).toEqual(["Drive", "Caisse"])
+    // Chacun occupe la moitié de la barre, exprimée EN POURCENTAGE DE LA BARRE :
+    // c'est ce qui leur permet de suivre quand on la déplace.
+    expect(bar.segments[0].sectors.map((part) => part.offsetPercent)).toEqual([0, 50])
+    expect(bar.segments[0].sectors.map((part) => part.widthPercent)).toEqual([50, 50])
+  })
+
+  it("découpe chaque morceau d'une journée coupée par ses propres rayons", () => {
+    const problem = input()
+    const splitShift = {
+      ...shift("coupe", "luca", "2026-07-20", 360, 900),
+      segments: [
+        { startMinutes: 360, endMinutes: 600 },
+        { startMinutes: 780, endMinutes: 900 },
+      ],
+      sectorAssignments: [
+        { sectorId: "drive", startMinutes: 360, endMinutes: 480 },
+        { sectorId: "caisse", startMinutes: 480, endMinutes: 600 },
+        { sectorId: "caisse", startMinutes: 780, endMinutes: 900 },
+      ],
+    }
+    const board = buildPlanningBoard(
+      {
+        ...problem,
+        sectors: [
+          { id: "drive", name: "Drive", color: "#2563eb" },
+          { id: "caisse", name: "Caisse", color: "#facc15" },
+        ],
+        shifts: [splitShift],
+      },
+      selection({ view: "day", sectorIds: ["drive", "caisse"], date: "2026-07-20" })
+    )
+
+    const bar = board.dayView.rows.flatMap((row) => row.shifts)[0]
+    expect(bar.segments).toHaveLength(2)
+    expect(bar.isSplit).toBe(true)
+    expect(bar.segments[0].sectors.map((part) => part.sectorName)).toEqual(["Drive", "Caisse"])
+    expect(bar.segments[1].sectors.map((part) => part.sectorName)).toEqual(["Caisse"])
+    // Le second morceau n'a qu'un rayon : il occupe tout, sans décalage.
+    expect(bar.segments[1].sectors[0].offsetPercent).toBe(0)
+    expect(bar.segments[1].sectors[0].widthPercent).toBe(100)
+  })
 })

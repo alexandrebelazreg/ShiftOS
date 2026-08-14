@@ -54,6 +54,31 @@ export interface BoardEmployee {
   readonly weeklyTargetMinutes?: number
   /** Human-readable rules, already worded by the adapter. */
   readonly rules: readonly string[]
+  /**
+   * Ce qu'il faut savoir de ce salarié pour lire un jour férié.
+   *
+   * Optionnels tous les quatre : un planning enregistré avant les fériés n'en
+   * porte aucun, et la grille doit continuer à s'afficher exactement comme
+   * avant plutôt que d'inventer un statut que personne n'a saisi.
+   */
+  readonly scheduleType?: "variable" | "fixed"
+  readonly student?: boolean
+  readonly forfaitJour?: boolean
+  /** Ses repos fixes, qui disent si un férié tombe sur un jour déjà libre. */
+  readonly fixedRestDays?: readonly WeekDay[]
+}
+
+/**
+ * Un jour férié de la période, tel que le magasin l'a réglé.
+ *
+ * Aussi pauvre que le reste de cette entrée : une date, un nom, un statut, des
+ * identifiants. C'est le ViewModel qui en tire des phrases, jamais l'inverse.
+ */
+export interface BoardHoliday {
+  readonly date: IsoDate
+  readonly name: string
+  readonly opening: "chome" | "demi-chome" | "travaille"
+  readonly volunteerIds: readonly string[]
 }
 
 export interface BoardDay {
@@ -116,6 +141,10 @@ export interface PlanningBoardInput {
   readonly days: readonly BoardDay[]
   readonly shifts: readonly BoardShift[]
   readonly demand: readonly BoardDemandSlot[]
+  /** Les fériés de la période. Absents, la grille ne dit rien de particulier. */
+  readonly holidays?: readonly BoardHoliday[]
+  /** Le magasin ouvre-t-il HABITUELLEMENT le dimanche ? Décide des dimanches fériés. */
+  readonly storeOpensSundays?: boolean
   readonly diagnostics?: BoardDiagnosticsInput
 }
 

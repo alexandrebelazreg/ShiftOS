@@ -41,6 +41,8 @@ const FIELD_TABS: Record<string, TabValue> = {
   legacyContractMinutes: "contrat",
   contractType: "contrat",
   scheduleType: "contrat",
+  student: "contrat",
+  forfaitJour: "contrat",
 
   sectors: "affectations",
   competencies: "affectations",
