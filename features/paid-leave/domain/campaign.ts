@@ -103,9 +103,101 @@ export function synchronizePaidLeaveCampaign(
   return { ...campaign, employeeSettings, requests, coverage }
 }
 
-export function effectiveRequestedWeeks(request: PaidLeaveRequest): number {
-  const selected = new Set([...request.wish1, ...request.wish2, ...request.wish3])
-  return Math.min(Math.max(0, Math.round(request.requestedWeeks)), selected.size)
+/**
+ * Les semaines de la campagne, en ensemble.
+ *
+ * Dérivée de la campagne plutôt que passée de main en main : c'est ce qui fait
+ * que tous les lecteurs — solveur, validation, écran — comptent la même chose,
+ * sans qu'aucun n'ait à se souvenir de la filtrer.
+ */
+export function campaignWeekIds(campaign: PaidLeaveCampaign): ReadonlySet<PaidLeaveWeekId> {
+  return new Set(campaignWeeks(campaign.year, campaign.period).map((week) => week.id))
+}
+
+/**
+ * Combien de semaines cette personne peut RÉELLEMENT obtenir.
+ *
+ * DÉDUIT des vœux : chaque rang est un plan complet de la même absence, donc le
+ * nombre demandé est la taille d'un plan. Il n'existe plus de champ à remplir —
+ * il en existait un, laissé à zéro par défaut, et une personne dont les vœux
+ * s'affichaient à l'écran repartait avec un objectif nul et n'obtenait rien.
+ *
+ * Les semaines de la campagne sont exigées, et ce n'est pas un confort d'appel :
+ * sans elles, cette fonction comptait des vœux que le solveur, lui, filtrait —
+ * l'écart ne se refermait jamais et la campagne devenait invalidable à vie.
+ *
+ * Une demande absente vaut zéro plutôt que de lever : une fiche créée après la
+ * campagne n'a pas encore de demande, et l'écran doit continuer à s'afficher.
+ */
+export function effectiveRequestedWeeks(
+  request: PaidLeaveRequest | undefined,
+  weekIds: ReadonlySet<PaidLeaveWeekId>
+): number {
+  // La taille du PLUS GRAND plan, et non celle du premier : un rang laissé
+  // vide — ou plus court parce qu'une de ses semaines est tombée hors période —
+  // ne doit pas rétrécir une demande que les autres rangs expriment en entier.
+  // Quand les trois portent le même nombre, ce qui est le cas normal, le
+  // maximum EST ce nombre.
+  return Math.max(0, ...wishPlanSizes(request, weekIds))
+}
+
+/**
+ * La taille de chacun des trois plans, semaines hors période exclues.
+ *
+ * Trois nombres et non un seul, parce que l'écart entre eux est une
+ * information : trois plans de tailles différentes ne décrivent pas la même
+ * absence, et c'est presque toujours une saisie inachevée.
+ */
+export function wishPlanSizes(
+  request: PaidLeaveRequest | undefined,
+  weekIds: ReadonlySet<PaidLeaveWeekId>
+): readonly [number, number, number] {
+  if (!request) return [0, 0, 0]
+  const size = (weeks: readonly PaidLeaveWeekId[]) =>
+    new Set(weeks.filter((weekId) => weekIds.has(weekId))).size
+  return [size(request.wish1), size(request.wish2), size(request.wish3)]
+}
+
+/**
+ * Les rangs remplis ne portent-ils pas tous le même nombre de semaines ?
+ *
+ * Un rang vide n'est pas une incohérence — on peut n'avoir qu'une seule idée.
+ * Deux rangs remplis de tailles différentes en sont une.
+ */
+export function wishPlansDisagree(
+  request: PaidLeaveRequest | undefined,
+  weekIds: ReadonlySet<PaidLeaveWeekId>
+): boolean {
+  const filled = wishPlanSizes(request, weekIds).filter((size) => size > 0)
+  return filled.length > 1 && new Set(filled).size > 1
+}
+
+/** Les vœux distincts que la campagne peut encore accorder. */
+export function grantableWishes(
+  request: PaidLeaveRequest | undefined,
+  weekIds: ReadonlySet<PaidLeaveWeekId>
+): readonly PaidLeaveWeekId[] {
+  if (!request) return []
+  return [...new Set([...request.wish1, ...request.wish2, ...request.wish3])].filter((weekId) =>
+    weekIds.has(weekId)
+  )
+}
+
+/**
+ * Les vœux tombés HORS de la période, qu'aucune attribution ne peut satisfaire.
+ *
+ * Ils survivent à un changement de période — `invalidateCampaign` efface les
+ * attributions, pas les souhaits — et il vaut mieux les nommer que les effacer :
+ * le gérant a saisi ces semaines, c'est à lui de décider ce qu'elles deviennent.
+ */
+export function orphanedWishes(
+  request: PaidLeaveRequest | undefined,
+  weekIds: ReadonlySet<PaidLeaveWeekId>
+): readonly PaidLeaveWeekId[] {
+  if (!request) return []
+  return [...new Set([...request.wish1, ...request.wish2, ...request.wish3])].filter(
+    (weekId) => !weekIds.has(weekId)
+  )
 }
 
 export function preferenceRank(
@@ -118,6 +210,12 @@ export function preferenceRank(
   return null
 }
 
+/**
+ * Cocher ou décocher une semaine dans un rang.
+ *
+ * Rien d'autre à tenir à jour : le nombre de semaines demandées se DÉDUIT de
+ * ces listes. C'est ce qui rend l'oubli impossible.
+ */
 export function togglePaidLeaveWish(
   request: PaidLeaveRequest,
   rank: 1 | 2 | 3,
@@ -135,9 +233,10 @@ export function togglePaidLeaveWish(
 
 export function grantIsEntirelyFirstChoice(
   request: PaidLeaveRequest,
-  grants: readonly PaidLeaveWeekId[]
+  grants: readonly PaidLeaveWeekId[],
+  weekIds: ReadonlySet<PaidLeaveWeekId>
 ): boolean {
-  const target = effectiveRequestedWeeks(request)
+  const target = effectiveRequestedWeeks(request, weekIds)
   return target > 0 && grants.length === target && grants.every((week) => request.wish1.includes(week))
 }
 
@@ -202,5 +301,5 @@ function defaultEmployeeSettings(
 }
 
 function emptyRequest(employeeId: string): PaidLeaveRequest {
-  return { employeeId, requestedWeeks: 0, wish1: [], wish2: [], wish3: [] }
+  return { employeeId, wish1: [], wish2: [], wish3: [] }
 }

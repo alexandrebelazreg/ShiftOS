@@ -39,13 +39,20 @@ import {
   type PaidLeaveCoverageSummary,
 } from "@/features/paid-leave/coverage/paid-leave-coverage"
 import {
+  campaignWeekIds,
   createPaidLeaveCampaign,
   effectiveRequestedWeeks,
   linkPriorityEmployees,
   preferenceRank,
   synchronizePaidLeaveCampaign,
   togglePaidLeaveWish,
+  wishPlanSizes,
+  wishPlansDisagree,
 } from "@/features/paid-leave/domain/campaign"
+import {
+  describePaidLeaveOutcome,
+  paidLeaveGenerationWarnings,
+} from "@/features/paid-leave/domain/generation-report"
 import {
   unlockPaidLeaveCampaign,
   validatePaidLeaveCampaign,
@@ -182,8 +189,20 @@ export function PaidLeavePlanningView() {
     window.clearTimeout(timer)
     setSolveStartedAt(null)
     if (isOptimalPaidLeaveResponse(response)) {
-      saveCampaign(applyOptimalPaidLeaveSolution(campaign, response, new Date().toISOString()))
-      setSolveMessage(`Solution optimale trouvée en ${(response.durationMs / 1000).toFixed(1)} s.`)
+      const applied = applyOptimalPaidLeaveSolution(campaign, response, new Date().toISOString())
+      saveCampaign(applied)
+      // Ce que le calcul a RÉELLEMENT produit, et non sa durée. L'optimum d'un
+      // problème où personne ne demande rien est l'ensemble vide, et l'annoncer
+      // comme une réussite envoyait chercher ailleurs un défaut qui était là.
+      setSolveMessage(
+        describePaidLeaveOutcome({
+          campaign: applied,
+          employees,
+          sectors,
+          weekIds: campaignWeekIds(applied),
+          durationMs: response.durationMs,
+        }).message
+      )
       return
     }
     setSolveMessage(
@@ -594,22 +613,32 @@ function EmployeesTab({ campaign, employees, sectors, locked, onUpdate }: Employ
 }
 
 function WishesTab({ campaign, weeks, employees, sectors, locked, onUpdate }: EmployeeTabProps & { readonly weeks: readonly PaidLeaveCampaignWeek[] }) {
+  const weekIds = campaignWeekIds(campaign)
   return (
     <div className="space-y-3 pt-4">
-      <Card size="sm"><CardHeader><CardTitle>Vœux de congés</CardTitle><CardDescription>Chaque employé conserve trois lignes distinctes. Cochez simplement le numéro de semaine dans Vœu 1, Vœu 2 ou Vœu 3.</CardDescription></CardHeader></Card>
+      <Card size="sm"><CardHeader><CardTitle>Vœux de congés</CardTitle><CardDescription>Chaque vœu est un plan complet de la même absence : cochez le <strong>même nombre de semaines</strong> dans Vœu 1, Vœu 2 et Vœu 3. Ce nombre est celui qui sera attribué — il n’y a rien d’autre à saisir.</CardDescription></CardHeader></Card>
       {groupEmployees(employees, sectors).map(({ sectorName, employees: team }) => (
         <Card key={sectorName} size="sm">
           <CardHeader><CardTitle>{sectorName}</CardTitle></CardHeader>
           <CardContent className="space-y-3">
             {team.map((employee) => {
               const request = campaign.requests[employee.id]
-              const selectedCount = new Set([...(request?.wish1 ?? []), ...(request?.wish2 ?? []), ...(request?.wish3 ?? [])]).size
-              const effective = request ? effectiveRequestedWeeks(request) : 0
+              const effective = effectiveRequestedWeeks(request, weekIds)
+              const sizes = wishPlanSizes(request, weekIds)
+              const disagrees = wishPlansDisagree(request, weekIds)
               return (
                 <section key={employee.id} className="space-y-2 rounded-lg border p-2.5">
-                  <div className="flex flex-wrap items-end justify-between gap-2">
-                    <div><h3 className="font-medium">{employeeName(employee)}</h3><p className="text-xs text-muted-foreground">{selectedCount} semaine{selectedCount === 1 ? "" : "s"} distincte{selectedCount === 1 ? "" : "s"} cochée{selectedCount === 1 ? "" : "s"} · objectif effectif : {effective}</p></div>
-                    <Field label="Semaines demandées" className="w-36"><Input disabled={locked} type="number" min={0} max={weeks.length} step={1} value={request?.requestedWeeks ?? 0} onChange={(event) => updateRequest(onUpdate, employee.id, { requestedWeeks: Math.max(0, Math.round(Number(event.target.value))) })} /></Field>
+                  {/* Plus de champ à remplir : le nombre de semaines dues se
+                      LIT dans les vœux. Il ne reste qu'à le montrer, et à
+                      signaler quand les rangs ne décrivent pas la même absence. */}
+                  <div className="flex flex-wrap items-baseline justify-between gap-2">
+                    <h3 className="font-medium">{employeeName(employee)}</h3>
+                    <p className={cn("text-xs", disagrees ? "font-medium text-amber-700 dark:text-amber-400" : "text-muted-foreground")}>
+                      {effective === 0
+                        ? "Aucune semaine demandée"
+                        : `${effective} semaine${effective > 1 ? "s" : ""} demandée${effective > 1 ? "s" : ""}`}
+                      {disagrees ? ` · vœux inégaux (${sizes.filter((size) => size > 0).join(" / ")})` : null}
+                    </p>
                   </div>
                   <WishWeekGrid employee={employee} request={request} weeks={weeks} disabled={locked} onToggle={(rank, weekId) => toggleWish(onUpdate, employee.id, rank, weekId)} />
                 </section>
@@ -669,7 +698,9 @@ function ValidationTab({ campaign, weeks, employees, sectors, locked, solveStart
   const grants = comparison === "granted" ? campaign.grants : wishOneScenario(campaign, employees)
   const declaredAllocations = comparison === "granted" ? campaign.solution?.reinforcementAllocations : undefined
   const coverage = calculatePaidLeaveCoverage({ campaign, employees, sectors, grants, reinforcementAllocations: declaredAllocations })
-  const incomplete = employees.filter((employee) => (campaign.grants[employee.id]?.length ?? 0) !== effectiveRequestedWeeks(campaign.requests[employee.id]))
+  const weekIds = campaignWeekIds(campaign)
+  const warnings = paidLeaveGenerationWarnings({ campaign, employees, sectors, weekIds })
+  const incomplete = employees.filter((employee) => (campaign.grants[employee.id]?.length ?? 0) !== effectiveRequestedWeeks(campaign.requests[employee.id], weekIds))
   const sectorNames = new Set(sectors.map((sector) => sector.name))
   const withoutPrimarySector = employees.filter(
     (employee) => !employee.sectors?.[0] || !sectorNames.has(employee.sectors[0])
@@ -689,7 +720,21 @@ function ValidationTab({ campaign, weeks, employees, sectors, locked, solveStart
               <div className="mt-3 h-1.5 overflow-hidden rounded-full bg-muted"><div className="h-full rounded-full bg-primary transition-[width]" style={{ width: `${Math.max(2, elapsedSeconds / 60 * 100)}%` }} /></div>
             </div>
           ) : (
-            <div className="flex flex-wrap items-center gap-3"><Button disabled={locked} onClick={onSolve}><Sparkles /> Générer l’attribution optimale</Button>{solveMessage ? <p className="text-sm text-muted-foreground">{solveMessage}</p> : null}</div>
+            <div className="space-y-3">
+              {/* Ce qui faussera le calcul, dit AVANT de le lancer : personne
+                  ne doit découvrir après soixante secondes que la moitié de
+                  l'équipe ne pesait sur aucun minimum. Des avertissements et
+                  non un blocage — on peut vouloir une proposition pendant que
+                  deux fiches restent à compléter. */}
+              {warnings.length > 0 ? (
+                <ul className="space-y-1 rounded-lg border border-amber-300 bg-amber-50 p-3 text-sm text-amber-800 dark:border-amber-900 dark:bg-amber-950/30 dark:text-amber-200">
+                  {warnings.map((warning) => (
+                    <li key={warning.kind}>{warning.message}</li>
+                  ))}
+                </ul>
+              ) : null}
+              <div className="flex flex-wrap items-center gap-3"><Button disabled={locked} onClick={onSolve}><Sparkles /> Générer l’attribution optimale</Button>{solveMessage ? <p className="text-sm text-muted-foreground">{solveMessage}</p> : null}</div>
+            </div>
           )}
         </CardContent>
       </Card>
@@ -726,13 +771,14 @@ function ValidationTab({ campaign, weeks, employees, sectors, locked, solveStart
 
 function GrantEditor({ campaign, employee, weeks, locked, onUpdate }: { readonly campaign: PaidLeaveCampaign; readonly employee: EmployeeRecord; readonly weeks: readonly PaidLeaveCampaignWeek[]; readonly locked: boolean; readonly onUpdate: TabProps["onUpdate"] }) {
   const request = campaign.requests[employee.id]
-  const target = request ? effectiveRequestedWeeks(request) : 0
+  const weekIds = campaignWeekIds(campaign)
+  const target = effectiveRequestedWeeks(request, weekIds)
   const granted = campaign.grants[employee.id] ?? []
   return (
     <section className="rounded-lg border p-3">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div><p className="font-medium">{employeeName(employee)}</p><p className="text-xs text-muted-foreground">{granted.length} / {target} semaine{target === 1 ? "" : "s"} accordée{target === 1 ? "" : "s"}</p></div>
-        <div className="flex gap-1 print:hidden">{([1, 2, 3] as const).map((rank) => <Button key={rank} disabled={locked || target === 0} size="xs" variant="outline" onClick={() => setRankGrants(onUpdate, employee.id, request, rank)}>Accorder V{rank}</Button>)}</div>
+        <div className="flex gap-1 print:hidden">{([1, 2, 3] as const).map((rank) => <Button key={rank} disabled={locked || target === 0} size="xs" variant="outline" onClick={() => setRankGrants(onUpdate, employee.id, request, rank, weekIds)}>Accorder V{rank}</Button>)}</div>
       </div>
       <div className="mt-3 flex gap-1 overflow-x-auto pb-2">
         {weeks.map((week) => {
@@ -781,10 +827,6 @@ function updateEmployeeSettings(onUpdate: TabProps["onUpdate"], employeeId: stri
   onUpdate((current) => invalidateCampaign({ ...current, employeeSettings: { ...current.employeeSettings, [employeeId]: { ...current.employeeSettings[employeeId], ...patch } } }))
 }
 
-function updateRequest(onUpdate: TabProps["onUpdate"], employeeId: string, patch: Partial<PaidLeaveRequest>) {
-  onUpdate((current) => invalidateCampaign({ ...current, requests: { ...current.requests, [employeeId]: { ...current.requests[employeeId], ...patch } } }))
-}
-
 function toggleWish(onUpdate: TabProps["onUpdate"], employeeId: string, rank: 1 | 2 | 3, weekId: PaidLeaveWeekId) {
   onUpdate((current) => {
     const request = current.requests[employeeId]
@@ -792,9 +834,9 @@ function toggleWish(onUpdate: TabProps["onUpdate"], employeeId: string, rank: 1 
   })
 }
 
-function setRankGrants(onUpdate: TabProps["onUpdate"], employeeId: string, request: PaidLeaveRequest | undefined, rank: 1 | 2 | 3) {
+function setRankGrants(onUpdate: TabProps["onUpdate"], employeeId: string, request: PaidLeaveRequest | undefined, rank: 1 | 2 | 3, weekIds: ReadonlySet<PaidLeaveWeekId>) {
   if (!request) return
-  const target = effectiveRequestedWeeks(request)
+  const target = effectiveRequestedWeeks(request, weekIds)
   const choices = request[`wish${rank}`]
   onUpdate((current) => ({ ...current, grants: { ...current.grants, [employeeId]: choices.slice(0, target) }, solution: null, updatedAt: new Date().toISOString() }))
 }
@@ -808,9 +850,10 @@ function toggleGrant(onUpdate: TabProps["onUpdate"], employeeId: string, weekId:
 }
 
 function wishOneScenario(campaign: PaidLeaveCampaign, employees: readonly EmployeeRecord[]): Readonly<Record<string, readonly PaidLeaveWeekId[]>> {
+  const weekIds = campaignWeekIds(campaign)
   return Object.fromEntries(employees.map((employee) => {
     const request = campaign.requests[employee.id]
-    return [employee.id, request ? request.wish1.slice(0, effectiveRequestedWeeks(request)) : []]
+    return [employee.id, request ? request.wish1.slice(0, effectiveRequestedWeeks(request, weekIds)) : []]
   }))
 }
 

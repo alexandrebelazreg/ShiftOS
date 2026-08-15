@@ -126,7 +126,11 @@ export function buildPaidLeaveSolveRequest({
       name: `${employee.firstName} ${employee.lastName}`.trim(),
       sectorId: sectorByName.get(employee.sectors?.[0] ?? "")?.id ?? null,
       contractHours: contractHours(employee),
-      targetWeeks: Math.min(effectiveRequestedWeeks(request), choices.length),
+      // `effectiveRequestedWeeks` compte désormais les mêmes vœux que `choices`
+      // — ceux qui tombent dans la période. Le `min` n'est plus un garde-fou
+      // contre une divergence, il n'y en a plus : il reste pour dire que la
+      // cible ne peut pas dépasser ce qu'il y a à donner.
+      targetWeeks: Math.min(effectiveRequestedWeeks(request, weekIds), choices.length),
       linkedEmployeeId: settings?.priority ? settings.linkedEmployeeId : null,
       seniorityOrder: seniorityOrder.get(employee.id) ?? 0,
       firstChoiceHistory: settings?.firstChoiceHistory ?? 0,

@@ -20,9 +20,21 @@ export interface PaidLeaveEmployeeSettings {
   readonly firstChoiceHistory: number
 }
 
+/**
+ * Les vœux d'une personne : trois PLANS COMPLETS, pas trois listes d'options.
+ *
+ * Chaque rang décrit la même absence vue autrement — « je veux deux semaines :
+ * celles-ci de préférence, sinon celles-là, sinon ces dernières ». Le nombre de
+ * semaines demandées n'est donc pas une donnée à part, c'est la TAILLE d'un
+ * plan, et les trois portent la même.
+ *
+ * Il a existé comme champ, saisi à la main et laissé à zéro par défaut : une
+ * personne dont les vœux s'affichaient à l'écran repartait avec un objectif nul
+ * et n'obtenait rien, en silence. Un nombre qui se déduit ne peut pas être
+ * oublié.
+ */
 export interface PaidLeaveRequest {
   readonly employeeId: string
-  readonly requestedWeeks: number
   readonly wish1: readonly PaidLeaveWeekId[]
   readonly wish2: readonly PaidLeaveWeekId[]
   readonly wish3: readonly PaidLeaveWeekId[]
