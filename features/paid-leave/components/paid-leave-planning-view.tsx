@@ -38,6 +38,8 @@ import {
   calculatePaidLeaveCoverage,
   type PaidLeaveCoverageSummary,
 } from "@/features/paid-leave/coverage/paid-leave-coverage"
+import { buildPaidLeaveProjection, wishOneScenario } from "@/features/paid-leave/coverage/paid-leave-projection"
+import { PaidLeaveProjectionReport } from "@/features/paid-leave/components/paid-leave-projection-report"
 import {
   campaignWeekIds,
   createPaidLeaveCampaign,
@@ -700,6 +702,7 @@ function ValidationTab({ campaign, weeks, employees, sectors, locked, solveStart
   const coverage = calculatePaidLeaveCoverage({ campaign, employees, sectors, grants, reinforcementAllocations: declaredAllocations })
   const weekIds = campaignWeekIds(campaign)
   const warnings = paidLeaveGenerationWarnings({ campaign, employees, sectors, weekIds })
+  const projection = buildPaidLeaveProjection({ campaign, employees, sectors })
   const incomplete = employees.filter((employee) => (campaign.grants[employee.id]?.length ?? 0) !== effectiveRequestedWeeks(campaign.requests[employee.id], weekIds))
   const sectorNames = new Set(sectors.map((sector) => sector.name))
   const withoutPrimarySector = employees.filter(
@@ -749,6 +752,8 @@ function ValidationTab({ campaign, weeks, employees, sectors, locked, solveStart
 
       <CoverageReport campaign={campaign} coverage={coverage} sectors={sectors} comparison={comparison} onComparison={setComparison} />
 
+      <PaidLeaveProjectionReport projection={projection} weekLabel={(weekId) => shortWeek(weekId as PaidLeaveWeekId)} />
+
       {campaign.solution?.compromises.length ? (
         <Card><CardHeader><CardTitle>Compte rendu des compromis</CardTitle></CardHeader><CardContent className="grid gap-2 md:grid-cols-2">{campaign.solution.compromises.map((item) => <div key={item.employeeId} className="rounded-lg border p-3"><p className="font-medium">{employeeName(employees.find((employee) => employee.id === item.employeeId))}</p><p className="text-xs text-muted-foreground">{item.message}</p></div>)}</CardContent></Card>
       ) : null}
@@ -780,11 +785,49 @@ function GrantEditor({ campaign, employee, weeks, locked, onUpdate }: { readonly
         <div><p className="font-medium">{employeeName(employee)}</p><p className="text-xs text-muted-foreground">{granted.length} / {target} semaine{target === 1 ? "" : "s"} accordée{target === 1 ? "" : "s"}</p></div>
         <div className="flex gap-1 print:hidden">{([1, 2, 3] as const).map((rank) => <Button key={rank} disabled={locked || target === 0} size="xs" variant="outline" onClick={() => setRankGrants(onUpdate, employee.id, request, rank, weekIds)}>Accorder V{rank}</Button>)}</div>
       </div>
-      <div className="mt-3 flex gap-1 overflow-x-auto pb-2">
+      {/* Une grille qui S'ENROULE plutôt qu'une bande qui défile : sur vingt-six
+          semaines, la bande obligeait à faire défiler pour comparer juillet et
+          août, c'est-à-dire exactement les deux semaines qu'on veut comparer.
+          Le rang tient dans la couleur, l'horaire complet dans l'infobulle. */}
+      <div className="mt-3 grid grid-cols-[repeat(13,minmax(0,1fr))] gap-1 xl:grid-cols-[repeat(26,minmax(0,1fr))]">
         {weeks.map((week) => {
           const checked = granted.includes(week.id)
           const rank = request ? preferenceRank(request, week.id) : null
-          return <Button key={week.id} disabled={locked || (!checked && granted.length >= target)} size="sm" variant={checked ? "default" : "outline"} className={cn("h-auto min-w-20 flex-col py-1", !rank && !checked && "opacity-50")} aria-pressed={checked} onClick={() => toggleGrant(onUpdate, employee.id, week.id, target)}><span>{week.shortLabel}</span><span className="text-[10px] font-normal opacity-75">{rank ? `V${rank}` : "manuel"}</span></Button>
+          return (
+            <button
+              key={week.id}
+              type="button"
+              disabled={locked || (!checked && granted.length >= target)}
+              aria-pressed={checked}
+              aria-label={`${week.shortLabel} · ${week.rangeLabel} · ${rank ? `vœu ${rank}` : "hors vœux"}`}
+              title={`${week.rangeLabel}${rank ? ` · vœu ${rank}` : ""}`}
+              onClick={() => toggleGrant(onUpdate, employee.id, week.id, target)}
+              className={cn(
+                "min-h-9 rounded border py-1 text-[11px] font-medium leading-tight tabular-nums transition disabled:cursor-not-allowed disabled:opacity-40",
+                checked
+                  ? "border-primary bg-primary text-primary-foreground"
+                  : rank === 1
+                    ? "border-emerald-300 bg-emerald-50 text-emerald-800 hover:bg-emerald-100"
+                    : rank === 2
+                      ? "border-amber-300 bg-amber-50 text-amber-900 hover:bg-amber-100"
+                      : rank === 3
+                        ? "border-sky-300 bg-sky-50 text-sky-800 hover:bg-sky-100"
+                        : "border-border text-muted-foreground/60 hover:bg-muted"
+              )}
+            >
+              <span className="block">{week.weekNumber}</span>
+              {/* Le rang SOUS la semaine accordée. Une case retenue prend la
+                  couleur de l'attribution et perd donc celle de son vœu :
+                  sans cette ligne, on ne sait plus si la personne a eu son
+                  premier choix ou son troisième — la seule chose qu'on veuille
+                  vraiment savoir en relisant. */}
+              {checked ? (
+                <span className="block text-[9px] font-semibold opacity-90">
+                  {rank ? `V${rank}` : "—"}
+                </span>
+              ) : null}
+            </button>
+          )
         })}
       </div>
     </section>
@@ -802,7 +845,38 @@ function CoverageReport({ campaign, coverage, sectors, comparison, onComparison 
         </div>
         {sectors.map((sector) => {
           const cells = coverage.cells.filter((cell) => cell.sectorId === sector.id)
-          return <section key={sector.id}><h3 className="mb-2 font-medium">{sector.name}</h3><div className="flex gap-2 overflow-x-auto pb-2">{cells.map((cell) => <div key={cell.weekId} className={cn("min-w-28 rounded-lg border p-2 text-xs", cell.state === "green" && "border-emerald-200 bg-emerald-50 text-emerald-950", cell.state === "orange" && "border-orange-200 bg-orange-50 text-orange-950", cell.state === "red" && "border-red-200 bg-red-50 text-red-950")}><p className="font-medium">{shortWeek(cell.weekId)}</p><p>{formatHours(cell.totalHours)} / {formatHours(cell.minimumHours)}</p>{cell.reinforcementHours > 0 ? <p className="opacity-70">+{formatHours(cell.reinforcementHours)} renfort</p> : null}</div>)}</div></section>
+          return (
+            <section key={sector.id}>
+              <h3 className="mb-2 font-medium">{sector.name}</h3>
+              {/* Même resserrement que les attributions : toute la période doit
+                  tenir sous les yeux, sinon on ne voit jamais le creux d'août
+                  et la tension de juillet en même temps. Le détail horaire
+                  passe dans l'infobulle. */}
+              <div className="grid grid-cols-[repeat(13,minmax(0,1fr))] gap-1 xl:grid-cols-[repeat(26,minmax(0,1fr))]">
+                {cells.map((cell) => (
+                  <div
+                    key={cell.weekId}
+                    title={`${shortWeek(cell.weekId)} · ${formatHours(cell.totalHours)} présentes pour ${formatHours(cell.minimumHours)} requises${cell.reinforcementHours > 0 ? ` · dont ${formatHours(cell.reinforcementHours)} de renfort` : ""}`}
+                    className={cn(
+                      "rounded border py-1 text-center text-[11px] tabular-nums",
+                      cell.state === "green" && "border-emerald-200 bg-emerald-50 text-emerald-900",
+                      cell.state === "orange" && "border-orange-200 bg-orange-50 text-orange-900",
+                      cell.state === "red" && "border-red-300 bg-red-100 font-semibold text-red-900"
+                    )}
+                  >
+                    <span className="block">{weekNumberOf(cell.weekId)}</span>
+                    {/* Le déficit est le seul chiffre qui appelle une décision ;
+                        les semaines qui vont bien n'ont rien à dire. */}
+                    {cell.deficitHours > 0 ? (
+                      <span className="block text-[9px] font-medium">−{Math.round(cell.deficitHours)}</span>
+                    ) : cell.reinforcementHours > 0 ? (
+                      <span className="block text-[9px] opacity-70">+{Math.round(cell.reinforcementHours)}</span>
+                    ) : null}
+                  </div>
+                ))}
+              </div>
+            </section>
+          )
         })}
         {coverage.pools.length > 0 ? <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-3">{coverage.pools.map((pool) => <div key={pool.poolId} className="rounded-lg bg-muted/50 p-3 text-xs"><p className="font-medium">{pool.label}</p><p className="text-muted-foreground">{formatHours(pool.usedHours)} utilisées · {formatHours(pool.remainingHours)} restantes sur {formatHours(pool.totalHours)}</p></div>)}</div> : null}
         <p className="text-xs text-muted-foreground">Vue : {comparison === "granted" ? "semaines accordées" : "simulation si chacun obtenait d’abord ses vœux 1"} · campagne {campaign.name}</p>
@@ -849,13 +923,6 @@ function toggleGrant(onUpdate: TabProps["onUpdate"], employeeId: string, weekId:
   })
 }
 
-function wishOneScenario(campaign: PaidLeaveCampaign, employees: readonly EmployeeRecord[]): Readonly<Record<string, readonly PaidLeaveWeekId[]>> {
-  const weekIds = campaignWeekIds(campaign)
-  return Object.fromEntries(employees.map((employee) => {
-    const request = campaign.requests[employee.id]
-    return [employee.id, request ? request.wish1.slice(0, effectiveRequestedWeeks(request, weekIds)) : []]
-  }))
-}
 
 function invalidateCampaign(campaign: PaidLeaveCampaign): PaidLeaveCampaign {
   return { ...campaign, grants: {}, solution: null, updatedAt: new Date().toISOString() }
@@ -890,5 +957,6 @@ function clampWeek(value: string): number { return Math.min(53, Math.max(1, Math
 function employeeName(employee: EmployeeRecord | undefined): string { return employee ? `${employee.firstName} ${employee.lastName}`.trim() : "Personne indisponible" }
 function contractHours(employee: EmployeeRecord): number { return typeof employee.weeklyMinutes === "number" ? employee.weeklyMinutes / 60 : employee.weeklyHours }
 function formatHours(hours: number): string { return `${new Intl.NumberFormat("fr-FR", { maximumFractionDigits: 2 }).format(hours)} h` }
-function shortWeek(weekId: PaidLeaveWeekId): string { return `S${Number(weekId.slice(-2))}` }
+function shortWeek(weekId: PaidLeaveWeekId): string { return `S${weekNumberOf(weekId)}` }
+function weekNumberOf(weekId: PaidLeaveWeekId): number { return Number(weekId.slice(-2)) }
 function formatDateTime(value: string | undefined): string { return value ? new Intl.DateTimeFormat("fr-FR", { dateStyle: "medium", timeStyle: "short" }).format(new Date(value)) : "date inconnue" }
