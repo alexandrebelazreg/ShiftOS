@@ -6,8 +6,10 @@ import { FormProvider } from "react-hook-form"
 
 import { ContraintesTab } from "@/features/employees/components/tabs/ContraintesTab"
 import { ContratTab } from "@/features/employees/components/tabs/ContratTab"
+import { DimancheTab } from "@/features/employees/components/tabs/DimancheTab"
 import { InformationsTab } from "@/features/employees/components/tabs/InformationsTab"
 import { AffectationsTab } from "@/features/employees/components/tabs/AffectationsTab"
+import { PermanenceTab } from "@/features/employees/components/tabs/PermanenceTab"
 import { useEmployeeForm } from "@/features/employees/hooks/useEmployeeForm"
 import type { EmployeeDraft } from "@/features/employees/schemas/employee.schema"
 import type { EmployeeRecord } from "@/features/employees/types/employee.types"
@@ -24,6 +26,8 @@ const TABS = [
   { value: "contrat", label: "Contrat" },
   { value: "affectations", label: "Affectations" },
   { value: "contraintes", label: "Contraintes" },
+  { value: "permanence", label: "Permanence" },
+  { value: "dimanche", label: "Dimanche" },
 ] as const
 
 type TabValue = (typeof TABS)[number]["value"]
@@ -60,6 +64,17 @@ const FIELD_TABS: Record<string, TabValue> = {
   endTimeIsExact: "contraintes",
   openingDays: "contraintes",
   closingDays: "contraintes",
+
+  permanence: "permanence",
+  permanencePreferredOpeningDays: "permanence",
+  permanenceRequiredOpeningDays: "permanence",
+  permanencePreferredClosingDays: "permanence",
+  permanenceRequiredClosingDays: "permanence",
+
+  sundayWork: "dimanche",
+  sundayCommitment: "dimanche",
+  maxSundaysPerMonth: "dimanche",
+  sundayCompensation: "dimanche",
 }
 
 /**
@@ -68,19 +83,36 @@ const FIELD_TABS: Record<string, TabValue> = {
  */
 export function EmployeeForm({
   employee,
+  sundayOpen,
   onSubmit,
   onCancel,
   onDisable,
 }: {
   employee: EmployeeRecord | null
+  /**
+   * Le magasin ouvre-t-il le dimanche ? Lu côté serveur et passé ici, parce que
+   * les horaires du magasin vivent dans un cookie que seul le serveur relit.
+   */
+  sundayOpen: boolean
   onSubmit: (draft: EmployeeDraft) => void | Promise<void>
   onCancel: () => void
   onDisable?: (employee: EmployeeRecord) => void | Promise<void>
 }) {
   const form = useEmployeeForm(employee)
-  const { isSubmitting } = form.formState
+  const { isSubmitting, errors } = form.formState
   const [tab, setTab] = useState<TabValue>("informations")
   const [blockedTab, setBlockedTab] = useState<TabValue | null>(null)
+
+  // Un onglet grisé qui porte l'erreur bloquerait l'enregistrement sans laisser
+  // aucun moyen de la corriger : le magasin peut fermer le dimanche APRÈS qu'une
+  // fiche y a été réglée. Il redevient donc atteignable le temps de la faute —
+  // même raison que la section repliée des contraintes, qui s'ouvre d'elle-même.
+  //
+  // Lu depuis FIELD_TABS et non d'une seconde liste : un champ ajouté à l'onglet
+  // sans être ajouté ici serait exactement le champ qu'on ne peut plus corriger.
+  const sundayBlocks = Object.keys(errors).some(
+    (field) => FIELD_TABS[field] === "dimanche"
+  )
 
   const canDisable = Boolean(employee && employee.status === "active" && onDisable)
 
@@ -111,11 +143,24 @@ export function EmployeeForm({
           className="flex-1 gap-4 overflow-hidden"
         >
           <TabsList className="w-full">
-            {TABS.map((item) => (
-              <TabsTrigger key={item.value} value={item.value}>
-                {item.label}
-              </TabsTrigger>
-            ))}
+            {TABS.map((item) => {
+              // Grisé plutôt que retiré : un onglet qui disparaît laisse croire
+              // que le réglage n'existe pas, quand il n'est qu'hors sujet ici —
+              // et il redeviendra saisissable le jour où le magasin ouvrira le
+              // dimanche, sans que rien de ce qui est enregistré soit perdu.
+              const closed = item.value === "dimanche" && !sundayOpen && !sundayBlocks
+              return (
+                <TabsTrigger
+                  key={item.value}
+                  value={item.value}
+                  disabled={closed}
+                  aria-label={closed ? "Dimanche — le magasin est fermé ce jour-là" : undefined}
+                  title={closed ? "Le magasin est fermé le dimanche" : undefined}
+                >
+                  {item.label}
+                </TabsTrigger>
+              )
+            })}
           </TabsList>
 
           <div className="flex-1 overflow-y-auto px-1">
@@ -128,6 +173,12 @@ export function EmployeeForm({
             <TabsContent value="affectations"><AffectationsTab /></TabsContent>
             <TabsContent value="contraintes">
               <ContraintesTab />
+            </TabsContent>
+            <TabsContent value="permanence">
+              <PermanenceTab />
+            </TabsContent>
+            <TabsContent value="dimanche">
+              <DimancheTab />
             </TabsContent>
           </div>
         </Tabs>

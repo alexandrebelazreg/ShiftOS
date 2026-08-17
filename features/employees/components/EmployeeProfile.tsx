@@ -12,7 +12,13 @@ import { Button } from "@/components/ui/button"
 import { PageHeader } from "@/components/layout/page-header"
 
 /** Dedicated editing page: the single place where an employee profile is changed. */
-export function EmployeeProfile({ employeeId }: { employeeId: string }) {
+export function EmployeeProfile({
+  employeeId,
+  sundayOpen,
+}: {
+  employeeId: string
+  sundayOpen: boolean
+}) {
   const router = useRouter()
   const [employee, setEmployee] = useState<EmployeeRecord | null | undefined>(undefined)
 
@@ -32,5 +38,5 @@ export function EmployeeProfile({ employeeId }: { employeeId: string }) {
     setEmployee(updated)
   }
 
-  return <div className="mx-auto max-w-7xl space-y-6"><PageHeader title={getFullName(profile)} description="Profil employé : informations, contrat, affectations et contraintes." /><EmployeeForm employee={profile} onSubmit={save} onCancel={() => router.push("/configuration/employes")} onDisable={disable} /></div>
+  return <div className="mx-auto max-w-7xl space-y-6"><PageHeader title={getFullName(profile)} description="Profil employé : informations, contrat, affectations et contraintes." /><EmployeeForm employee={profile} sundayOpen={sundayOpen} onSubmit={save} onCancel={() => router.push("/configuration/employes")} onDisable={disable} /></div>
 }

@@ -3,7 +3,26 @@ import type { EmployeeDraft } from "@/features/employees/schemas/employee.schema
 import type {
   EmployeeRecord,
   EmployeeFormValues,
+  SundaysPerMonthChoice,
 } from "@/features/employees/types/employee.types"
+
+/**
+ * Le plafond persisté ramené à l'un des quatre boutons du formulaire.
+ *
+ * `null` — « tous les dimanches », ou aucun — revient à 1 : c'est ce que le
+ * formulaire proposera s'il repasse volontaire, et de deux valeurs également
+ * arbitraires il vaut mieux retenir la plus prudente. On n'appelle jamais
+ * quelqu'un plus souvent qu'il n'a dit oui.
+ *
+ * Un enregistrement venu d'ailleurs — import, script de reprise — peut porter
+ * n'importe quel nombre ; un choix hors liste ne s'afficherait comme aucun des
+ * quatre.
+ */
+function sundaysPerMonthChoice(value: number | null | undefined): SundaysPerMonthChoice {
+  const rounded = Math.round(value ?? 1)
+  if (!Number.isFinite(rounded)) return "1"
+  return String(Math.min(4, Math.max(1, rounded))) as SundaysPerMonthChoice
+}
 
 /** Blank form values for the "create employee" flow. */
 export function createEmptyEmployeeFormValues(): EmployeeFormValues {
@@ -38,6 +57,17 @@ export function createEmptyEmployeeFormValues(): EmployeeFormValues {
     endTimeIsExact: false,
     openingDays: [],
     closingDays: [],
+
+    permanence: false,
+    permanencePreferredOpeningDays: [],
+    permanenceRequiredOpeningDays: [],
+    permanencePreferredClosingDays: [],
+    permanenceRequiredClosingDays: [],
+
+    sundayWork: false,
+    sundayCommitment: "volunteer",
+    maxSundaysPerMonth: "1",
+    sundayCompensation: "",
 
     preferOpening: false,
     preferClosing: false,
@@ -85,6 +115,21 @@ export function employeeToFormValues(employee: EmployeeRecord): EmployeeFormValu
     endTimeIsExact: employee.endTimeIsExact ?? false,
     openingDays: [...(employee.openingDays ?? [])],
     closingDays: [...(employee.closingDays ?? [])],
+
+    // Une fiche antérieure au tour de permanence n'en porte rien : l'absence
+    // se relit comme « n'y participe pas », sans avoir à rouvrir la fiche.
+    permanence: employee.permanence === true,
+    permanencePreferredOpeningDays: [...(employee.permanencePreferredOpeningDays ?? [])],
+    permanenceRequiredOpeningDays: [...(employee.permanenceRequiredOpeningDays ?? [])],
+    permanencePreferredClosingDays: [...(employee.permanencePreferredClosingDays ?? [])],
+    permanenceRequiredClosingDays: [...(employee.permanenceRequiredClosingDays ?? [])],
+
+    // Une fiche antérieure à l'onglet Dimanche n'en porte rien : l'absence se
+    // relit comme « ne travaille pas le dimanche ».
+    sundayWork: employee.sundayWork === true,
+    sundayCommitment: employee.sundayCommitment ?? "volunteer",
+    maxSundaysPerMonth: sundaysPerMonthChoice(employee.maxSundaysPerMonth),
+    sundayCompensation: employee.sundayCompensation ?? "",
 
     preferOpening: employee.preferOpening,
     preferClosing: employee.preferClosing,

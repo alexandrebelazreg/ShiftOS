@@ -20,12 +20,14 @@ export function EmployeeDrawer({
   open,
   onOpenChange,
   employee,
+  sundayOpen,
   onSubmit,
   onDisable,
 }: {
   open: boolean
   onOpenChange: (open: boolean) => void
   employee: EmployeeRecord | null
+  sundayOpen: boolean
   onSubmit: (draft: EmployeeDraft) => void | Promise<void>
   onDisable?: (employee: EmployeeRecord) => void | Promise<void>
 }) {
@@ -52,6 +54,7 @@ export function EmployeeDrawer({
           <EmployeeForm
             key={employee?.id ?? "new"}
             employee={employee}
+            sundayOpen={sundayOpen}
             onSubmit={onSubmit}
             onCancel={() => onOpenChange(false)}
             onDisable={onDisable}

@@ -3,6 +3,7 @@ import {
   CalendarDays,
   Printer,
   CalendarHeart,
+  KeyRound,
   Palmtree,
   UserRoundX,
   Settings,
@@ -29,6 +30,9 @@ export const navItems: NavItem[] = [
   // Avant les congés : un férié se règle pour toute l'année, alors qu'un congé
   // se traite au fil de l'eau.
   { title: "Jours fériés", href: "/feries", icon: CalendarHeart },
+  // Après les fériés, avant les congés : une permanence se pose au mois, en
+  // sachant quels jours le rideau reste baissé, et sans attendre les congés.
+  { title: "Permanences", href: "/permanence", icon: KeyRound },
   { title: "Congés", href: "/conges", icon: Palmtree },
   { title: "Absences", href: "/absences", icon: UserRoundX },
 ]

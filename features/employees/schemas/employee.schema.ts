@@ -8,7 +8,13 @@ import {
 } from "@/features/core/models"
 import type { WeekDay } from "@/features/core/models"
 import { timeToMinutes } from "@/features/core/shared"
-import { EMPLOYEE_SCHEDULE_TYPES } from "@/features/employees/types/employee.types"
+import {
+  EMPLOYEE_SCHEDULE_TYPES,
+  SUNDAY_COMMITMENTS,
+  SUNDAY_COMPENSATIONS,
+  type SundayCommitment,
+  type SundayCompensation,
+} from "@/features/employees/types/employee.types"
 
 const wholeWeeklyHours = z.preprocess((value) => {
   if (typeof value !== "string") return value
@@ -87,6 +93,24 @@ export const employeeSchema = z.object({
   openingDays: z.array(weekDay).default([]),
   closingDays: z.array(weekDay).default([]),
 
+  // Permanence — `.default()` partout : une fiche enregistrée avant le tour de
+  // permanence doit continuer à se relire, et l'absence vaut « n'y participe pas ».
+  permanence: z.boolean().default(false),
+  permanencePreferredOpeningDays: z.array(weekDay).default([]),
+  permanenceRequiredOpeningDays: z.array(weekDay).default([]),
+  permanencePreferredClosingDays: z.array(weekDay).default([]),
+  permanenceRequiredClosingDays: z.array(weekDay).default([]),
+
+  // Dimanche — `.default()` partout, pour la même raison que la permanence :
+  // une fiche enregistrée avant cet onglet doit continuer à se relire, et son
+  // silence vaut « ne travaille pas le dimanche ».
+  sundayWork: z.boolean().default(false),
+  sundayCommitment: z.enum(SUNDAY_COMMITMENTS).default("volunteer"),
+  maxSundaysPerMonth: z.coerce.number().int().min(1).max(4).default(1),
+  // `""` = pas encore choisi. La contrepartie n'a pas de valeur par défaut :
+  // en donner une ferait passer un oubli pour une décision.
+  sundayCompensation: z.union([z.literal(""), z.enum(SUNDAY_COMPENSATIONS)]).default(""),
+
   // Préférences
   preferOpening: z.boolean(),
   preferClosing: z.boolean(),
@@ -110,10 +134,30 @@ export const employeeSchema = z.object({
   if (value.endTimeIsExact && latest === null) {
     context.addIssue({ code: "custom", path: ["latestEndTime"], message: "Indiquez l’heure de fin à imposer" })
   }
+  // Un dimanche travaillé se rend d'une des trois façons — toujours. C'est la
+  // seule règle du dimanche qui bloque : le reste (plafond, engagement) a une
+  // valeur sensée par défaut, une contrepartie manquante n'en a aucune, et
+  // c'est celle qui se réclamera sur la fiche de paie.
+  //
+  // Rien n'est exigé du dimanche resté en repos fixe : c'est l'usage de la
+  // maison, et un volontaire y est appelé sans que ce repos soit levé.
+  if (value.sundayWork && !value.sundayCompensation) {
+    context.addIssue({ code: "custom", path: ["sundayCompensation"], message: "Choisissez ce que le dimanche lui rend" })
+  }
   // Ouvrir et fermer le même jour est possible ; l'être et se reposer, non.
   // Chaque champ porte son propre message : renvoyer une faute de fermeture
   // sur le champ d'ouverture désigne la mauvaise ligne à corriger.
-  for (const [field, days] of [["openingDays", value.openingDays], ["closingDays", value.closingDays]] as const) {
+  //
+  // Les jours de permanence IMPOSÉS subissent le même contrôle, et eux seuls :
+  // un jour seulement PRÉFÉRÉ qui tombe sur un repos ne sera jamais retenu par
+  // le générateur, ce qui est sans conséquence — refuser la fiche pour cela
+  // ferait perdre un réglage inoffensif.
+  for (const [field, days] of [
+    ["openingDays", value.openingDays],
+    ["closingDays", value.closingDays],
+    ["permanenceRequiredOpeningDays", value.permanenceRequiredOpeningDays],
+    ["permanenceRequiredClosingDays", value.permanenceRequiredClosingDays],
+  ] as const) {
     for (const day of days) {
       if (value.fixedDaysOff.includes(day) || value.forbiddenDays.includes(day)) {
         context.addIssue({ code: "custom", path: [field], message: `Ce salarié ne travaille pas le ${day === "monday" ? "lundi" : day === "tuesday" ? "mardi" : day === "wednesday" ? "mercredi" : day === "thursday" ? "jeudi" : day === "friday" ? "vendredi" : day === "saturday" ? "samedi" : "dimanche"}` })
@@ -126,10 +170,55 @@ export const employeeSchema = z.object({
   // Retirer le droit d'ouvrir retire les jours d'ouverture imposés. Sans cela
   // un réglage devenu invisible dans l'écran continuerait de contraindre le
   // solveur, et le refus tomberait sur un champ que personne ne voit.
+  // Retirer quelqu'un du tour de permanence retire ses jours de permanence,
+  // pour la même raison : un réglage devenu invisible à l'écran continuerait
+  // d'imposer des fermetures à quelqu'un qui n'y participe plus.
+  const permanenceDays = value.permanence
+    ? {
+        permanencePreferredOpeningDays: value.permanencePreferredOpeningDays,
+        permanenceRequiredOpeningDays: value.permanenceRequiredOpeningDays,
+        permanencePreferredClosingDays: value.permanencePreferredClosingDays,
+        permanenceRequiredClosingDays: value.permanenceRequiredClosingDays,
+      }
+    : {
+        permanencePreferredOpeningDays: [],
+        permanenceRequiredOpeningDays: [],
+        permanencePreferredClosingDays: [],
+        permanenceRequiredClosingDays: [],
+      }
+
+  // Idem pour le dimanche : décocher « travaille le dimanche » ramène tout à
+  // neutre. Sinon un « 3 dimanches par mois » survivrait à l'accord qui le
+  // justifiait, et le premier appelant qui oublierait de vérifier `sundayWork`
+  // appellerait quelqu'un qui n'a jamais accepté aucun dimanche.
+  //
+  // `maxSundaysPerMonth` est un PLAFOND, et `null` dit « aucun » : c'est ce que
+  // vaut « tous les dimanches », où il n'y a rien à plafonner. Un 4 y aurait
+  // menti les mois de cinq dimanches.
+  const sunday: {
+    sundayCommitment: SundayCommitment
+    maxSundaysPerMonth: number | null
+    sundayCompensation: SundayCompensation | null
+  } = value.sundayWork
+    ? {
+        sundayCommitment: value.sundayCommitment,
+        maxSundaysPerMonth:
+          value.sundayCommitment === "fixed" ? null : value.maxSundaysPerMonth,
+        // Non vide : le refus ci-dessus n'a laissé passer que ce cas.
+        sundayCompensation: value.sundayCompensation || null,
+      }
+    : {
+        sundayCommitment: "volunteer",
+        maxSundaysPerMonth: null,
+        sundayCompensation: null,
+      }
+
   return {
     ...value,
     openingDays: value.canOpen ? value.openingDays : [],
     closingDays: value.canClose ? value.closingDays : [],
+    ...permanenceDays,
+    ...sunday,
     weeklyMinutes,
     weeklyHours: weeklyMinutes / 60,
   }
@@ -149,6 +238,15 @@ export type EmployeeDraft = Omit<
   | "scheduleType"
   | "student"
   | "forfaitJour"
+  | "permanence"
+  | "permanencePreferredOpeningDays"
+  | "permanenceRequiredOpeningDays"
+  | "permanencePreferredClosingDays"
+  | "permanenceRequiredClosingDays"
+  | "sundayWork"
+  | "sundayCommitment"
+  | "maxSundaysPerMonth"
+  | "sundayCompensation"
 > & {
   weeklyMinutes?: number | null
   /** Optional for callers and persisted drafts created before this preference existed. */
@@ -164,4 +262,15 @@ export type EmployeeDraft = Omit<
   endTimeIsExact?: boolean
   openingDays?: WeekDay[]
   closingDays?: WeekDay[]
+  /** Idem : un brouillon écrit avant le tour de permanence reste valide. */
+  permanence?: boolean
+  permanencePreferredOpeningDays?: WeekDay[]
+  permanenceRequiredOpeningDays?: WeekDay[]
+  permanencePreferredClosingDays?: WeekDay[]
+  permanenceRequiredClosingDays?: WeekDay[]
+  /** Idem : un brouillon écrit avant l'onglet Dimanche reste valide. */
+  sundayWork?: boolean
+  sundayCommitment?: SundayCommitment
+  maxSundaysPerMonth?: number | null
+  sundayCompensation?: SundayCompensation | null
 }
