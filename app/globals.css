@@ -145,6 +145,18 @@
   margin: 8mm;
 }
 
+/* La feuille des congés est un tableau de vingt-six colonnes : elle réclame la
+ * largeur de l'A3, et une page nommée est le seul moyen de la lui donner sans
+ * imposer l'A3 aux feuilles du planning, qui tiennent en A4. */
+@page a3-landscape {
+  size: A3 landscape;
+  margin: 8mm;
+}
+
+.leave-sheet {
+  page: a3-landscape;
+}
+
 @media print {
   body:has([data-publication-document])
     *:not(:has([data-publication-document])):not([data-publication-document]):not(

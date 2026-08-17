@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest"
 import type { EmployeeRecord } from "@/features/employees/types/employee.types"
 import {
   buildPaidLeaveProjection,
+  describePaidLeaveTension,
   wishOneScenario,
   withRelaxedMinimums,
 } from "@/features/paid-leave/coverage/paid-leave-projection"
@@ -394,5 +395,74 @@ describe("le levier des minima", () => {
     const relaxed = withRelaxedMinimums(campaign(), 500)
 
     expect(relaxed.coverage.drive["2026-W20"].minimumHours).toBe(0)
+  })
+})
+
+describe("le verdict, en deux phrases", () => {
+  const tension = (patch: Partial<PaidLeaveCampaign> = {}) =>
+    describePaidLeaveTension(project(patch))
+
+  const contested = {
+    requests: {
+      a: request(["2026-W20"]),
+      b: request(["2026-W20"]),
+      c: request(["2026-W20"]),
+    },
+  }
+
+  const pool = (patch: Record<string, unknown> = {}) => ({
+    id: "p1",
+    label: "Intérim",
+    totalHours: 100,
+    startWeekId: "2026-W20",
+    endWeekId: "2026-W22",
+    scope: "global",
+    sectorId: null,
+    ...patch,
+  })
+
+  it("annonce que tout passe quand rien ne coince", () => {
+    const verdict = tension({ requests: { a: request(["2026-W20"]) } })
+
+    expect(verdict.critical).toBe(false)
+    expect(verdict.headline).toContain("Tout le monde peut obtenir son premier vœu")
+    expect(verdict.remedy).toBeNull()
+  })
+
+  it("compte les semaines qui coincent, et accorde le verbe", () => {
+    const verdict = tension({
+      requests: {
+        a: request(["2026-W20"]),
+        b: request(["2026-W20"]),
+        c: request(["2026-W20"]),
+        d: request(["2026-W21"]),
+        e: request(["2026-W21"]),
+      },
+    })
+
+    expect(verdict.critical).toBe(true)
+    expect(verdict.headline).toContain("2 semaines passeraient sous leur minimum")
+  })
+
+  it("dit que le budget suffit quand il couvre tout", () => {
+    const verdict = tension({ ...contested, reinforcementPools: [pool()] as never })
+
+    expect(verdict.remedy).toContain("peuvent les couvrir entièrement")
+  })
+
+  it("chiffre ce qui manque quand le budget est trop court", () => {
+    const verdict = tension({
+      ...contested,
+      reinforcementPools: [pool({ totalHours: 20 })] as never,
+    })
+
+    expect(verdict.remedy).toContain("il en manque 50 h")
+  })
+
+  it("dit qu’il faudra déplacer des congés quand aucune enveloppe n’atteint les semaines", () => {
+    // Le cas qui change la décision : l'argent ne peut rien.
+    const verdict = tension(contested)
+
+    expect(verdict.remedy).toContain("déplacer des congés")
   })
 })

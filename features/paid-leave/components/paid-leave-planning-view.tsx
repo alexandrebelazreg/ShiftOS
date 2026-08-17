@@ -40,6 +40,8 @@ import {
 } from "@/features/paid-leave/coverage/paid-leave-coverage"
 import { buildPaidLeaveProjection, wishOneScenario } from "@/features/paid-leave/coverage/paid-leave-projection"
 import { PaidLeaveProjectionReport } from "@/features/paid-leave/components/paid-leave-projection-report"
+import { buildLeaveSheet } from "@/features/paid-leave/publication/leave-sheet"
+import { PaidLeaveSheet } from "@/features/paid-leave/publication/PaidLeaveSheet"
 import {
   campaignWeekIds,
   createPaidLeaveCampaign,
@@ -77,11 +79,12 @@ import {
   createSectorRepository,
   type SectorDemandConfiguration,
 } from "@/features/sectors"
+import type { StoreConfig } from "@/features/store/schemas/store.schema"
 import { cn } from "@/lib/utils"
 
 const selectClassName = "h-8 w-full rounded-lg border border-input bg-background px-2.5 text-sm outline-none focus:border-ring focus:ring-3 focus:ring-ring/50 disabled:cursor-not-allowed disabled:opacity-50"
 
-export function PaidLeavePlanningView() {
+export function PaidLeavePlanningView({ initialStore }: { readonly initialStore: StoreConfig | null }) {
   const [employees, setEmployees] = useState<EmployeeRecord[]>([])
   const [sectors, setSectors] = useState<SectorDemandConfiguration[]>([])
   const [campaigns, setCampaigns] = useState<PaidLeaveCampaign[]>([])
@@ -251,6 +254,7 @@ export function PaidLeavePlanningView() {
         <EmptyCampaign employees={activeEmployees} sectors={activeSectors} />
       ) : (
         <CampaignWorkspace
+          storeName={initialStore?.name ?? "Magasin"}
           campaign={campaign}
           weeks={weeks}
           employees={activeEmployees}
@@ -334,6 +338,7 @@ function CampaignWorkspace({
   weeks,
   employees,
   sectors,
+  storeName,
   solveStartedAt,
   elapsedSeconds,
   solveMessage,
@@ -345,6 +350,7 @@ function CampaignWorkspace({
   readonly weeks: readonly PaidLeaveCampaignWeek[]
   readonly employees: readonly EmployeeRecord[]
   readonly sectors: readonly SectorDemandConfiguration[]
+  readonly storeName: string
   readonly solveStartedAt: number | null
   readonly elapsedSeconds: number
   readonly solveMessage: string | null
@@ -390,6 +396,7 @@ function CampaignWorkspace({
         </TabsContent>
         <TabsContent value="validation">
           <ValidationTab
+            storeName={storeName}
             campaign={campaign}
             weeks={weeks}
             employees={employees}
@@ -695,7 +702,7 @@ function WishWeekGrid({ employee, request, weeks, disabled, onToggle }: { readon
   )
 }
 
-function ValidationTab({ campaign, weeks, employees, sectors, locked, solveStartedAt, elapsedSeconds, solveMessage, onUpdate, onSave, onSolve }: EmployeeTabProps & { readonly weeks: readonly PaidLeaveCampaignWeek[]; readonly solveStartedAt: number | null; readonly elapsedSeconds: number; readonly solveMessage: string | null; readonly onSave: (campaign: PaidLeaveCampaign) => void; readonly onSolve: () => void }) {
+function ValidationTab({ campaign, weeks, employees, sectors, locked, solveStartedAt, elapsedSeconds, solveMessage, storeName, onUpdate, onSave, onSolve }: EmployeeTabProps & { readonly weeks: readonly PaidLeaveCampaignWeek[]; readonly solveStartedAt: number | null; readonly elapsedSeconds: number; readonly solveMessage: string | null; readonly storeName: string; readonly onSave: (campaign: PaidLeaveCampaign) => void; readonly onSolve: () => void }) {
   const [comparison, setComparison] = useState<"granted" | "wish1">("granted")
   const grants = comparison === "granted" ? campaign.grants : wishOneScenario(campaign, employees)
   const declaredAllocations = comparison === "granted" ? campaign.solution?.reinforcementAllocations : undefined
@@ -754,9 +761,30 @@ function ValidationTab({ campaign, weeks, employees, sectors, locked, solveStart
 
       <PaidLeaveProjectionReport projection={projection} weekLabel={(weekId) => shortWeek(weekId as PaidLeaveWeekId)} />
 
-      {campaign.solution?.compromises.length ? (
-        <Card><CardHeader><CardTitle>Compte rendu des compromis</CardTitle></CardHeader><CardContent className="grid gap-2 md:grid-cols-2">{campaign.solution.compromises.map((item) => <div key={item.employeeId} className="rounded-lg border p-3"><p className="font-medium">{employeeName(employees.find((employee) => employee.id === item.employeeId))}</p><p className="text-xs text-muted-foreground">{item.message}</p></div>)}</CardContent></Card>
-      ) : null}
+      {/* La FEUILLE, et non la page. `window.print()` sortait jusqu'ici les
+          éditeurs interactifs, les boutons et les onglets ; les règles
+          d'impression n'épargnent maintenant que ce document. */}
+      <Card>
+        <CardHeader className="print:hidden">
+          <CardTitle>Feuille à afficher</CardTitle>
+          <CardDescription>
+            Un salarié par ligne, groupé par rayon. Dans la fenêtre d’impression, choisissez le
+            format <strong>A3</strong>, l’orientation <strong>paysage</strong>, et activez les
+            graphiques d’arrière-plan pour conserver les couleurs des rayons.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="overflow-x-auto bg-muted/40 p-4 print:overflow-visible print:bg-transparent print:p-0">
+          <PaidLeaveSheet
+            sheet={buildLeaveSheet({
+              campaign,
+              employees,
+              sectors,
+              storeName,
+              printedAtLabel: `Édité le ${formatDateTime(new Date().toISOString())}`,
+            })}
+          />
+        </CardContent>
+      </Card>
 
       <Card className="print:hidden">
         <CardContent className="flex flex-wrap items-center justify-between gap-4">

@@ -214,6 +214,57 @@ export function buildPaidLeaveProjection({
   }
 }
 
+export interface PaidLeaveTension {
+  /** La situation en une phrase, lisible sans rien ouvrir. */
+  readonly headline: string
+  /** Ce qu'il faudrait pour la lever. `null` quand il n'y a rien à lever. */
+  readonly remedy: string | null
+  readonly critical: boolean
+}
+
+/**
+ * La situation en deux phrases.
+ *
+ * Écrite ici et testée, parce que c'est le SEUL texte que le gérant lira
+ * forcément : tout le reste de l'écran est repliable. Une carte qui empile six
+ * blocs de chiffres minuscules ne dit rien ; une phrase qui donne le verdict et
+ * son prix se lit en trois secondes, et le détail attend qu'on le demande.
+ */
+export function describePaidLeaveTension(projection: PaidLeaveProjection): PaidLeaveTension {
+  const weeks = projection.criticalWeeks.length
+  if (weeks === 0) {
+    return {
+      headline:
+        "Tout le monde peut obtenir son premier vœu : aucune semaine ne passe sous son minimum de couverture.",
+      remedy: null,
+      critical: false,
+    }
+  }
+
+  const headline =
+    `${weeks} semaine${weeks > 1 ? "s" : ""} passerai${weeks > 1 ? "en" : ""}t sous leur minimum `
+    + `de couverture si chacun obtenait son premier vœu.`
+
+  // Le remède, dans l'ordre où il se décide : d'abord l'argent s'il suffit,
+  // ensuite ce qui manque, et enfin le cas où l'argent ne peut rien.
+  const remedy =
+    projection.reinforcementReachableHours === 0
+      ? `Il faudrait ${formatHours(projection.reinforcementNeededHours)} de renfort, et aucune de vos `
+        + `enveloppes n'atteint ces semaines : il faudra déplacer des congés.`
+      : projection.reinforcementMissingHours === 0
+        ? `Il faudrait ${formatHours(projection.reinforcementNeededHours)} de renfort, et vos enveloppes `
+          + `peuvent les couvrir entièrement.`
+        : `Il faudrait ${formatHours(projection.reinforcementNeededHours)} de renfort ; vos enveloppes en `
+          + `couvrent ${formatHours(projection.reinforcementReachableHours)}, il en manque `
+          + `${formatHours(projection.reinforcementMissingHours)}.`
+
+  return { headline, remedy, critical: true }
+}
+
+function formatHours(value: number): string {
+  return `${Math.round(value * 10) / 10} h`
+}
+
 /**
  * Ce que rendrait un minimum de couverture abaissé.
  *
