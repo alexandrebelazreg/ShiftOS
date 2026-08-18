@@ -1,16 +1,13 @@
-import type { AbsenceType, KnownAbsenceType } from "@/features/core/models"
+import type { AbsenceType } from "@/features/core/models"
 import type { IsoDate } from "@/features/core/models"
 import type { EmployeeRecord } from "@/features/employees/types/employee.types"
+import {
+  absenceCoversDate,
+  absenceOverlaps,
+  absencePeriodLabel,
+} from "@/features/absences/models/absence-period"
+import { absenceMotiveLabel } from "@/features/absences/models/absence-motive"
 import type { AbsenceRecord } from "@/features/absences/types/absence-record"
-
-export const ABSENCE_TYPE_LABELS = {
-  paid_leave: "Congé payé",
-  sick_leave: "Maladie",
-  training: "Formation",
-  unpaid_leave: "Congé sans solde",
-  temporary_unavailability: "Indisponibilité",
-  other: "Autre absence",
-} satisfies Record<KnownAbsenceType, string>
 
 export interface DashboardAbsenceItem extends AbsenceRecord {
   readonly employeeName: string
@@ -48,7 +45,7 @@ export function buildDashboardAbsenceSummary(
 
   return {
     currentLeave: items.filter(
-      (absence) => isLeave(absence.type) && covers(absence, today)
+      (absence) => isLeave(absence.type) && absenceCoversDate(absence, today)
     ),
     nextWeekLeaveDepartures: items.filter(
       (absence) =>
@@ -59,7 +56,7 @@ export function buildDashboardAbsenceSummary(
     otherCurrentWeekAbsences: items.filter(
       (absence) =>
         !isLeave(absence.type) &&
-        overlaps(absence, currentWeekStart, currentWeekEnd)
+        absenceOverlaps(absence, currentWeekStart, currentWeekEnd)
     ),
     currentWeekLabel: formatDateRange(currentWeekStart, currentWeekEnd),
     nextWeekLabel: formatDateRange(nextWeekStart, nextWeekEnd),
@@ -73,25 +70,18 @@ function toDashboardItem(
   return {
     ...absence,
     employeeName: employeeNames.get(absence.employeeId) || "Employé non renseigné",
-    typeLabel: absenceTypeLabel(absence.type),
-    periodLabel: formatDateRange(absence.start, absence.end),
+    typeLabel: absenceMotiveLabel(absence.type),
+    // Une absence sans fin connue se lit « depuis le 3 mars » : lui inventer une
+    // date de retour la ferait passer pour un dossier réglé.
+    periodLabel:
+      absence.end === null
+        ? absencePeriodLabel(absence)
+        : formatDateRange(absence.start, absence.end),
   }
-}
-
-function absenceTypeLabel(type: AbsenceType): string {
-  return ABSENCE_TYPE_LABELS[type as KnownAbsenceType] ?? "Autre absence"
 }
 
 function isLeave(type: AbsenceType): boolean {
   return type === "paid_leave" || type === "unpaid_leave"
-}
-
-function covers(absence: AbsenceRecord, date: string): boolean {
-  return absence.start <= date && absence.end >= date
-}
-
-function overlaps(absence: AbsenceRecord, start: string, end: string): boolean {
-  return absence.start <= end && absence.end >= start
 }
 
 function compareAbsences(left: DashboardAbsenceItem, right: DashboardAbsenceItem): number {

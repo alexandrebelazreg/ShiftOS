@@ -1,3 +1,5 @@
+import { absentEmployeeIds } from "@/features/absences/models/absence-period"
+import type { AbsenceRecord } from "@/features/absences/types/absence-record"
 import type { IsoDate, WeekDay } from "@/features/core/models"
 import type { EmployeeRecord } from "@/features/employees/types/employee.types"
 import { getFullName } from "@/features/employees/utils/employee.format"
@@ -69,12 +71,11 @@ function shortNameOf(employee: EmployeeRecord, roster: readonly EmployeeRecord[]
  * générateur ne peut pas confier les clés à quelqu'un qui n'est pas là.
  */
 export function absentOn(
-  absences: readonly { readonly employeeId: string; readonly start: string; readonly end: string }[],
+  absences: readonly AbsenceRecord[],
   date: IsoDate
 ): ReadonlySet<string> {
-  return new Set(
-    absences
-      .filter((absence) => absence.start <= date && date <= absence.end)
-      .map((absence) => absence.employeeId)
-  )
+  // Déléguée plutôt que réécrite : une fin inconnue et une absence annulée ne
+  // se lisent pas dans les dates elles-mêmes, et le tour de permanence n'a pas
+  // à connaître ces deux règles pour savoir qui n'est pas là.
+  return absentEmployeeIds(absences, date)
 }

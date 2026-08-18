@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest"
 
+import type { AbsenceRecord } from "@/features/absences/types/absence-record"
 import { employeeSchema } from "@/features/employees/schemas/employee.schema"
 import type { EmployeeRecord } from "@/features/employees/types/employee.types"
 import { createEmptyEmployeeFormValues } from "@/features/employees/utils/employee.mappers"
@@ -100,9 +101,23 @@ describe("l’effectif du tour de permanence", () => {
 })
 
 describe("les absences, côté permanence", () => {
+  const absence = (
+    employeeId: string,
+    start: string,
+    end: string,
+    overrides: Partial<AbsenceRecord> = {}
+  ): AbsenceRecord => ({
+    id: `${employeeId}-${start}`,
+    employeeId,
+    type: "sick_leave",
+    start,
+    end,
+    ...overrides,
+  })
+
   const absences = [
-    { employeeId: "1", start: "2026-01-05", end: "2026-01-09" },
-    { employeeId: "2", start: "2026-01-08", end: "2026-01-08" },
+    absence("1", "2026-01-05", "2026-01-09"),
+    absence("2", "2026-01-08", "2026-01-08"),
   ]
 
   it("retient qui est absent un jour donné, bornes comprises", () => {
@@ -114,6 +129,17 @@ describe("les absences, côté permanence", () => {
   it("ne retient personne hors des périodes saisies", () => {
     expect(absentOn(absences, "2026-01-04").size).toBe(0)
     expect(absentOn(absences, "2026-01-10").size).toBe(0)
+  })
+
+  it("suit la fin repoussée par une prolongation", () => {
+    const extended = [absence("3", "2026-01-05", "2026-01-16")]
+    expect([...absentOn(extended, "2026-01-16")]).toEqual(["3"])
+    expect(absentOn(extended, "2026-01-17").size).toBe(0)
+  })
+
+  it("ne retient plus une absence annulée", () => {
+    const cancelled = [absence("4", "2026-01-05", "2026-01-09", { status: "cancelled" })]
+    expect(absentOn(cancelled, "2026-01-06").size).toBe(0)
   })
 })
 
