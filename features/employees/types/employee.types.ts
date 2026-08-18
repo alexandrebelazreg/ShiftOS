@@ -14,6 +14,10 @@ import type {
   EmployeeStatus,
   WeekDay,
 } from "@/features/core/models"
+import type {
+  ContractArrangement,
+  ContractArrangementReason,
+} from "@/features/employees/models/contract-arrangement"
 
 export const EMPLOYEE_SCHEDULE_TYPES = ["variable", "fixed"] as const
 export type EmployeeScheduleType = (typeof EMPLOYEE_SCHEDULE_TYPES)[number]
@@ -78,6 +82,16 @@ export interface EmployeeRecord {
   student?: boolean
   /** Cadre au forfait jour : ni heures fériées ni plages, seulement JF ou PJ. */
   forfaitJour?: boolean
+
+  /**
+   * L'aménagement temporaire en cours — mi-temps thérapeutique et semblables.
+   *
+   * Un seul à la fois : deux contrats réduits qui se chevauchent ne se
+   * départageraient pas, et personne n'en vit deux en même temps. Un aménagement
+   * terminé reste sur la fiche, inerte, jusqu'à ce qu'on l'efface : c'est la
+   * trace de ce qui s'est passé ce printemps-là.
+   */
+  arrangement?: ContractArrangement | null
 
   /** Product metadata used to present the employee's mastered sectors. */
   sectors?: string[]
@@ -191,6 +205,18 @@ export interface EmployeeFormValues {
   forfaitJour: boolean
   sectors: string[]
   competencies: Record<string, string[]>
+
+  // Aménagement temporaire — les champs sont plats, comme tout le formulaire :
+  // un objet imbriqué dans react-hook-form se valide et se réinitialise moins
+  // bien, et le schéma les rassemble à l'enregistrement.
+  arrangementActive: boolean
+  arrangementReason: ContractArrangementReason
+  arrangementStart: string
+  arrangementEnd: string
+  arrangementHours: string
+  arrangementMinuteRemainder: string
+  arrangementDaysOff: WeekDay[]
+  arrangementNote: string
 
   // Contraintes
   canOpen: boolean

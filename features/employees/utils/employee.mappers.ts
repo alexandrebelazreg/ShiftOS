@@ -44,6 +44,15 @@ export function createEmptyEmployeeFormValues(): EmployeeFormValues {
     sectors: [],
     competencies: {},
 
+    arrangementActive: false,
+    arrangementReason: "therapeutic_part_time",
+    arrangementStart: "",
+    arrangementEnd: "",
+    arrangementHours: "",
+    arrangementMinuteRemainder: "0",
+    arrangementDaysOff: [],
+    arrangementNote: "",
+
     // Read from the house rules rather than restated, so the form and the
     // summary that reports departures from them can never disagree.
     ...ADVANCED_CONSTRAINTS_DEFAULTS,
@@ -99,6 +108,21 @@ export function employeeToFormValues(employee: EmployeeRecord): EmployeeFormValu
     forfaitJour: employee.forfaitJour === true,
     sectors: [...(employee.sectors ?? [])],
     competencies: { ...(employee.competencies ?? {}) },
+
+    // Un aménagement terminé se relit tel quel, avec ses dates passées : c'est
+    // au gérant de l'effacer, pas au formulaire de décider qu'il n'a plus lieu
+    // d'être — la trace de ce qui s'est passé ce printemps-là a sa valeur.
+    arrangementActive: employee.arrangement != null,
+    arrangementReason: employee.arrangement?.reason ?? "therapeutic_part_time",
+    arrangementStart: employee.arrangement?.start ?? "",
+    arrangementEnd: employee.arrangement?.end ?? "",
+    arrangementHours:
+      employee.arrangement === undefined || employee.arrangement === null
+        ? ""
+        : String(Math.floor(employee.arrangement.weeklyMinutes / 60)),
+    arrangementMinuteRemainder: String((employee.arrangement?.weeklyMinutes ?? 0) % 60),
+    arrangementDaysOff: [...(employee.arrangement?.daysOff ?? [])],
+    arrangementNote: employee.arrangement?.note ?? "",
 
     canOpen: employee.canOpen,
     canClose: employee.canClose,

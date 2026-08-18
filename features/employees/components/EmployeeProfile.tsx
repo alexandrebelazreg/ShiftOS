@@ -3,6 +3,8 @@
 import { useEffect, useState } from "react"
 import { useRouter } from "next/navigation"
 
+import { CurrentAbsenceBanner } from "@/features/absences/components/CurrentAbsenceBanner"
+import { ArrangementBanner } from "@/features/employees/components/ArrangementBanner"
 import { EmployeeForm } from "@/features/employees/components/EmployeeForm"
 import { employeeService } from "@/features/employees/services/employee.service"
 import type { EmployeeDraft } from "@/features/employees/schemas/employee.schema"
@@ -38,5 +40,5 @@ export function EmployeeProfile({
     setEmployee(updated)
   }
 
-  return <div className="mx-auto max-w-7xl space-y-6"><PageHeader title={getFullName(profile)} description="Profil employé : informations, contrat, affectations et contraintes." /><EmployeeForm employee={profile} sundayOpen={sundayOpen} onSubmit={save} onCancel={() => router.push("/configuration/employes")} onDisable={disable} /></div>
+  return <div className="mx-auto max-w-7xl space-y-6"><PageHeader title={getFullName(profile)} description="Profil employé : informations, contrat, affectations et contraintes." /><CurrentAbsenceBanner employeeId={profile.id} /><ArrangementBanner employee={profile} /><EmployeeForm employee={profile} sundayOpen={sundayOpen} onSubmit={save} onCancel={() => router.push("/configuration/employes")} onDisable={disable} /></div>
 }

@@ -9,6 +9,10 @@ import {
 import type { WeekDay } from "@/features/core/models"
 import { timeToMinutes } from "@/features/core/shared"
 import {
+  CONTRACT_ARRANGEMENT_REASONS,
+  type ContractArrangement,
+} from "@/features/employees/models/contract-arrangement"
+import {
   EMPLOYEE_SCHEDULE_TYPES,
   SUNDAY_COMMITMENTS,
   SUNDAY_COMPENSATIONS,
@@ -51,6 +55,25 @@ const optionalTimeOfDay = z.preprocess(
 
 const weekDay = z.enum(WEEK_DAYS)
 
+/**
+ * Le contrat hebdomadaire en minutes, lu depuis les champs du formulaire.
+ *
+ * Ici plutôt que deux fois : la validation de l'aménagement doit le comparer au
+ * contrat, et la transformation doit l'enregistrer. Deux calculs pour la même
+ * quantité auraient fini par accepter un aménagement de 36 h sur un contrat de
+ * 35 h par une simple divergence d'arrondi.
+ */
+function contractMinutesOf(value: {
+  weeklyHours: number
+  weeklyMinuteRemainder: number
+  contractConfirmationRequired: boolean
+  legacyContractMinutes: "" | "2190" | "2205"
+}): number {
+  return value.contractConfirmationRequired && value.legacyContractMinutes !== ""
+    ? Number(value.legacyContractMinutes)
+    : value.weeklyHours * 60 + value.weeklyMinuteRemainder
+}
+
 export const employeeSchema = z.object({
   // Informations
   firstName: z.string().trim().min(1, "First name is required"),
@@ -74,6 +97,17 @@ export const employeeSchema = z.object({
   forfaitJour: z.boolean().default(false),
   sectors: z.array(z.string().trim().min(1)).default([]),
   competencies: z.record(z.string(), z.array(z.string())).default({}),
+
+  // Aménagement temporaire — `.default()` partout : une fiche antérieure n'en
+  // porte rien, et son silence vaut « contrat ordinaire ».
+  arrangementActive: z.boolean().default(false),
+  arrangementReason: z.enum(CONTRACT_ARRANGEMENT_REASONS).default("therapeutic_part_time"),
+  arrangementStart: z.string().default(""),
+  arrangementEnd: z.string().default(""),
+  arrangementHours: z.string().default(""),
+  arrangementMinuteRemainder: z.string().default("0"),
+  arrangementDaysOff: z.array(weekDay).default([]),
+  arrangementNote: z.string().trim().default(""),
 
   // Contraintes
   canOpen: z.boolean(),
@@ -134,6 +168,31 @@ export const employeeSchema = z.object({
   if (value.endTimeIsExact && latest === null) {
     context.addIssue({ code: "custom", path: ["latestEndTime"], message: "Indiquez l’heure de fin à imposer" })
   }
+  // L'aménagement temporaire : contrôlé seulement s'il est actif, et alors
+  // entièrement. Un aménagement à moitié saisi réduirait un contrat sans qu'on
+  // sache à partir de quand, ce que le planning appliquerait quand même.
+  if (value.arrangementActive) {
+    const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/
+    if (!ISO_DATE.test(value.arrangementStart)) {
+      context.addIssue({ code: "custom", path: ["arrangementStart"], message: "Indiquez le début de l’aménagement" })
+    }
+    if (!ISO_DATE.test(value.arrangementEnd)) {
+      context.addIssue({ code: "custom", path: ["arrangementEnd"], message: "Indiquez la fin de l’aménagement" })
+    } else if (value.arrangementEnd < value.arrangementStart) {
+      context.addIssue({ code: "custom", path: ["arrangementEnd"], message: "La fin doit suivre le début" })
+    }
+
+    const arrangedMinutes =
+      Number(value.arrangementHours) * 60 + Number(value.arrangementMinuteRemainder)
+    if (!Number.isFinite(arrangedMinutes) || arrangedMinutes <= 0) {
+      context.addIssue({ code: "custom", path: ["arrangementHours"], message: "Indiquez les heures de la période" })
+    } else if (arrangedMinutes > contractMinutesOf(value)) {
+      // Un « aménagement » qui augmente le contrat n'en est pas un, et ce
+      // dépassement passerait ensuite pour une consigne du médecin.
+      context.addIssue({ code: "custom", path: ["arrangementHours"], message: "L’aménagement ne peut pas dépasser le contrat" })
+    }
+  }
+
   // Un dimanche travaillé se rend d'une des trois façons — toujours. C'est la
   // seule règle du dimanche qui bloque : le reste (plafond, engagement) a une
   // valeur sensée par défaut, une contrepartie manquante n'en a aucune, et
@@ -165,8 +224,35 @@ export const employeeSchema = z.object({
       }
     }
   }
-}).transform(({ weeklyMinuteRemainder, contractConfirmationRequired, legacyContractMinutes, ...value }) => {
+}).transform(({
+  weeklyMinuteRemainder,
+  contractConfirmationRequired,
+  legacyContractMinutes,
+  arrangementActive,
+  arrangementReason,
+  arrangementStart,
+  arrangementEnd,
+  arrangementHours,
+  arrangementMinuteRemainder,
+  arrangementDaysOff,
+  arrangementNote,
+  ...value
+}) => {
   const weeklyMinutes = contractConfirmationRequired ? Number(legacyContractMinutes) : value.weeklyHours * 60 + weeklyMinuteRemainder
+
+  // Les neuf champs plats du formulaire redeviennent UN objet, ou `null`.
+  // `null` et non l'absence : décocher l'aménagement doit EFFACER celui qui
+  // était enregistré, sans quoi un contrat réduit survivrait à sa fin.
+  const arrangement: ContractArrangement | null = arrangementActive
+    ? {
+        reason: arrangementReason,
+        start: arrangementStart,
+        end: arrangementEnd,
+        weeklyMinutes: Number(arrangementHours) * 60 + Number(arrangementMinuteRemainder),
+        daysOff: arrangementDaysOff,
+        ...(arrangementNote ? { note: arrangementNote } : {}),
+      }
+    : null
   // Retirer le droit d'ouvrir retire les jours d'ouverture imposés. Sans cela
   // un réglage devenu invisible dans l'écran continuerait de contraindre le
   // solveur, et le refus tomberait sur un champ que personne ne voit.
@@ -219,6 +305,7 @@ export const employeeSchema = z.object({
     closingDays: value.canClose ? value.closingDays : [],
     ...permanenceDays,
     ...sunday,
+    arrangement,
     weeklyMinutes,
     weeklyHours: weeklyMinutes / 60,
   }
@@ -247,6 +334,7 @@ export type EmployeeDraft = Omit<
   | "sundayCommitment"
   | "maxSundaysPerMonth"
   | "sundayCompensation"
+  | "arrangement"
 > & {
   weeklyMinutes?: number | null
   /** Optional for callers and persisted drafts created before this preference existed. */
@@ -273,4 +361,6 @@ export type EmployeeDraft = Omit<
   sundayCommitment?: SundayCommitment
   maxSundaysPerMonth?: number | null
   sundayCompensation?: SundayCompensation | null
+  /** Idem : un brouillon écrit avant les aménagements reste valide. */
+  arrangement?: ContractArrangement | null
 }

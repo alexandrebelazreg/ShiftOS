@@ -2,6 +2,7 @@
 
 import { Controller, useFormContext } from "react-hook-form"
 
+import { ArrangementSection } from "@/features/employees/components/ArrangementSection"
 import { FormRow } from "@/features/employees/components/FormRow"
 import type { EmployeeFormValues } from "@/features/employees/types/employee.types"
 import { CONTRACT_TYPE_OPTIONS } from "@/features/employees/utils/employee.labels"
@@ -172,6 +173,8 @@ export function ContratTab() {
           ) : null}
         </div>
       </FormRow>
+
+      <ArrangementSection />
 
       <p className="rounded-lg border border-dashed p-4 text-sm text-muted-foreground">Les jours travaillés sont automatiquement déduits des repos fixes.</p>
     </div>

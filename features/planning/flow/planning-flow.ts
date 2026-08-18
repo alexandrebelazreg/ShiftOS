@@ -15,6 +15,7 @@ import type {
 import type { StoreConfig } from "@/features/store/schemas/store.schema"
 import type { StoreConfiguration } from "@/features/store/models"
 import { storeConfigurationService } from "@/features/store/services/store-configuration-service"
+import { employeesDuring } from "@/features/employees/models/contract-arrangement"
 import type { EmployeeRecord } from "@/features/employees/types/employee.types"
 import type { SectorDemandConfiguration } from "@/features/sectors"
 import { effectiveMinimumShiftDuration, effectiveWeeklyDistribution } from "@/features/sectors"
@@ -119,9 +120,17 @@ export function preparePlanningGeneration(
 ): PreparedPlanningGeneration {
   try {
     const selectedSectors = (request.sectors ?? []).filter((sector) => sector.status === "active")
-    const planningEmployees = request.sectors === undefined
+    // Les aménagements temporaires — mi-temps thérapeutique et semblables — sont
+    // appliqués ICI, une fois, avant tout le reste : contrats, contraintes,
+    // préférences et historique lisent ensuite un salarié ordinaire, et rien en
+    // aval n'a besoin de connaître la notion.
+    //
+    // Sans aménagement en vigueur, `employeesDuring` rend les enregistrements
+    // INCHANGÉS — c'est ce qui garantit qu'aucun planning existant ne bouge.
+    const eligible = request.sectors === undefined
       ? request.employees
       : eligibleEmployees(request.employees, selectedSectors)
+    const planningEmployees = employeesDuring(eligible, request.scope.period.start)
 
     // Build StoreConfiguration and validate it.
     const configuration = storeConfigurationFromOnboarding(request.store)

@@ -47,6 +47,9 @@ const FIELD_TABS: Record<string, TabValue> = {
   scheduleType: "contrat",
   student: "contrat",
   forfaitJour: "contrat",
+  arrangementStart: "contrat",
+  arrangementEnd: "contrat",
+  arrangementHours: "contrat",
 
   sectors: "affectations",
   competencies: "affectations",
