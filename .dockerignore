@@ -1,0 +1,37 @@
+# Ce que l'image ne doit jamais recevoir.
+#
+# Deux catégories distinctes : ce qui serait inutile (et gonflerait le contexte
+# de build), et ce qui serait DANGEREUX — des données réelles de salariés
+# n'ont rien à faire dans une image qu'on pousse sur un registre.
+
+# Recréés dans l'image, et ceux de la machine de dev sont pour Windows :
+# copier le venv Windows produirait un interpréteur qui ne démarre pas sous Linux.
+node_modules
+.venv-planning-highs
+.next
+out
+build
+
+# Captures de problèmes réels : noms, contrats, disponibilités. Elles ne
+# quittent pas la machine, et surtout pas dans une image.
+planning-dumps
+tmp
+*.zip
+
+# Secrets
+.env*
+
+# Artefacts locaux sans valeur pour l'exécution
+.git
+.github
+.claude
+.pytest_cache
+**/__pycache__
+*.py[cod]
+*.tsbuildinfo
+experiments/planning-v3-highs/results
+experiments/planning-v3-highs/fixtures/perturbations
+drive-solve-response-current.json
+planning-v3-decomposed-benchmark.json
+npm-debug.log*
+.DS_Store
