@@ -6,7 +6,7 @@ import { Controller, useForm, useWatch, type Resolver } from "react-hook-form"
 import { FormRow } from "@/features/employees/components/FormRow"
 import type { EmployeeRecord } from "@/features/employees/types/employee.types"
 import { getFullName } from "@/features/employees/utils/employee.format"
-import { ABSENCE_MOTIVE_DEFAULTS } from "@/features/absences/models/absence-motive"
+import { SELECTABLE_ABSENCE_MOTIVES } from "@/features/absences/models/absence-motive"
 import {
   DEFAULT_ABSENCE_RULES,
   resolveMotive,
@@ -98,7 +98,7 @@ export function AbsenceForm({
             className="h-9 w-full rounded-lg border border-input bg-background px-2.5 text-sm"
             {...register("type")}
           >
-            {ABSENCE_MOTIVE_DEFAULTS.map((motive) => (
+            {SELECTABLE_ABSENCE_MOTIVES.map((motive) => (
               <option key={motive.value} value={motive.value}>
                 {motive.label}
               </option>

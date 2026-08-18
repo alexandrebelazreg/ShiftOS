@@ -26,9 +26,34 @@ export interface AbsenceExtension {
   readonly recordedOn: string
 }
 
+/**
+ * D'où vient une absence, et donc si elle se modifie ici.
+ *
+ * Absente du champ : SAISIE À LA MAIN dans cet écran, la seule qui s'y corrige.
+ * Les deux autres sont des LECTURES d'une décision prise ailleurs — la campagne
+ * de congés, le calendrier des fériés — et l'écran les affiche sans les toucher :
+ * sans elles, il annoncerait une équipe au complet la semaine du 15 juillet, et
+ * les modifier ici ferait exister deux réponses à la même question.
+ *
+ * Un champ plutôt que le préfixe de l'identifiant, qu'on reniflait jusqu'ici :
+ * une convention de nommage n'est pas une garantie, et la deuxième source
+ * l'aurait montré en produisant des absences modifiables par accident.
+ */
+export const ABSENCE_SOURCES = ["paid_leave_campaign", "holiday"] as const
+export type AbsenceSource = (typeof ABSENCE_SOURCES)[number]
+
+export const ABSENCE_SOURCE_NOTICES: Record<AbsenceSource, string> = {
+  paid_leave_campaign:
+    "Semaine issue de la campagne de congés : elle se corrige dans l’écran Congés.",
+  holiday:
+    "Jour férié : cette personne n’est pas volontaire. Cela se corrige dans l’écran Jours fériés.",
+}
+
 /** Persisted application record used by the dashboard and the absence screen. */
 export interface AbsenceRecord {
   readonly id: string
+  /** Absente : saisie à la main, et modifiable ici. */
+  readonly source?: AbsenceSource
   readonly employeeId: string
   readonly type: AbsenceType
   /** Premier jour couvert, borne incluse, tel qu'il est écrit sur le papier. */

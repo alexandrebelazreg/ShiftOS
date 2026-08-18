@@ -7,10 +7,20 @@ import { PageHeader } from "@/components/layout/page-header"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import type { IsoDate } from "@/features/core/models"
+import { weekDayOf } from "@/features/core/shared"
 import { useEmployees } from "@/features/employees/hooks/useEmployees"
 import { getFullName } from "@/features/employees/utils/employee.format"
 import { validatedPaidLeaveAbsences } from "@/features/paid-leave/dashboard/validated-paid-leave"
 import { createPaidLeaveRepository } from "@/features/paid-leave/persistence/paid-leave-repository"
+import {
+  createHolidayRepository,
+  type StoredHolidays,
+} from "@/features/planning/holidays/holiday.repository"
+import {
+  closedHolidayDates,
+  holidayAbsences,
+} from "@/features/planning/holidays/model/holiday-absences"
+import { defaultHolidaySchedules } from "@/features/planning/holidays/model/holiday-schedule"
 import { planningStore } from "@/features/planning/persistence/planning-store"
 import type { PlanningSummary } from "@/features/planning/persistence/planning-record"
 import { storeOpensOn } from "@/features/store/lib/opening-days"
@@ -37,7 +47,10 @@ import {
 } from "@/features/absences/models/absence-rules"
 import { createAbsenceRulesRepository } from "@/features/absences/persistence/absence-rules.repository"
 import { absenceService, type AbsenceDraft } from "@/features/absences/services/absence.service"
-import type { AbsenceRecord } from "@/features/absences/types/absence-record"
+import {
+  ABSENCE_SOURCE_NOTICES,
+  type AbsenceRecord,
+} from "@/features/absences/types/absence-record"
 
 /**
  * L'écran des absences : le mois de l'équipe, et ce qui réclame une action.
@@ -59,6 +72,7 @@ export function AbsencesView({ initialStore }: { readonly initialStore: StoreCon
   const [month, setMonth] = useState(() => Number(today.slice(5, 7)))
   const [saved, setSaved] = useState<readonly AbsenceRecord[]>([])
   const [campaignLeave, setCampaignLeave] = useState<readonly AbsenceRecord[]>([])
+  const [holidays, setHolidays] = useState<StoredHolidays>({})
   const [plannings, setPlannings] = useState<readonly PlanningSummary[]>([])
   const [rules, setRules] = useState<AbsenceRules>(DEFAULT_ABSENCE_RULES)
   const [formOpen, setFormOpen] = useState(false)
@@ -83,6 +97,9 @@ export function AbsencesView({ initialStore }: { readonly initialStore: StoreCon
       // Les congés validés viennent de leur propre écran : cet écran les LIT,
       // pour ne pas annoncer une équipe au complet la semaine du 15 juillet.
       setCampaignLeave(validatedPaidLeaveAbsences(createPaidLeaveRepository(window.localStorage).list()))
+      // Les fériés viennent aussi de leur propre écran : sur un férié
+      // travaillé, ceux qui ne se sont pas portés volontaires ne viennent pas.
+      setHolidays(createHolidayRepository(window.localStorage).read())
     })
     void planningStore.list().then(setPlannings)
   }, [])
@@ -92,9 +109,44 @@ export function AbsencesView({ initialStore }: { readonly initialStore: StoreCon
     [employees]
   )
 
-  // Les deux sources se lisent ensemble : le calendrier doit dire qui est là,
+  /**
+   * Les fériés de l'année affichée, réglés.
+   *
+   * Les horaires habituels servent de proposition, exactement comme dans
+   * l'écran des jours fériés : c'est le même calcul, et deux lectures
+   * différentes du même férié finiraient par ne pas dire la même chose.
+   */
+  const holidaySchedules = useMemo(
+    () =>
+      defaultHolidaySchedules(year, (date) => {
+        const entry = initialStore?.openingHours.find((hours) => hours.day === weekDayOf(date))
+        if (!entry || entry.closed) return null
+        return { opensAt: entry.opensAt, closesAt: entry.closesAt }
+      }),
+    [year, initialStore]
+  )
+
+  const holidayLeave = useMemo(
+    () =>
+      holidayAbsences({
+        schedules: holidaySchedules,
+        stored: holidays,
+        employeeIds: activeEmployees.map((employee) => employee.id),
+      }),
+    [holidaySchedules, holidays, activeEmployees]
+  )
+
+  const closedHolidays = useMemo(
+    () => closedHolidayDates({ schedules: holidaySchedules, stored: holidays }),
+    [holidaySchedules, holidays]
+  )
+
+  // Les trois sources se lisent ensemble : le calendrier doit dire qui est là,
   // pas qui a été saisi ici.
-  const absences = useMemo(() => [...saved, ...campaignLeave], [saved, campaignLeave])
+  const absences = useMemo(
+    () => [...saved, ...campaignLeave, ...holidayLeave],
+    [saved, campaignLeave, holidayLeave]
+  )
 
   const employeeNames = useMemo(
     () => new Map(activeEmployees.map((employee) => [employee.id, getFullName(employee)])),
@@ -109,8 +161,9 @@ export function AbsencesView({ initialStore }: { readonly initialStore: StoreCon
         employees: activeEmployees,
         absences,
         opensOn: (day) => storeOpensOn(initialStore, day),
+        closedDates: closedHolidays,
       }),
-    [year, month, activeEmployees, absences, initialStore]
+    [year, month, activeEmployees, absences, initialStore, closedHolidays]
   )
 
   const alerts = useMemo(
@@ -307,7 +360,7 @@ function AbsenceDetail({
 }) {
   const [extending, setExtending] = useState(false)
   const [newEnd, setNewEnd] = useState(absence.end)
-  const fromCampaign = absence.id.startsWith("validated-paid-leave:")
+  const notice = absence.source ? ABSENCE_SOURCE_NOTICES[absence.source] : null
   const cancelled = absence.status === "cancelled"
 
   return (
@@ -356,10 +409,8 @@ function AbsenceDetail({
           <p className="text-muted-foreground">Annulée le {absence.cancelledOn}.</p>
         ) : null}
 
-        {fromCampaign ? (
-          <p className="rounded-md border border-dashed p-3 text-muted-foreground">
-            Semaine issue de la campagne de congés : elle se corrige dans l’écran Congés.
-          </p>
+        {notice ? (
+          <p className="rounded-md border border-dashed p-3 text-muted-foreground">{notice}</p>
         ) : cancelled ? null : (
           <div className="space-y-3 border-t border-border pt-3">
             {/* Le geste qui remplace la « fin inconnue » : on enregistre la date

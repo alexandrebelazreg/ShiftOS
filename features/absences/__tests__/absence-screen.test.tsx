@@ -116,9 +116,9 @@ describe("le formulaire", () => {
     expect(markup).toContain("sous 2 jours")
   })
 
-  it("propose les onze motifs, et aucune fin ouverte", () => {
+  it("propose les douze motifs, et aucune fin ouverte", () => {
     const markup = form()
-    expect(markup.match(/<option/g)).toHaveLength(2 + 11)
+    expect(markup.match(/<option/g)).toHaveLength(2 + 12)
     expect(markup).not.toContain("Fin inconnue")
     expect(markup).toContain("Prolongeable ensuite")
   })

@@ -90,12 +90,20 @@ export function buildAbsenceMonth({
   employees,
   absences,
   opensOn,
+  closedDates,
 }: {
   readonly year: number
   readonly month: number
   readonly employees: readonly EmployeeRecord[]
   readonly absences: readonly AbsenceRecord[]
   readonly opensOn: (day: WeekDay) => boolean
+  /**
+   * Les journées fermées pour une autre raison que le jour de la semaine — un
+   * férié chômé. Grisées comme un jour de fermeture : personne n'y est attendu,
+   * donc personne n'y manque, et y compter des absences ferait apparaître une
+   * équipe entière absente le 1er mai.
+   */
+  readonly closedDates?: ReadonlySet<IsoDate>
 }): AbsenceMonth {
   const first = `${year}-${String(month).padStart(2, "0")}-01` as IsoDate
   const last = lastDayOf(year, month)
@@ -107,7 +115,7 @@ export function buildAbsenceMonth({
       date,
       weekDay,
       label: String(Number(date.slice(8, 10))),
-      open: opensOn(weekDay),
+      open: opensOn(weekDay) && !(closedDates?.has(date) ?? false),
     }
   })
 

@@ -10,6 +10,7 @@ import {
 } from "@/features/absences/calendar/absence-month"
 import {
   ABSENCE_MOTIVE_DEFAULTS,
+  SELECTABLE_ABSENCE_MOTIVES,
   absenceMotiveDefinition,
 } from "@/features/absences/models/absence-motive"
 import {
@@ -39,8 +40,8 @@ function employee(id: string, firstName: string, lastName: string): EmployeeReco
 const openAllWeek = () => true
 
 describe("le catalogue des motifs", () => {
-  it("porte les onze motifs décidés, et pas un de plus", () => {
-    expect(ABSENCE_MOTIVE_DEFAULTS).toHaveLength(11)
+  it("porte les treize motifs décidés, et pas un de plus", () => {
+    expect(ABSENCE_MOTIVE_DEFAULTS).toHaveLength(13)
     expect(ABSENCE_MOTIVE_DEFAULTS.map((motive) => motive.value)).toEqual([
       "sick_leave",
       "work_accident",
@@ -52,8 +53,29 @@ describe("le catalogue des motifs", () => {
       "delegation",
       "unjustified",
       "paid_leave",
+      "rest_day",
+      "public_holiday",
       "other",
     ])
+  })
+
+  it("ne propose pas à la saisie ce qui se déduit d’un autre écran", () => {
+    // Le jour férié figure au catalogue — c'est lui qui donne son libellé à la
+    // ligne affichée — mais le proposer inviterait à écrire à la main ce qui se
+    // coche dans l'écran des jours fériés.
+    expect(absenceMotiveDefinition("public_holiday").label).toBe("Jour férié")
+    expect(SELECTABLE_ABSENCE_MOTIVES.map((motive) => motive.value)).not.toContain(
+      "public_holiday"
+    )
+    expect(SELECTABLE_ABSENCE_MOTIVES).toHaveLength(12)
+  })
+
+  it("n’attend aucun papier pour un repos : rien n’était prévu ce jour-là", () => {
+    expect(absenceMotiveDefinition("rest_day")).toMatchObject({
+      label: "Repos",
+      hours: "deducted",
+      proof: null,
+    })
   })
 
   it("applique le tableau des heures validé", () => {

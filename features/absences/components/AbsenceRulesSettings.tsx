@@ -7,7 +7,7 @@ import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import {
-  ABSENCE_MOTIVE_DEFAULTS,
+  SELECTABLE_ABSENCE_MOTIVES,
   HOURS_TREATMENTS,
   HOURS_TREATMENT_LABELS,
   type HoursTreatment,
@@ -61,7 +61,7 @@ export function AbsenceRulesSettings() {
     repository?.reset()
   }
 
-  const modifiedCount = ABSENCE_MOTIVE_DEFAULTS.filter((motive) =>
+  const modifiedCount = SELECTABLE_ABSENCE_MOTIVES.filter((motive) =>
     isModified(rules, motive.value)
   ).length
 
@@ -86,7 +86,7 @@ export function AbsenceRulesSettings() {
         {!ready ? (
           <p className="text-sm text-muted-foreground">Chargement des règles…</p>
         ) : (
-          ABSENCE_MOTIVE_DEFAULTS.map((motive) => {
+          SELECTABLE_ABSENCE_MOTIVES.map((motive) => {
             const applied = resolveMotive(rules, motive.value)
             const modified = isModified(rules, motive.value)
             return (

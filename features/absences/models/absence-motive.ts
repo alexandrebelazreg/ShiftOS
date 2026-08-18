@@ -42,6 +42,8 @@ export const ABSENCE_MOTIVES = [
   "delegation",
   "unjustified",
   "paid_leave",
+  "rest_day",
+  "public_holiday",
   "other",
 ] as const satisfies readonly AbsenceType[]
 export type AbsenceMotive = (typeof ABSENCE_MOTIVES)[number]
@@ -69,6 +71,16 @@ export interface AbsenceMotiveDefinition {
   readonly countedInHours?: boolean
   /** Une précision écrite est obligatoire : sans elle, le motif ne dit rien. */
   readonly needsDetail?: boolean
+  /**
+   * Ne se saisit pas : il est DÉDUIT d'une décision prise dans un autre écran.
+   *
+   * Il figure quand même au catalogue, parce que c'est lui qui donne son
+   * libellé à la ligne affichée — sans quoi une absence de jour férié
+   * s'annoncerait sous le nom d'un motif voisin. Mais il est retiré de la liste
+   * proposée à la saisie : le proposer inviterait à écrire à la main ce qui se
+   * coche dans l'écran des jours fériés, et les deux se contrediraient.
+   */
+  readonly derived?: boolean
 }
 
 /**
@@ -151,6 +163,27 @@ export const ABSENCE_MOTIVE_DEFAULTS: readonly AbsenceMotiveDefinition[] = [
     proof: null,
   },
   {
+    // Un repos n'est pas une absence au sens des autres motifs : rien n'était
+    // prévu ce jour-là, il n'y a donc ni heures à maintenir ni papier à
+    // réclamer. Il figure ici parce que la question qu'on pose à cet écran est
+    // « qui n'est pas là », et qu'un repos y répond aussi bien qu'un arrêt.
+    value: "rest_day",
+    label: "Repos",
+    hours: "deducted",
+    proof: null,
+  },
+  {
+    // Déduit du calendrier des fériés, jamais saisi. Heures MAINTENUES : un
+    // férié non travaillé ne coûte pas ses heures au salarié. Le traitement
+    // exact se joue salarié par salarié dans `holidayProfileOf` ; ce qui est
+    // écrit ici n'est que le défaut du compteur.
+    value: "public_holiday",
+    label: "Jour férié",
+    hours: "maintained",
+    proof: null,
+    derived: true,
+  },
+  {
     // Déduites par prudence : un motif qu'on n'a pas su nommer ne peut pas
     // maintenir des heures sans que quelqu'un l'ait décidé.
     value: "other",
@@ -160,6 +193,16 @@ export const ABSENCE_MOTIVE_DEFAULTS: readonly AbsenceMotiveDefinition[] = [
     needsDetail: true,
   },
 ]
+
+/**
+ * Les motifs proposés À LA SAISIE — le catalogue moins ceux qui se déduisent.
+ *
+ * Deux listes plutôt qu'une, parce que les deux questions sont différentes :
+ * « comment s'appelle ce motif » se pose pour tous, « lequel puis-je choisir »
+ * seulement pour ceux qu'on écrit soi-même.
+ */
+export const SELECTABLE_ABSENCE_MOTIVES: readonly AbsenceMotiveDefinition[] =
+  ABSENCE_MOTIVE_DEFAULTS.filter((motive) => motive.derived !== true)
 
 const DEFAULTS_BY_MOTIVE = new Map<string, AbsenceMotiveDefinition>(
   ABSENCE_MOTIVE_DEFAULTS.map((definition) => [definition.value, definition])

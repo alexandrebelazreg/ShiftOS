@@ -47,6 +47,9 @@ function mergeConsecutiveWeeks(
     type: "paid_leave",
     start: period.start,
     end: period.end,
+    // La source est PORTÉE et non devinée à l'identifiant : c'est elle qui
+    // interdit de corriger ici une décision prise dans l'écran des congés.
+    source: "paid_leave_campaign",
     note: "Campagne de congés payés validée",
   }))
 }
