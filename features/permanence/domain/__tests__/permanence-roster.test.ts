@@ -73,6 +73,54 @@ describe("l’effectif du tour de permanence", () => {
     })
   })
 
+  it("reprend la liste blanche, le plafond et le dernier recours", () => {
+    const [member] = permanenceRoster([
+      employee({
+        id: "1",
+        firstName: "Alex",
+        permanence: true,
+        permanenceClosingOnlyDays: ["monday", "friday"],
+        permanenceMaxClosings: 4,
+        permanenceLastResortClosing: true,
+      }),
+    ])
+
+    expect(member).toMatchObject({
+      closingOnlyDays: ["monday", "friday"],
+      maxClosings: 4,
+      lastResortOpening: false,
+      lastResortClosing: true,
+    })
+  })
+
+  it("lit l’absence de ces réglages comme « aucune restriction »", () => {
+    const [member] = permanenceRoster([employee({ id: "1", firstName: "Alex", permanence: true })])
+
+    expect(member).toMatchObject({
+      closingOnlyDays: [],
+      maxClosings: null,
+      lastResortOpening: false,
+      lastResortClosing: false,
+    })
+    // Ouvrir et fermer sont des tâches ordinaires : une fiche qui n'en dit rien
+    // les accorde, sinon toute fiche antérieure sortirait du tour en silence.
+    expect(member).toMatchObject({ canOpen: true, canClose: true })
+  })
+
+  it("reprend le droit d’ouvrir et de fermer le magasin", () => {
+    const [member] = permanenceRoster([
+      employee({
+        id: "1",
+        firstName: "Alex",
+        permanence: true,
+        permanenceCanOpen: true,
+        permanenceCanClose: false,
+      }),
+    ])
+
+    expect(member).toMatchObject({ canOpen: true, canClose: false })
+  })
+
   it("distingue deux homonymes par l’initiale, sinon la feuille devient illisible", () => {
     const roster = permanenceRoster([
       employee({ id: "1", firstName: "Marie", lastName: "Alba", permanence: true }),
@@ -173,6 +221,142 @@ describe("la fiche employé, côté permanence", () => {
 
     expect(parsed.permanenceRequiredClosingDays).toEqual(["monday"])
     expect(parsed.permanencePreferredOpeningDays).toEqual(["saturday"])
+  })
+
+  it("efface aussi le plafond et le dernier recours de qui n’y participe plus", () => {
+    const parsed = employeeSchema.parse(
+      values({
+        permanence: false,
+        permanenceClosingOnlyDays: ["monday"],
+        permanenceMaxClosings: "3",
+        permanenceLastResortOpening: true,
+        permanenceLastResortClosing: true,
+      })
+    )
+
+    expect(parsed.permanenceClosingOnlyDays).toEqual([])
+    expect(parsed.permanenceMaxClosings).toBeNull()
+    expect(parsed.permanenceLastResortOpening).toBe(false)
+    expect(parsed.permanenceLastResortClosing).toBe(false)
+  })
+
+  it("lit un maximum de fermetures vide comme « aucun plafond »", () => {
+    const parsed = employeeSchema.parse(values({ permanence: true, permanenceMaxClosings: "" }))
+
+    expect(parsed.permanenceMaxClosings).toBeNull()
+    // Zéro est un vrai plafond, pas une absence : celui de quelqu'un qui reste
+    // dans le tour pour les ouvertures seules.
+    expect(
+      employeeSchema.parse(values({ permanence: true, permanenceMaxClosings: "0" }))
+        .permanenceMaxClosings
+    ).toBe(0)
+  })
+
+  it("efface les réglages de fermeture de qui ne sait pas fermer le magasin", () => {
+    // Le droit retiré retire le devoir, comme `canOpen` et ses jours
+    // d'ouverture : un réglage devenu invisible ne doit plus contraindre.
+    const parsed = employeeSchema.parse(
+      values({
+        permanence: true,
+        permanenceCanClose: false,
+        permanenceRequiredClosingDays: ["monday"],
+        permanenceClosingOnlyDays: ["monday"],
+        permanenceMaxClosings: "2",
+        permanenceLastResortClosing: true,
+        permanenceLastResortOpening: true,
+      })
+    )
+
+    expect(parsed.permanenceRequiredClosingDays).toEqual([])
+    expect(parsed.permanenceClosingOnlyDays).toEqual([])
+    expect(parsed.permanenceMaxClosings).toBeNull()
+    expect(parsed.permanenceLastResortClosing).toBe(false)
+    // Celui de l'ouverture survit : c'est le droit de FERMER qui a été retiré.
+    expect(parsed.permanenceLastResortOpening).toBe(true)
+  })
+
+  it("garde intacts les réglages d’ouverture de la même fiche", () => {
+    const parsed = employeeSchema.parse(
+      values({
+        permanence: true,
+        permanenceCanClose: false,
+        permanenceRequiredOpeningDays: ["friday"],
+      })
+    )
+
+    expect(parsed.permanenceRequiredOpeningDays).toEqual(["friday"])
+  })
+
+  it("refuse quelqu’un du tour qui ne sait ni ouvrir ni fermer", () => {
+    const parsed = employeeSchema.safeParse(
+      values({ permanence: true, permanenceCanOpen: false, permanenceCanClose: false })
+    )
+
+    expect(parsed.success).toBe(false)
+    expect(parsed.error?.issues[0].path).toEqual(["permanenceCanOpen"])
+  })
+
+  it("accepte les mêmes cases décochées hors du tour", () => {
+    // Hors du tour, la question ne se pose pas : les deux droits reviennent à
+    // leur valeur ordinaire plutôt que de bloquer un enregistrement.
+    const parsed = employeeSchema.safeParse(
+      values({ permanence: false, permanenceCanOpen: false, permanenceCanClose: false })
+    )
+
+    expect(parsed.success).toBe(true)
+    expect(parsed.data?.permanenceCanOpen).toBe(true)
+  })
+
+  it("refuse un jour imposé que la liste blanche interdit", () => {
+    const parsed = employeeSchema.safeParse(
+      values({
+        permanence: true,
+        permanenceClosingOnlyDays: ["monday"],
+        permanenceRequiredClosingDays: ["tuesday"],
+      })
+    )
+
+    expect(parsed.success).toBe(false)
+    expect(parsed.error?.issues[0].path).toEqual(["permanenceRequiredClosingDays"])
+    expect(parsed.error?.issues[0].message).toContain("mardi")
+  })
+
+  it("accepte un jour imposé que la liste blanche autorise", () => {
+    const parsed = employeeSchema.safeParse(
+      values({
+        permanence: true,
+        permanenceClosingOnlyDays: ["monday", "friday"],
+        permanenceRequiredClosingDays: ["monday"],
+      })
+    )
+
+    expect(parsed.success).toBe(true)
+  })
+
+  it("refuse un plafond de zéro à qui a une liste blanche — elle impose aussi", () => {
+    const parsed = employeeSchema.safeParse(
+      values({
+        permanence: true,
+        permanenceMaxClosings: "0",
+        permanenceClosingOnlyDays: ["monday"],
+      })
+    )
+
+    expect(parsed.success).toBe(false)
+    expect(parsed.error?.issues[0].path).toEqual(["permanenceMaxClosings"])
+  })
+
+  it("refuse un plafond de zéro à qui a des fermetures imposées", () => {
+    const parsed = employeeSchema.safeParse(
+      values({
+        permanence: true,
+        permanenceMaxClosings: "0",
+        permanenceRequiredClosingDays: ["monday"],
+      })
+    )
+
+    expect(parsed.success).toBe(false)
+    expect(parsed.error?.issues[0].path).toEqual(["permanenceMaxClosings"])
   })
 
   it("refuse d’imposer une permanence un jour de repos fixe", () => {

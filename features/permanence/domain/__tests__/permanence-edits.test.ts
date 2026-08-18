@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest"
 
+import type { AbsenceRecord } from "@/features/absences/types/absence-record"
 import type {
   PaidLeaveCampaign,
   PaidLeaveValidatedSnapshot,
@@ -100,9 +101,17 @@ describe("affecter une case", () => {
   })
 })
 
-describe("les congés, lus depuis les campagnes", () => {
+describe("les congés, lus depuis les campagnes et les absences", () => {
   const campaign = (patch: Partial<PaidLeaveCampaign>): PaidLeaveCampaign =>
     ({ status: "validated", validatedSnapshot: null, ...patch }) as PaidLeaveCampaign
+
+  const absence = (start: string, end: string, type = "paid_leave"): AbsenceRecord => ({
+    id: `${start}-${end}`,
+    employeeId: "alexandre",
+    type,
+    start,
+    end,
+  })
 
   it("range les bénéficiaires par semaine", () => {
     const weeks = paidLeaveByWeek([
@@ -126,6 +135,52 @@ describe("les congés, lus depuis les campagnes", () => {
     ])
 
     expect(weeks.size).toBe(0)
+  })
+
+  it("retient aussi une absence saisie au motif « congés payés »", () => {
+    // Le défaut signalé : la semaine posée dans l'écran des absences retirait
+    // bien la personne du tour, mais laissait sa case CP vide — la feuille ne
+    // disait donc pas POURQUOI elle n'apparaissait nulle part.
+    const weeks = paidLeaveByWeek([], [absence("2026-01-05", "2026-01-09")])
+
+    expect(weeks.get("2026-W02")).toEqual(["alexandre"])
+  })
+
+  it("remplit toutes les semaines qu’une absence traverse", () => {
+    const weeks = paidLeaveByWeek([], [absence("2026-01-08", "2026-01-13")])
+
+    expect(weeks.get("2026-W02")).toEqual(["alexandre"])
+    expect(weeks.get("2026-W03")).toEqual(["alexandre"])
+  })
+
+  it("ignore une absence qui n’est pas un congé payé", () => {
+    // Un arrêt maladie retire bien quelqu'un du tour, mais la colonne s'appelle
+    // « CP » et l'y écrire dirait une chose fausse à toute l'équipe.
+    expect(paidLeaveByWeek([], [absence("2026-01-05", "2026-01-09", "sick_leave")]).size).toBe(0)
+  })
+
+  it("ignore une absence annulée", () => {
+    const cancelled = { ...absence("2026-01-05", "2026-01-09"), status: "cancelled" as const }
+
+    expect(paidLeaveByWeek([], [cancelled]).size).toBe(0)
+  })
+
+  it("n’écrit qu’une fois quelqu’un qu’une campagne et une absence couvrent", () => {
+    const weeks = paidLeaveByWeek(
+      [
+        campaign({
+          validatedSnapshot: {
+            validatedAt: "2026-01-01T00:00:00.000Z",
+            grants: { alexandre: ["2026-W02"] },
+            reinforcementAllocations: [],
+            fullFirstChoiceEmployeeIds: [],
+          },
+        }),
+      ],
+      [absence("2026-01-05", "2026-01-09")]
+    )
+
+    expect(weeks.get("2026-W02")).toEqual(["alexandre"])
   })
 
   it("n’écrit pas deux fois quelqu’un que deux campagnes couvrent", () => {

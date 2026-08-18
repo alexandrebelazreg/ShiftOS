@@ -146,8 +146,17 @@ export function PermanenceView({ initialStore }: { readonly initialStore: StoreC
 
   const roster = useMemo(() => permanenceRoster(employees), [employees])
 
-  /** La colonne « CP » : qui part en congés, semaine par semaine. */
-  const leaveByWeek = useMemo(() => paidLeaveByWeek(campaigns), [campaigns])
+  /**
+   * La colonne « CP » : qui part en congés, semaine par semaine.
+   *
+   * Les campagnes ET les absences au motif « congés payés » : une semaine posée
+   * dans l'écran des absences retirait bien la personne du tour sans jamais
+   * dire pourquoi sa case restait vide.
+   */
+  const leaveByWeek = useMemo(
+    () => paidLeaveByWeek(campaigns, absences),
+    [campaigns, absences]
+  )
 
   /**
    * Tout ce qui empêche quelqu'un de porter les clés un jour donné.

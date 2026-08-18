@@ -55,6 +55,21 @@ const optionalTimeOfDay = z.preprocess(
 
 const weekDay = z.enum(WEEK_DAYS)
 
+/** « lundi », « mardi »… — pour les messages qui désignent un jour fautif. */
+const DAY_NAMES: Record<WeekDay, string> = {
+  monday: "lundi",
+  tuesday: "mardi",
+  wednesday: "mercredi",
+  thursday: "jeudi",
+  friday: "vendredi",
+  saturday: "samedi",
+  sunday: "dimanche",
+}
+
+function dayName(day: WeekDay): string {
+  return DAY_NAMES[day]
+}
+
 /**
  * Le contrat hebdomadaire en minutes, lu depuis les champs du formulaire.
  *
@@ -130,10 +145,20 @@ export const employeeSchema = z.object({
   // Permanence — `.default()` partout : une fiche enregistrée avant le tour de
   // permanence doit continuer à se relire, et l'absence vaut « n'y participe pas ».
   permanence: z.boolean().default(false),
+  // Accordés jusqu'à ce qu'on les retire, comme `canOpen` et `canClose` : une
+  // fiche antérieure n'a coché ni l'un ni l'autre, et son silence ne doit pas
+  // la sortir du tour.
+  permanenceCanOpen: z.boolean().default(true),
+  permanenceCanClose: z.boolean().default(true),
   permanencePreferredOpeningDays: z.array(weekDay).default([]),
   permanenceRequiredOpeningDays: z.array(weekDay).default([]),
   permanencePreferredClosingDays: z.array(weekDay).default([]),
   permanenceRequiredClosingDays: z.array(weekDay).default([]),
+  permanenceClosingOnlyDays: z.array(weekDay).default([]),
+  permanenceMaxClosings: optionalCount.default(null),
+  permanenceLastResortOpening: z.boolean().default(false),
+  permanenceLastResortClosing: z.boolean().default(false),
+  permanenceSaturdayTurnOver: z.boolean().default(false),
 
   // Dimanche — `.default()` partout, pour la même raison que la permanence :
   // une fiche enregistrée avant cet onglet doit continuer à se relire, et son
@@ -219,10 +244,50 @@ export const employeeSchema = z.object({
   ] as const) {
     for (const day of days) {
       if (value.fixedDaysOff.includes(day) || value.forbiddenDays.includes(day)) {
-        context.addIssue({ code: "custom", path: [field], message: `Ce salarié ne travaille pas le ${day === "monday" ? "lundi" : day === "tuesday" ? "mardi" : day === "wednesday" ? "mercredi" : day === "thursday" ? "jeudi" : day === "friday" ? "vendredi" : day === "saturday" ? "samedi" : "dimanche"}` })
+        context.addIssue({ code: "custom", path: [field], message: `Ce salarié ne travaille pas le ${dayName(day)}` })
         break
       }
     }
+  }
+
+  // « Uniquement le lundi » et « toujours le mardi » se contredisent : la liste
+  // blanche interdit le mardi que l'autre champ impose. Le refus tombe sur le
+  // jour imposé, parce que c'est lui qui déborde de la permission.
+  if (value.permanenceClosingOnlyDays.length > 0) {
+    const outside = value.permanenceRequiredClosingDays.find(
+      (day) => !value.permanenceClosingOnlyDays.includes(day)
+    )
+    if (outside) {
+      context.addIssue({
+        code: "custom",
+        path: ["permanenceRequiredClosingDays"],
+        message: `Il ne ferme que certains jours, et le ${dayName(outside)} n’en fait pas partie`,
+      })
+    }
+  }
+
+  // Être du tour sans savoir ni ouvrir ni fermer, c'est y figurer sans jamais
+  // pouvoir y être appelé — une case cochée qui ne produit rien.
+  if (value.permanence && !value.permanenceCanOpen && !value.permanenceCanClose) {
+    context.addIssue({
+      code: "custom",
+      path: ["permanenceCanOpen"],
+      message: "Il doit savoir ouvrir ou fermer le magasin pour être du tour",
+    })
+  }
+
+  // Un plafond de zéro fermeture et des fermetures imposées ne peuvent pas être
+  // tenus ensemble. La liste blanche compte parmi elles : « uniquement le
+  // lundi » donne les lundis. Zéro reste un réglage valide par ailleurs : c'est
+  // celui de quelqu'un qui reste dans le tour pour les ouvertures seules.
+  const imposedClosings =
+    value.permanenceRequiredClosingDays.length + value.permanenceClosingOnlyDays.length
+  if (value.permanenceMaxClosings === 0 && imposedClosings > 0) {
+    context.addIssue({
+      code: "custom",
+      path: ["permanenceMaxClosings"],
+      message: "Ce salarié a des fermetures imposées : son maximum ne peut pas être zéro",
+    })
   }
 }).transform(({
   weeklyMinuteRemainder,
@@ -259,19 +324,25 @@ export const employeeSchema = z.object({
   // Retirer quelqu'un du tour de permanence retire ses jours de permanence,
   // pour la même raison : un réglage devenu invisible à l'écran continuerait
   // d'imposer des fermetures à quelqu'un qui n'y participe plus.
-  const permanenceDays = value.permanence
-    ? {
-        permanencePreferredOpeningDays: value.permanencePreferredOpeningDays,
-        permanenceRequiredOpeningDays: value.permanenceRequiredOpeningDays,
-        permanencePreferredClosingDays: value.permanencePreferredClosingDays,
-        permanenceRequiredClosingDays: value.permanenceRequiredClosingDays,
-      }
-    : {
-        permanencePreferredOpeningDays: [],
-        permanenceRequiredOpeningDays: [],
-        permanencePreferredClosingDays: [],
-        permanenceRequiredClosingDays: [],
-      }
+  // Le droit retiré retire le devoir, à deux niveaux : hors du tour, plus rien ;
+  // dans le tour sans savoir fermer, plus rien qui parle de fermeture. Même
+  // règle que `canOpen` et ses jours d'ouverture, et pour la même raison — un
+  // réglage devenu invisible à l'écran ne doit pas continuer à contraindre.
+  const opens = value.permanence && value.permanenceCanOpen
+  const closes = value.permanence && value.permanenceCanClose
+  const permanenceDays = {
+    permanenceCanOpen: value.permanence ? value.permanenceCanOpen : true,
+    permanenceCanClose: value.permanence ? value.permanenceCanClose : true,
+    permanencePreferredOpeningDays: opens ? value.permanencePreferredOpeningDays : [],
+    permanenceRequiredOpeningDays: opens ? value.permanenceRequiredOpeningDays : [],
+    permanencePreferredClosingDays: closes ? value.permanencePreferredClosingDays : [],
+    permanenceRequiredClosingDays: closes ? value.permanenceRequiredClosingDays : [],
+    permanenceClosingOnlyDays: closes ? value.permanenceClosingOnlyDays : [],
+    permanenceMaxClosings: closes ? value.permanenceMaxClosings : null,
+    permanenceLastResortOpening: opens ? value.permanenceLastResortOpening : false,
+    permanenceLastResortClosing: closes ? value.permanenceLastResortClosing : false,
+    permanenceSaturdayTurnOver: closes ? value.permanenceSaturdayTurnOver : false,
+  }
 
   // Idem pour le dimanche : décocher « travaille le dimanche » ramène tout à
   // neutre. Sinon un « 3 dimanches par mois » survivrait à l'accord qui le
@@ -326,10 +397,17 @@ export type EmployeeDraft = Omit<
   | "student"
   | "forfaitJour"
   | "permanence"
+  | "permanenceCanOpen"
+  | "permanenceCanClose"
   | "permanencePreferredOpeningDays"
   | "permanenceRequiredOpeningDays"
   | "permanencePreferredClosingDays"
   | "permanenceRequiredClosingDays"
+  | "permanenceClosingOnlyDays"
+  | "permanenceMaxClosings"
+  | "permanenceLastResortOpening"
+  | "permanenceLastResortClosing"
+  | "permanenceSaturdayTurnOver"
   | "sundayWork"
   | "sundayCommitment"
   | "maxSundaysPerMonth"
@@ -352,10 +430,17 @@ export type EmployeeDraft = Omit<
   closingDays?: WeekDay[]
   /** Idem : un brouillon écrit avant le tour de permanence reste valide. */
   permanence?: boolean
+  permanenceCanOpen?: boolean
+  permanenceCanClose?: boolean
   permanencePreferredOpeningDays?: WeekDay[]
   permanenceRequiredOpeningDays?: WeekDay[]
   permanencePreferredClosingDays?: WeekDay[]
   permanenceRequiredClosingDays?: WeekDay[]
+  permanenceClosingOnlyDays?: WeekDay[]
+  permanenceMaxClosings?: number | null
+  permanenceLastResortOpening?: boolean
+  permanenceLastResortClosing?: boolean
+  permanenceSaturdayTurnOver?: boolean
   /** Idem : un brouillon écrit avant l'onglet Dimanche reste valide. */
   sundayWork?: boolean
   sundayCommitment?: SundayCommitment

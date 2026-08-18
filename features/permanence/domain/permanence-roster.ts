@@ -22,10 +22,33 @@ export interface PermanenceMember {
   readonly name: string
   /** « Alex » — le prénom, comme sur la feuille, où une case est étroite. */
   readonly shortName: string
+  /** Sait-il ouvrir, sait-il fermer le MAGASIN ? Rien à voir avec son rayon. */
+  readonly canOpen: boolean
+  readonly canClose: boolean
   readonly requiredOpeningDays: readonly WeekDay[]
   readonly preferredOpeningDays: readonly WeekDay[]
   readonly requiredClosingDays: readonly WeekDay[]
   readonly preferredClosingDays: readonly WeekDay[]
+  /**
+   * Les seuls jours où il ferme — et il les ferme. Vide : aucune restriction.
+   *
+   * Le générateur la lit DEUX fois : comme un refus des autres jours, et comme
+   * des jours imposés. Se distingue de `requiredClosingDays` par ce qu'elle
+   * interdit, non par ce qu'elle impose.
+   */
+  readonly closingOnlyDays: readonly WeekDay[]
+  /** Le plafond de fermetures de la SEMAINE. `null` : aucun plafond. */
+  readonly maxClosings: number | null
+  /**
+   * N'est retenu à ce rôle que si personne d'autre ne peut.
+   *
+   * Un par rôle : ouvrir régulièrement et ne fermer qu'au dépannage est la
+   * situation ordinaire d'un adjoint.
+   */
+  readonly lastResortOpening: boolean
+  readonly lastResortClosing: boolean
+  /** Fait partie du tour de rôle des fermetures du samedi. */
+  readonly saturdayTurnOver: boolean
   /** Ses repos fixes : le tour ne les touche pas. */
   readonly daysOff: readonly WeekDay[]
 }
@@ -41,10 +64,23 @@ export function permanenceRoster(employees: readonly EmployeeRecord[]): readonly
       employeeId: employee.id,
       name: getFullName(employee),
       shortName: shortNameOf(employee, eligible),
+      // Une fiche antérieure ne porte ni l'un ni l'autre : leur silence vaut
+      // OUI, comme pour `canOpen` et `canClose`.
+      canOpen: employee.permanenceCanOpen !== false,
+      canClose: employee.permanenceCanClose !== false,
       requiredOpeningDays: employee.permanenceRequiredOpeningDays ?? [],
       preferredOpeningDays: employee.permanencePreferredOpeningDays ?? [],
       requiredClosingDays: employee.permanenceRequiredClosingDays ?? [],
       preferredClosingDays: employee.permanencePreferredClosingDays ?? [],
+      closingOnlyDays: employee.permanenceClosingOnlyDays ?? [],
+      maxClosings: employee.permanenceMaxClosings ?? null,
+      // Une fiche antérieure à la séparation portait un seul drapeau, qui
+      // valait pour les deux rôles.
+      lastResortOpening:
+        employee.permanenceLastResortOpening ?? employee.permanenceLastResort === true,
+      lastResortClosing:
+        employee.permanenceLastResortClosing ?? employee.permanenceLastResort === true,
+      saturdayTurnOver: employee.permanenceSaturdayTurnOver === true,
       daysOff: employee.fixedDaysOff ?? [],
     }))
     .sort((left, right) => left.name.localeCompare(right.name, "fr"))

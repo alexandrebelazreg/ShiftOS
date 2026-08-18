@@ -16,10 +16,17 @@ function member(id: string, name: string): PermanenceMember {
     employeeId: id,
     name,
     shortName: name,
+    canOpen: true,
+    canClose: true,
     requiredOpeningDays: [],
     preferredOpeningDays: [],
     requiredClosingDays: [],
     preferredClosingDays: [],
+    closingOnlyDays: [],
+    maxClosings: null,
+    lastResortOpening: false,
+    lastResortClosing: false,
+    saturdayTurnOver: false,
     daysOff: [],
   }
 }

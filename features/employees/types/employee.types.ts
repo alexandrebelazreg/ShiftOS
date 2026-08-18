@@ -141,6 +141,20 @@ export interface EmployeeRecord {
    * Absent de toute fiche antérieure : `undefined` vaut « ne participe pas ».
    */
   permanence?: boolean
+  /**
+   * Sait-il ouvrir, sait-il fermer le magasin ?
+   *
+   * Distincts de `canOpen` et `canClose`, qui parlent de SON rayon : porter les
+   * clés du magasin, désarmer l'alarme et compter la caisse ne s'apprennent pas
+   * en même temps que lever le rideau d'un comptoir. Quelqu'un peut très bien
+   * ouvrir le magasin sans jamais le fermer.
+   *
+   * Absents d'une fiche antérieure : `undefined` vaut OUI pour les deux, comme
+   * `canOpen` et `canClose` — ce sont des tâches ordinaires, accordées jusqu'à
+   * ce qu'on les retire, et personne n'a coché ces cases qui n'existaient pas.
+   */
+  permanenceCanOpen?: boolean
+  permanenceCanClose?: boolean
   /** Jours où il PRÉFÈRE ouvrir le magasin — un départage, jamais une règle. */
   permanencePreferredOpeningDays?: WeekDay[]
   /** Jours où il ouvre le magasin, quoi qu'il arrive. */
@@ -148,6 +162,65 @@ export interface EmployeeRecord {
   /** Idem pour la fermeture du magasin. */
   permanencePreferredClosingDays?: WeekDay[]
   permanenceRequiredClosingDays?: WeekDay[]
+  /**
+   * Les seuls jours où il ferme le magasin — et il les ferme.
+   *
+   * DEUX effets d'un même réglage, et le second est le plus facile à oublier :
+   * « uniquement le lundi » interdit les autres jours, ET donne les lundis.
+   * Lue comme une simple permission, la liste n'aurait servi qu'à retirer
+   * quelqu'un du tour sans jamais lui donner la fermeture qu'elle annonce.
+   *
+   * Se distingue donc de `permanenceRequiredClosingDays` par ce qu'elle
+   * INTERDIT, non par ce qu'elle impose : « imposé le lundi » laisse fermer le
+   * jeudi, « uniquement le lundi » non. Vide : aucune restriction.
+   */
+  permanenceClosingOnlyDays?: WeekDay[]
+  /**
+   * Le nombre de fermetures qu'il porte au maximum dans la SEMAINE.
+   *
+   * Par semaine et non par mois : ce qui pèse, c'est trois fermetures d'affilée,
+   * pas leur total sur trente jours. Un plafond mensuel laisserait poser les
+   * quatre de suite puis plus rien, ce qui est exactement ce qu'on veut éviter.
+   *
+   * Un PLAFOND et non un quota : il peut n'en faire aucune. `null` ou absent
+   * veut dire « aucun plafond », et zéro est un vrai plafond — celui de
+   * quelqu'un qui reste dans le tour pour les ouvertures seules.
+   */
+  permanenceMaxClosings?: number | null
+  /**
+   * N'est appelé à ce rôle que si personne d'autre ne peut.
+   *
+   * Le tour l'ignore tant qu'un autre est disponible, sans jamais l'écarter
+   * tout à fait : c'est la place de celui qui dépanne — un adjoint, quelqu'un
+   * en fin de contrat — et le retirer du tour laisserait des cases vides que
+   * lui aurait pu tenir.
+   *
+   * Un par rôle, parce que les deux ne se décident pas ensemble : ouvrir
+   * régulièrement et ne fermer qu'au dépannage est la situation ordinaire d'un
+   * adjoint, et un seul drapeau aurait obligé à choisir entre les deux.
+   */
+  permanenceLastResortOpening?: boolean
+  permanenceLastResortClosing?: boolean
+  /**
+   * Participe au tour de rôle des fermetures du samedi.
+   *
+   * Un GROUPE, pas un droit de plus : dès qu'une seule fiche du magasin le
+   * coche, les samedis ne vont plus qu'aux personnes cochées, et les autres en
+   * sont dispensées. Personne coché : tout le monde y passe, comme avant — un
+   * réglage que personne n'a touché ne doit rien changer.
+   *
+   * Le samedi seulement, parce que c'est le seul jour dont la fermeture se
+   * négocie dans une équipe : le récapitulatif lui donne sa colonne pour la
+   * même raison.
+   */
+  permanenceSaturdayTurnOver?: boolean
+  /**
+   * @deprecated Remplacé par les deux drapeaux par rôle ci-dessus.
+   *
+   * Relu, jamais écrit : une fiche enregistrée avant la séparation portait un
+   * seul drapeau, et il valait pour les deux rôles.
+   */
+  permanenceLastResort?: boolean
 
   /**
    * Dimanche — le magasin peut ouvrir ce jour-là sans que tout le monde y aille.
@@ -236,10 +309,18 @@ export interface EmployeeFormValues {
 
   // Permanence
   permanence: boolean
+  permanenceCanOpen: boolean
+  permanenceCanClose: boolean
   permanencePreferredOpeningDays: WeekDay[]
   permanenceRequiredOpeningDays: WeekDay[]
   permanencePreferredClosingDays: WeekDay[]
   permanenceRequiredClosingDays: WeekDay[]
+  permanenceClosingOnlyDays: WeekDay[]
+  /** Vide veut dire « aucun plafond » — le formulaire garde les nombres en texte. */
+  permanenceMaxClosings: string
+  permanenceLastResortOpening: boolean
+  permanenceLastResortClosing: boolean
+  permanenceSaturdayTurnOver: boolean
 
   // Dimanche
   sundayWork: boolean

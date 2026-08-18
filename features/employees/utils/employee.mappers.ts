@@ -68,10 +68,17 @@ export function createEmptyEmployeeFormValues(): EmployeeFormValues {
     closingDays: [],
 
     permanence: false,
+    permanenceCanOpen: true,
+    permanenceCanClose: true,
     permanencePreferredOpeningDays: [],
     permanenceRequiredOpeningDays: [],
     permanencePreferredClosingDays: [],
     permanenceRequiredClosingDays: [],
+    permanenceClosingOnlyDays: [],
+    permanenceMaxClosings: "",
+    permanenceLastResortOpening: false,
+    permanenceLastResortClosing: false,
+    permanenceSaturdayTurnOver: false,
 
     sundayWork: false,
     sundayCommitment: "volunteer",
@@ -143,10 +150,26 @@ export function employeeToFormValues(employee: EmployeeRecord): EmployeeFormValu
     // Une fiche antérieure au tour de permanence n'en porte rien : l'absence
     // se relit comme « n'y participe pas », sans avoir à rouvrir la fiche.
     permanence: employee.permanence === true,
+    // Une fiche antérieure n'a coché ni l'un ni l'autre : leur silence vaut OUI,
+    // ce sont des tâches ordinaires accordées jusqu'à ce qu'on les retire.
+    permanenceCanOpen: employee.permanenceCanOpen !== false,
+    permanenceCanClose: employee.permanenceCanClose !== false,
     permanencePreferredOpeningDays: [...(employee.permanencePreferredOpeningDays ?? [])],
     permanenceRequiredOpeningDays: [...(employee.permanenceRequiredOpeningDays ?? [])],
     permanencePreferredClosingDays: [...(employee.permanencePreferredClosingDays ?? [])],
     permanenceRequiredClosingDays: [...(employee.permanenceRequiredClosingDays ?? [])],
+    permanenceClosingOnlyDays: [...(employee.permanenceClosingOnlyDays ?? [])],
+    permanenceMaxClosings:
+      employee.permanenceMaxClosings === null || employee.permanenceMaxClosings === undefined
+        ? ""
+        : String(employee.permanenceMaxClosings),
+    // Une fiche antérieure à la séparation portait un seul drapeau, qui valait
+    // pour les deux rôles : il se relit sans qu'on ait à rouvrir la fiche.
+    permanenceLastResortOpening:
+      employee.permanenceLastResortOpening ?? employee.permanenceLastResort === true,
+    permanenceLastResortClosing:
+      employee.permanenceLastResortClosing ?? employee.permanenceLastResort === true,
+    permanenceSaturdayTurnOver: employee.permanenceSaturdayTurnOver === true,
 
     // Une fiche antérieure à l'onglet Dimanche n'en porte rien : l'absence se
     // relit comme « ne travaille pas le dimanche ».

@@ -69,10 +69,17 @@ const FIELD_TABS: Record<string, TabValue> = {
   closingDays: "contraintes",
 
   permanence: "permanence",
+  permanenceCanOpen: "permanence",
+  permanenceCanClose: "permanence",
   permanencePreferredOpeningDays: "permanence",
   permanenceRequiredOpeningDays: "permanence",
   permanencePreferredClosingDays: "permanence",
   permanenceRequiredClosingDays: "permanence",
+  permanenceClosingOnlyDays: "permanence",
+  permanenceMaxClosings: "permanence",
+  permanenceLastResortOpening: "permanence",
+  permanenceLastResortClosing: "permanence",
+  permanenceSaturdayTurnOver: "permanence",
 
   sundayWork: "dimanche",
   sundayCommitment: "dimanche",
