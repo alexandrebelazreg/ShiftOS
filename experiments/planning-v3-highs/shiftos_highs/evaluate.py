@@ -260,20 +260,28 @@ def evaluate(problem: dict[str, Any], assignments: list[dict[str, Any]]) -> dict
         if not segments:
             continue
         allowed = [str(value) for value in employees[employee_id].get("allowedSectorIds") or []]
-        opens_at = sorted(
-            int(own["opensAtMinutes"])
+        # Sans rayons, ce qu'on ouvre et ferme est le magasin, et sa journée
+        # porte déjà les deux heures. Chercher malgré tout dans une liste vide
+        # rendait `closes_at` vide, donc `not closes_at` vrai, donc la violation
+        # inconditionnelle : un horaire pourtant exact était refusé.
+        #
+        # Aligné sur `closingMinutesFor` du validateur TypeScript, qui traite ce
+        # cas depuis toujours. Les deux lisent les mêmes règles ; ils doivent en
+        # tirer la même réponse, sinon le générateur produit ce que l'évaluateur
+        # rejette et la recherche lit ce refus comme un fait sur la semaine.
+        own_days = [
+            own
             for sector in problem.get("sectors") or []
             if str(sector["id"]) in allowed
             for own in sector["days"]
             if own["date"] == day_date and not own["closed"]
-        )
-        closes_at = sorted(
-            int(own["closesAtMinutes"])
-            for sector in problem.get("sectors") or []
-            if str(sector["id"]) in allowed
-            for own in sector["days"]
-            if own["date"] == day_date and not own["closed"]
-        )
+        ]
+        if not own_days and not (problem.get("sectors") or []):
+            store_day = days.get(day_date)
+            if store_day is not None and not store_day["closed"]:
+                own_days = [store_day]
+        opens_at = sorted(int(own["opensAtMinutes"]) for own in own_days)
+        closes_at = sorted(int(own["closesAtMinutes"]) for own in own_days)
         if entry.get("mustOpen") and (not opens_at or segments[0]["startMinutes"] != opens_at[0]):
             violations.append(f"must-open:{employee_id}:{day_date}")
         if entry.get("mustClose") and (not closes_at or segments[-1]["endMinutes"] != closes_at[-1]):

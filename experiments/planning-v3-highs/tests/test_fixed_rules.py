@@ -14,6 +14,7 @@ from __future__ import annotations
 import unittest
 
 from shiftos_highs.demand import build_demand_model
+from shiftos_highs.evaluate import evaluate
 from shiftos_highs_fast.allocation import Allocation, build_allocation_model
 from shiftos_highs_fast.shifts import generate_shifts
 from shiftos_highs_fast.skeleton import generate_skeletons
@@ -139,6 +140,31 @@ class FixedRuleGenerationTests(unittest.TestCase):
         self.assertEqual(_ends(_mono_problem(mustClose=True), 180), {720})
         self.assertEqual(_starts(_mono_problem(mustOpen=True), 180), {420})
         self.assertEqual(_starts(_mono_problem(mustOpen=True, mustClose=True), 300), {420})
+
+    def test_the_generator_and_the_evaluator_agree_without_sectors(self) -> None:
+        # Les deux lisent la MÊME règle, et doivent en tirer la même réponse.
+        # Quand ils divergent, le générateur produit exactement ce que
+        # l'évaluateur refuse : la recherche épuise son budget sur des candidats
+        # légaux qu'elle croit fautifs, et rapporte une semaine impossible.
+        #
+        # C'est ce qui est arrivé. Le générateur réparé plaçait la journée à la
+        # bonne heure ; l'évaluateur, resté aveugle au mono-secteur, la rejetait
+        # toujours avec « must-close ». Corriger un seul des deux ne débloque
+        # rien — d'où ce test qui les tient ensemble.
+        problem = _mono_problem(mustClose=True)
+        shifts, index = _shifts(problem, {"aurelie": 180})
+        self.assertTrue(shifts, "le générateur ne produit aucune journée")
+        shift = shifts[0]
+        assignments = [{
+            "employeeId": "aurelie",
+            "date": "2026-07-20",
+            "segments": [
+                {"startMinutes": seg.start, "endMinutes": seg.end} for seg in shift.segments
+            ],
+        }]
+        report = evaluate(problem, assignments)
+        offending = [v for v in report["violations"] if v.startswith("must-close")]
+        self.assertEqual(offending, [], f"violations rapportées : {report['violations']}")
 
     def test_a_declared_sector_that_never_opens_stays_impossible(self) -> None:
         # Le garde-fou du repli. Un problème qui DÉCLARE des rayons et dont
