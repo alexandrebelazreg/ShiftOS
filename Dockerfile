@@ -27,10 +27,18 @@ WORKDIR /app
 # étape : la couche des dépendances scientifiques (~200 Mo) ne se reconstruit
 # alors que si les versions épinglées changent, jamais parce qu'un composant
 # React a bougé.
+#
+# Hors de /app, et c'est une CORRECTION, pas un rangement. Placé dans le dossier
+# du projet, `bin/python` est un lien symbolique vers le Python du système :
+# Turbopack analyse l'arborescence du projet en construisant, suit ce lien, le
+# voit sortir de la racine et abandonne la compilation entière sur
+#   « Symlink .venv-planning-highs/bin/python is invalid ».
+# L'emplacement ne se devine plus, il se déclare — voir PLANNING_HIGHS_PYTHON
+# plus bas, que `resolveHighsFastPython()` lit avant toute recherche.
 COPY experiments/planning-v3-highs/requirements.txt /tmp/requirements.txt
-RUN python3 -m venv /app/.venv-planning-highs \
- && /app/.venv-planning-highs/bin/pip install --no-cache-dir --upgrade pip \
- && /app/.venv-planning-highs/bin/pip install --no-cache-dir -r /tmp/requirements.txt
+RUN python3 -m venv /opt/shiftos-venv \
+ && /opt/shiftos-venv/bin/pip install --no-cache-dir --upgrade pip \
+ && /opt/shiftos-venv/bin/pip install --no-cache-dir -r /tmp/requirements.txt
 
 # Même raisonnement côté npm. `npm ci` installe AUSSI les devDependencies :
 # TypeScript, Tailwind et eslint-config-next sont requis par `next build`.
@@ -51,7 +59,7 @@ ENV NODE_ENV=production
 # premier et ne retombe sur une recherche de venv qu'à défaut. Nommer
 # l'interpréteur ici, c'est garantir qu'une image qui démarre est une image dont
 # le solveur est joignable.
-ENV PLANNING_HIGHS_PYTHON=/app/.venv-planning-highs/bin/python3
+ENV PLANNING_HIGHS_PYTHON=/opt/shiftos-venv/bin/python3
 ENV PORT=3000
 ENV HOSTNAME=0.0.0.0
 
