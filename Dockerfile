@@ -17,8 +17,14 @@ FROM node:22-bookworm-slim
 # de jour.
 ENV TZ=Europe/Paris
 
+# `curl` n'est pas un confort : l'orchestrateur interroge /api/health DEPUIS
+# l'intérieur du conteneur, avec l'outil qu'il y trouve. Une image Node
+# minimaliste n'en porte aucun, la sonde échoue à s'exécuter — et un conteneur
+# dont la sonde ne peut pas répondre est déclaré malade alors qu'il sert
+# parfaitement ses pages. Le retour arrière qui suit ne dit rien de vrai sur
+# l'application.
 RUN apt-get update \
- && apt-get install -y --no-install-recommends python3 python3-venv ca-certificates tzdata \
+ && apt-get install -y --no-install-recommends python3 python3-venv ca-certificates tzdata curl \
  && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
