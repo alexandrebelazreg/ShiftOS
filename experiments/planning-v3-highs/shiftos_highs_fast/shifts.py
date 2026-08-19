@@ -800,6 +800,21 @@ def generate_shifts(
                     for own_day in sector["days"]
                     if own_day["date"] == day["date"] and not own_day["closed"]
                 ]
+                # Un problème mono-secteur ne porte AUCUN rayon. La liste est
+                # alors vide non parce que le salarié n'a nulle part où ouvrir,
+                # mais parce qu'il n'y a rien à subdiviser : ce qu'il ouvre et
+                # ferme, c'est le magasin, dont la journée porte déjà ses deux
+                # heures. Sans ce repli, les deux devoirs concluaient « je ne
+                # trouve pas l'heure » puis vidaient la cellule — et « doit
+                # ouvrir » comme « doit fermer » étaient inutilisables hors
+                # multi-secteur, sans qu'aucun test ne le dise.
+                #
+                # La condition porte sur l'ABSENCE de rayons, jamais sur une
+                # liste vide : un problème qui en déclare et dont aucun de ceux
+                # que ce salarié sert n'ouvre ce jour-là reste une vraie
+                # impossibilité, et doit continuer de tuer la cellule.
+                if not own_days and not (problem.get("sectors") or []):
+                    own_days = [day]
                 if rules_entry.get("mustOpen"):
                     opens = min((int(own["opensAtMinutes"]) for own in own_days), default=None)
                     # Deux règles qui se contredisent ne se départagent pas : la

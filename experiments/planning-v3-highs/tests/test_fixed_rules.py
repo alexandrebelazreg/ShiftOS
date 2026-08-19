@@ -62,6 +62,19 @@ def _problem(**day_overrides: object) -> dict:
     }
 
 
+def _mono_problem(**day_overrides: object) -> dict:
+    """Le même cas SANS aucun rayon : la forme que prend toute la production.
+
+    Ce n'est pas une variante exotique. Un magasin qui n'a pas subdivisé son
+    activité produit exactement ce problème-là, et c'est celui sur lequel les
+    devoirs d'ouverture et de fermeture n'ont jamais été éprouvés.
+    """
+    problem = _problem(**day_overrides)
+    problem.pop("sectors")
+    problem["employees"][0].pop("allowedSectorIds", None)
+    return problem
+
+
 def _shifts(problem: dict, minutes: dict[str, int]) -> tuple[list, dict[str, int]]:
     """L'espace des journées, pour une durée imposée à chaque salarié."""
     model = build_allocation_model(problem)
@@ -117,6 +130,24 @@ class FixedRuleGenerationTests(unittest.TestCase):
 
     def test_must_close_pins_the_end_to_the_sector_closing(self) -> None:
         self.assertEqual(_ends(_problem(mustClose=True), 180), {720})
+
+    def test_the_duties_hold_when_the_problem_has_no_sector_at_all(self) -> None:
+        # Sans rayon, l'heure cherchée n'était nulle part — et « introuvable »
+        # tuait la journée. Un magasin mono-secteur ouvre et ferme pourtant bien,
+        # à l'heure que porte sa propre journée. Les deux devoirs se lisent donc
+        # là, et rendent les mêmes bornes qu'avec un rayon.
+        self.assertEqual(_ends(_mono_problem(mustClose=True), 180), {720})
+        self.assertEqual(_starts(_mono_problem(mustOpen=True), 180), {420})
+        self.assertEqual(_starts(_mono_problem(mustOpen=True, mustClose=True), 300), {420})
+
+    def test_a_declared_sector_that_never_opens_stays_impossible(self) -> None:
+        # Le garde-fou du repli. Un problème qui DÉCLARE des rayons et dont
+        # aucun de ceux que ce salarié sert n'ouvre ce jour-là est une vraie
+        # impossibilité : le repli ne doit pas la transformer en journée
+        # ordinaire adossée aux heures du magasin.
+        problem = _problem(mustClose=True)
+        problem["sectors"][0]["days"][0]["closed"] = True
+        self.assertEqual(_ends(problem, 180), set())
 
     def test_opening_and_closing_the_same_day_forces_the_whole_span(self) -> None:
         # Les deux devoirs ensemble ne laissent qu'une journée : celle qui va de
