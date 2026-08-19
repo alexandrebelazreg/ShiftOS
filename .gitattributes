@@ -1,0 +1,20 @@
+# Les fins de ligne sont LF, quelle que soit la machine qui écrit.
+#
+# Ce dépôt est lu par Linux bien plus que par Windows : le conteneur qui le
+# sert, le solveur Python qu'il lance, et les tests qui comparent des fixtures
+# OCTET PAR OCTET pour attraper une dérive de format que Python lirait
+# autrement. Sans cette règle, un `git checkout` sur une machine réglée en
+# `core.autocrlf=true` réécrit ces fichiers en CRLF, git continue de les voir
+# propres — puisqu'il normalise à la comparaison — et cinq tests rougissent en
+# annonçant une régression du builder qui n'a jamais eu lieu.
+#
+# Le piège coûte cher parce qu'il ment sur sa cause : les données sont
+# identiques, seuls les retours à la ligne diffèrent, et rien dans `git status`
+# ne le montre.
+* text=auto eol=lf
+
+# Binaires : jamais convertis, sous aucun prétexte.
+*.png binary
+*.jpg binary
+*.zip binary
+*.pyc binary
