@@ -42,7 +42,16 @@ create table stores (
 -- connecte, les salariés lisent la feuille publiée. La colonne est néanmoins
 -- créée avec son type, parce que trente minutes aujourd'hui valent mieux que la
 -- migration du jour où un salarié devra consulter son planning.
-create type app_role as enum ('manager');
+-- `create type` n'accepte pas `if not exists`. Sans ce garde, une migration
+-- interrompue à mi-chemin ne se rejoue pas : la deuxième tentative meurt sur un
+-- type déjà présent, et il faut aller nettoyer à la main pour réessayer.
+do $$
+begin
+  if not exists (select 1 from pg_type where typname = 'app_role') then
+    create type app_role as enum ('manager');
+  end if;
+end;
+$$;
 
 -- Le pont vers `auth.users`, que Supabase possède. On n'y touche pas : on
 -- l'étend. Un compte appartient à un magasin, et c'est cette ligne qui porte le
