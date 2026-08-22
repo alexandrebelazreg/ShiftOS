@@ -253,6 +253,27 @@ alter table plannings            enable row level security;
 alter table permanences          enable row level security;
 alter table paid_leave_campaigns enable row level security;
 
+-- Les droits, avant les politiques.
+--
+-- RLS décide qui voit QUOI ; les droits décident qui a le droit de demander.
+-- Une table sans `grant` renvoie « permission denied » avant même qu'une
+-- politique soit consultée — et l'erreur ne ressemble alors en rien à un
+-- problème de cloisonnement, ce qui coûte une heure à comprendre.
+--
+-- Supabase pose des droits par défaut qui couvrent déjà ce cas. On les redit
+-- quand même : une migration qui dépend d'un réglage invisible de la plateforme
+-- est une migration qu'on ne peut pas rejouer ailleurs. Gardé par l'existence
+-- des rôles, pour qu'un Postgres nu — celui des tests — l'ignore sans broncher.
+do $$
+begin
+  if exists (select 1 from pg_roles where rolname = 'authenticated') then
+    execute 'grant usage on schema public to authenticated';
+    execute 'grant select, insert, update, delete on all tables in schema public to authenticated';
+    execute 'grant execute on all functions in schema public to authenticated';
+  end if;
+end;
+$$;
+
 create policy "son propre profil" on profiles
   for select using (id = auth.uid());
 
