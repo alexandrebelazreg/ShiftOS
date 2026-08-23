@@ -69,6 +69,8 @@ import type {
   PaidLeaveWeekId,
 } from "@/features/paid-leave/models/paid-leave-campaign"
 import { paidLeaveStore } from "@/features/paid-leave/persistence/paid-leave.store"
+import { SaveFailureBanner } from "@/components/feedback/save-failure-banner"
+import { useSaveFailure } from "@/components/feedback/use-save-failure"
 import { sectorStore } from "@/features/sectors/sector.store"
 import { applyOptimalPaidLeaveSolution } from "@/features/paid-leave/solver/apply-solution"
 import {
@@ -88,6 +90,7 @@ export function PaidLeavePlanningView({ initialStore }: { readonly initialStore:
   const [employees, setEmployees] = useState<EmployeeRecord[]>([])
   const [sectors, setSectors] = useState<SectorDemandConfiguration[]>([])
   const [campaigns, setCampaigns] = useState<PaidLeaveCampaign[]>([])
+  const { failure, guard } = useSaveFailure()
   const [activeId, setActiveId] = useState<string | null>(null)
   const [loaded, setLoaded] = useState(false)
   const [creationYear, setCreationYear] = useState(new Date().getFullYear())
@@ -148,7 +151,7 @@ export function PaidLeavePlanningView({ initialStore }: { readonly initialStore:
   )
 
   const saveCampaign = (next: PaidLeaveCampaign) => {
-    void paidLeaveStore.save(next)
+    void guard(() => paidLeaveStore.save(next))
     setCampaigns((current) =>
       [next, ...current.filter((item) => item.id !== next.id)]
         .sort((left, right) => right.updatedAt.localeCompare(left.updatedAt))
@@ -172,12 +175,12 @@ export function PaidLeavePlanningView({ initialStore }: { readonly initialStore:
       now,
     })
     saveCampaign(next)
-    void paidLeaveStore.setActiveId(next.id)
+    void guard(() => paidLeaveStore.setActiveId(next.id))
     setActiveId(next.id)
   }
 
   const chooseCampaign = (id: string) => {
-    void paidLeaveStore.setActiveId(id)
+    void guard(() => paidLeaveStore.setActiveId(id))
     setActiveId(id)
     setSolveMessage(null)
   }
@@ -233,6 +236,7 @@ export function PaidLeavePlanningView({ initialStore }: { readonly initialStore:
 
   return (
     <div className="space-y-6 print:space-y-3">
+      <SaveFailureBanner failure={failure} what="Cette campagne de congés" />
       <div className="flex flex-wrap items-start justify-between gap-4 print:hidden">
         <PageHeader
           title="Congés payés"

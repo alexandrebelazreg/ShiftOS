@@ -39,6 +39,8 @@ import {
   type PermanenceMonth,
 } from "@/features/permanence/models/permanence-month"
 import { permanenceStore } from "@/features/permanence/persistence/permanence.store"
+import { SaveFailureBanner } from "@/components/feedback/save-failure-banner"
+import { useSaveFailure } from "@/components/feedback/use-save-failure"
 import { PermanenceSheet } from "@/features/permanence/publication/PermanenceSheet"
 import { buildPermanenceSheet } from "@/features/permanence/publication/permanence-sheet"
 import {
@@ -71,6 +73,7 @@ export function PermanenceView({ initialStore }: { readonly initialStore: StoreC
   const [absences, setAbsences] = useState<readonly AbsenceRecord[]>([])
   const [campaigns, setCampaigns] = useState<readonly PaidLeaveCampaign[]>([])
   const [sheet, setSheet] = useState<PermanenceMonth | null>(null)
+  const { failure, guard } = useSaveFailure()
   const [yearSheets, setYearSheets] = useState<readonly PermanenceMonth[]>([])
   useEffect(() => {
     if (typeof window === "undefined") return
@@ -196,14 +199,14 @@ export function PermanenceView({ initialStore }: { readonly initialStore: StoreC
   const write = useCallback(
     (next: PermanenceMonth) => {
       const stamped = { ...next, updatedAt: new Date().toISOString() }
-      void permanenceStore.save(stamped)
+      void guard(() => permanenceStore.save(stamped))
       setSheet(stamped)
       setYearSheets((current) => {
         const others = current.filter((entry) => entry.id !== stamped.id)
         return [...others, stamped].sort((left, right) => left.month - right.month)
       })
     },
-    []
+    [guard]
   )
 
   const generate = () => {
@@ -254,6 +257,7 @@ export function PermanenceView({ initialStore }: { readonly initialStore: StoreC
 
   return (
     <div className="space-y-6">
+      <SaveFailureBanner failure={failure} what="Cette permanence" />
       <PageHeader
         title="Permanences"
         description="Qui ouvre et qui ferme le magasin, mois par mois, réparti à charge égale."

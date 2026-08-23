@@ -14,6 +14,8 @@ import { validatedPaidLeaveAbsences } from "@/features/paid-leave/dashboard/vali
 import { paidLeaveStore } from "@/features/paid-leave/persistence/paid-leave.store"
 import { type StoredHolidays } from "@/features/planning/holidays/holiday.repository"
 import { holidayStore } from "@/features/planning/holidays/holiday.store"
+import { SaveFailureBanner } from "@/components/feedback/save-failure-banner"
+import { useSaveFailure } from "@/components/feedback/use-save-failure"
 import {
   closedHolidayDates,
   holidayAbsences,
@@ -75,6 +77,7 @@ export function AbsencesView({ initialStore }: { readonly initialStore: StoreCon
   const [rules, setRules] = useState<AbsenceRules>(DEFAULT_ABSENCE_RULES)
   const [formOpen, setFormOpen] = useState(false)
   const [selected, setSelected] = useState<AbsenceRecord | null>(null)
+  const { failure, guard } = useSaveFailure()
 
   // `.then` plutôt qu'`await` : poser l'état DANS l'effet, sans frontière
   // asynchrone, déclenche une seconde passe de rendu à chaque montage — c'est la
@@ -172,26 +175,30 @@ export function AbsencesView({ initialStore }: { readonly initialStore: StoreCon
   const counters = useMemo(() => buildYearCounters(year, absences), [year, absences])
 
   async function create(draft: AbsenceDraft) {
-    await absenceService.create(draft, today, rules)
+    // Le formulaire ne se ferme QUE si l'absence est partie. Le refermer
+    // d'abord donnerait à croire qu'elle est enregistrée, et la saisie serait
+    // perdue avec lui.
+    const written = await guard(() => absenceService.create(draft, today, rules))
+    if (written === null) return
     setFormOpen(false)
     await reload()
   }
 
   async function cancel(id: string) {
-    await absenceService.cancel(id, today)
+    if ((await guard(() => absenceService.cancel(id, today))) === null) return
     setSelected(null)
     await reload()
   }
 
   async function extend(id: string, newEnd: string) {
-    await absenceService.extend(id, newEnd, today)
+    if ((await guard(() => absenceService.extend(id, newEnd, today))) === null) return
     const updated = await absenceService.list()
     setSaved(updated)
     setSelected(updated.find((absence) => absence.id === id) ?? null)
   }
 
   async function receiveProof(id: string) {
-    await absenceService.markProofReceived(id, today)
+    if ((await guard(() => absenceService.markProofReceived(id, today))) === null) return
     setSelected(null)
     await reload()
   }
@@ -211,6 +218,7 @@ export function AbsencesView({ initialStore }: { readonly initialStore: StoreCon
 
   return (
     <div className="space-y-6">
+      <SaveFailureBanner failure={failure} what="Cette absence" />
       <PageHeader
         title="Absences"
         description="Qui n’est pas là, pourquoi, et ce qu’il reste à réclamer."

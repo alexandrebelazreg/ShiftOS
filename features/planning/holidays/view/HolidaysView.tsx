@@ -9,6 +9,8 @@ import type { IsoDate, WeekDay } from "@/features/core/models"
 import { useEmployees } from "@/features/employees/hooks/useEmployees"
 import { type StoredHolidays } from "@/features/planning/holidays/holiday.repository"
 import { holidayStore } from "@/features/planning/holidays/holiday.store"
+import { SaveFailureBanner } from "@/components/feedback/save-failure-banner"
+import { useSaveFailure } from "@/components/feedback/use-save-failure"
 import { buildHolidayYear } from "@/features/planning/holidays/model/holiday-year-view-model"
 import type { HolidayOpening } from "@/features/planning/holidays/model/holiday-schedule"
 import { HolidayDayCard } from "@/features/planning/holidays/ui/HolidayDayCard"
@@ -29,6 +31,7 @@ import type { StoreConfig } from "@/features/store/schemas/store.schema"
 export function HolidaysView({ initialStore }: { readonly initialStore: StoreConfig | null }) {
   const { employees, isLoading } = useEmployees()
   const [stored, setStored] = useState<StoredHolidays | null>(null)
+  const { failure, guard } = useSaveFailure()
   const [year, setYear] = useState(() => new Date().getFullYear())
   const [expanded, setExpanded] = useState<IsoDate | null>(null)
 
@@ -83,7 +86,7 @@ export function HolidaysView({ initialStore }: { readonly initialStore: StoreCon
         ...(current ?? {}),
         [date]: { ...(current?.[date] ?? {}), ...patch },
       }
-      void holidayStore.save(next)
+      void guard(() => holidayStore.save(next))
       return next
     })
   }
@@ -98,6 +101,7 @@ export function HolidaysView({ initialStore }: { readonly initialStore: StoreCon
 
   return (
     <div className="space-y-6">
+      <SaveFailureBanner failure={failure} what="Ce réglage de jour férié" />
       <PageHeader
         title="Jours fériés"
         description="Réglez ce que le magasin fait de chaque férié, puis recueillez les volontaires."
