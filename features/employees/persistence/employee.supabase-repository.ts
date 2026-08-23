@@ -88,6 +88,10 @@ export function toRow(record: EmployeeRecord, storeId: string) {
   for (const field of PROMOTED_FIELDS) delete profile[field]
 
   return {
+    // L'identifiant vient de l'application, jamais de la base. Les plannings
+    // enregistrés citent le salarié par ce nom-là, dans tout leur état : le
+    // laisser changer romprait le lien avec chaque semaine passée.
+    id: record.id,
     store_id: storeId,
     first_name: record.firstName,
     last_name: record.lastName,
@@ -141,9 +145,10 @@ export function createSupabaseEmployeeRepository(client: SupabaseClient): Employ
 
     async create(draft) {
       const storeId = await requireStoreId(client)
+      const record = { ...fromDraft(draft), id: `emp_${crypto.randomUUID()}` } as EmployeeRecord
       const { data, error } = await client
         .from("employees")
-        .insert(toRow(fromDraft(draft), storeId))
+        .insert(toRow(record, storeId))
         .select("*")
         .single()
       if (error) throw new Error(error.message)

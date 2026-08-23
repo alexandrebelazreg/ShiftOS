@@ -68,6 +68,10 @@ export function toRecord(row: PlanningRow): PlanningRecord {
 
 export function toRow(record: PlanningRecord, storeId: string) {
   return {
+    // Comme pour les salariés : l'identifiant vient de l'application. Il figure
+    // dans les adresses (`?planningId=`), et une semaine qu'on rouvre par un
+    // lien enregistré doit rester la même.
+    id: record.id,
     store_id: storeId,
     week_key: weekKeyOf(record.periodStart),
     week_start: record.periodStart,
@@ -90,14 +94,7 @@ export function createSupabasePlanningRepository(client: SupabaseClient): Planni
       const storeId = await requireStoreId(client)
       const row = toRow(record, storeId)
 
-      // Un identifiant venu de `localStorage` (`planning_xxx`) n'est pas un
-      // uuid : la base en fabrique un à l'insertion, et l'ancien ne sert plus.
-      // Un identifiant déjà en base est réutilisé pour écraser la même ligne.
-      const isDatabaseId = /^[0-9a-f]{8}-[0-9a-f]{4}-/i.test(record.id)
-      const { error } = isDatabaseId
-        ? await client.from("plannings").upsert({ id: record.id, ...row })
-        : await client.from("plannings").insert(row)
-
+      const { error } = await client.from("plannings").upsert(row, { onConflict: "id" })
       if (error) throw new Error(error.message)
     },
 
