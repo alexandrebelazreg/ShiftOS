@@ -1,4 +1,7 @@
 import { browserStore } from "@/features/core/shared/key-value-store"
+import { supabaseConfigured } from "@/features/auth/supabase/config"
+import { createSupabaseBrowserClient } from "@/features/auth/supabase/browser"
+import { createSupabaseAbsenceRepository } from "@/features/absences/persistence/absence.supabase-repository"
 import { createAbsenceRepository } from "@/features/absences/persistence/absence.repository"
 import type {
   AbsenceDraft,
@@ -19,6 +22,9 @@ import type {
  * serveur trouverait l'oubli et le garderait pour toute la vie du module.
  */
 function repository(): AbsenceRepository {
+  if (supabaseConfigured() && typeof window !== "undefined") {
+    return createSupabaseAbsenceRepository(createSupabaseBrowserClient())
+  }
   return createAbsenceRepository(browserStore())
 }
 

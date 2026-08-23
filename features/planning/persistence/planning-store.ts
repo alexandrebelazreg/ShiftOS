@@ -8,6 +8,9 @@ import { toSummary } from "@/features/planning/persistence/planning-record"
 import type { PlanningRepository } from "@/features/planning/persistence/planning-repository"
 import { createInMemoryPlanningRepository } from "@/features/planning/persistence/in-memory-planning-repository"
 import { createLocalStoragePlanningRepository } from "@/features/planning/persistence/local-storage-planning-repository"
+import { createSupabasePlanningRepository } from "@/features/planning/persistence/planning.supabase-repository"
+import { supabaseConfigured } from "@/features/auth/supabase/config"
+import { createSupabaseBrowserClient } from "@/features/auth/supabase/browser"
 import * as lifecycle from "@/features/planning/persistence/planning-lifecycle"
 
 /**
@@ -90,13 +93,36 @@ export function createPlanningStore(
   }
 }
 
-/** Default repository: localStorage in the browser, in-memory on the server. */
+/**
+ * Où les plannings sont rangés : la base si elle est configurée, le navigateur
+ * sinon, la mémoire quand il n'y a ni l'un ni l'autre.
+ */
 function defaultRepository(): PlanningRepository {
-  if (typeof window !== "undefined" && typeof window.localStorage !== "undefined") {
+  if (typeof window === "undefined") return createInMemoryPlanningRepository()
+  if (supabaseConfigured()) {
+    return createSupabasePlanningRepository(createSupabaseBrowserClient())
+  }
+  if (typeof window.localStorage !== "undefined") {
     return createLocalStoragePlanningRepository(window.localStorage)
   }
   return createInMemoryPlanningRepository()
 }
 
+/**
+ * Le dépôt actif, résolu à CHAQUE appel.
+ *
+ * Il était choisi une fois pour toutes au chargement du module. Sur un rendu
+ * serveur, cela figeait le magasin en mémoire pour toute la vie du module — y
+ * compris une fois revenu dans le navigateur, où il n'aurait plus rien
+ * enregistré. Le défaut était invisible tant que la seule source était
+ * `localStorage` ; avec une base derrière une session, il ne l'est plus.
+ */
+const lazyRepository: PlanningRepository = {
+  save: (record) => defaultRepository().save(record),
+  get: (id) => defaultRepository().get(id),
+  list: () => defaultRepository().list(),
+  delete: (id) => defaultRepository().delete(id),
+}
+
 /** The active planning store used by the UI. */
-export const planningStore: PlanningStore = createPlanningStore(defaultRepository())
+export const planningStore: PlanningStore = createPlanningStore(lazyRepository)
