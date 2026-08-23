@@ -1,14 +1,24 @@
 # Phase 3 — brancher les comptes
 
-Onze étapes. Chaque commande remplit le presse-papier ou crée un fichier :
-aucun fichier à ouvrir, rien à choisir.
+**Commandes PowerShell** (le terminal par défaut sous Windows). Elles ne
+fonctionnent pas dans Git Bash, et inversement.
+
+Deux pièges déjà désamorcés ici :
+
+- `&&` n'existe pas en Windows PowerShell 5.1 — les commandes sont séparées.
+- `Set-Content -Encoding utf8` écrit un BOM invisible en tête de fichier, qui
+  casserait la première variable d'environnement. D'où `WriteAllText`.
 
 ---
 
 ## 1. Terminal — récupérer le code
 
 ```
-git pull && npm install
+git pull
+```
+
+```
+npm install
 ```
 
 ## 2. Supabase — relever les deux valeurs de connexion
@@ -18,8 +28,7 @@ git pull && npm install
 Garder cette page ouverte. Deux valeurs y figurent :
 
 - **Project URL** — de la forme `https://xxxx.supabase.co`
-- **Publishable key** (ou **anon public** selon l'âge du projet) — une longue
-  chaîne commençant par `eyJ` ou `sb_`
+- **Publishable key** (ou **anon public** selon l'âge du projet)
 
 > Ne jamais prendre la clé `service_role`. Elle contourne toutes les protections
 > et n'a sa place ni dans ce fichier ni dans un navigateur.
@@ -27,19 +36,23 @@ Garder cette page ouverte. Deux valeurs y figurent :
 ## 3. Terminal — créer le fichier de configuration locale
 
 ```
-printf 'NEXT_PUBLIC_SUPABASE_URL=\nNEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY=\n' > .env.local
+[System.IO.File]::WriteAllText("$PWD\.env.local", "NEXT_PUBLIC_SUPABASE_URL=`r`nNEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY=`r`n")
 ```
 
 ## 4. Éditeur — coller les deux valeurs
 
-Ouvrir `.env.local` et compléter les deux lignes, sans guillemets ni espaces :
+```
+notepad .env.local
+```
+
+Compléter les deux lignes, sans guillemets ni espaces autour du `=` :
 
 ```
 NEXT_PUBLIC_SUPABASE_URL=https://xxxx.supabase.co
 NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY=sb_publishable_...
 ```
 
-Ce fichier est ignoré par git : il ne partira jamais sur GitHub.
+Enregistrer. Ce fichier est ignoré par git : il ne partira jamais sur GitHub.
 
 ## 5. Supabase — créer son compte
 
@@ -51,10 +64,10 @@ sinon la connexion sera refusée tant qu'un e-mail n'aura pas été validé.
 ## 6. Terminal — copier le rattachement
 
 ```
-powershell -c "Get-Content -Raw -Encoding UTF8 supabase/bootstrap.sql | Set-Clipboard"
+Get-Content -Raw -Encoding UTF8 supabase/bootstrap.sql | Set-Clipboard
 ```
 
-## 7. Éditeur Supabase — modifier une ligne, puis exécuter
+## 7. Supabase — modifier une ligne, puis exécuter
 
 `SQL Editor` → `New query` → **Ctrl+V**
 
@@ -74,6 +87,10 @@ npm run dev
 Ouvrir `http://localhost:3000`. La redirection vers `/login` doit être
 automatique. Se connecter avec les identifiants de l'étape 5.
 
+---
+
+## Une fois que ça marche en local
+
 ## 10. Coolify — reporter les deux variables
 
 `Environment Variables` → ajouter les deux mêmes lignes qu'à l'étape 4, puis
@@ -88,13 +105,23 @@ désormais sa propre porte.
 
 ---
 
-## Si la connexion échoue
+## Si ça coince
 
-| Message | Cause |
+| Symptôme | Cause |
 |---|---|
 | `Adresse ou mot de passe incorrect` | « Auto Confirm User » oublié à l'étape 5 |
 | Redirection en boucle vers `/login` | étape 7 non faite : compte sans magasin |
 | `NEXT_PUBLIC_SUPABASE_URL manque` | `.env.local` absent, ou `npm run dev` lancé avant |
+| `printf n'est pas reconnu` | commande bash lancée dans PowerShell |
 
 Après toute modification de `.env.local`, **redémarrer `npm run dev`** : les
 variables ne sont lues qu'au démarrage.
+
+## Vérifier que le fichier est sain
+
+```
+[System.IO.File]::ReadAllBytes("$PWD\.env.local")[0..2] -join ','
+```
+
+Doit rendre `78,69,88`. Si c'est `239,187,191`, le fichier porte un BOM :
+refaire l'étape 3.
