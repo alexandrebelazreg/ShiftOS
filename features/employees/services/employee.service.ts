@@ -1,26 +1,33 @@
 import { browserStore } from "@/features/core/shared/key-value-store"
+import { supabaseConfigured } from "@/features/auth/supabase/config"
+import { createSupabaseBrowserClient } from "@/features/auth/supabase/browser"
 import {
   createEmployeeRepository,
   normalizeContract,
 } from "@/features/employees/persistence/employee.repository"
+import { createSupabaseEmployeeRepository } from "@/features/employees/persistence/employee.supabase-repository"
 import type { EmployeeRepository } from "@/features/employees/persistence/employee.repository"
 
 /**
- * Le dépôt des salariés, lié au navigateur.
+ * Le dépôt des salariés, et le choix de sa source.
  *
- * Toute la logique vit désormais dans `employee.repository.ts`, qui reçoit son
- * stockage. Ce fichier n'est plus qu'une liaison : il dit *où* les fiches sont
- * rangées, pas *comment* elles se lisent.
+ * Base quand elle est configurée, `localStorage` sinon. Ce n'est pas une
+ * transition molle : c'est ce qui permet à l'application de continuer de
+ * fonctionner sur un poste dont les variables ne sont pas posées, et de rendre
+ * la bascule réversible en retirant une variable d'environnement.
  *
- * Il reste parce que neuf appelants le nomment. Les débrancher est le travail
- * des écrans, pas celui-ci — et les mêler aurait rendu impossible de dire, en
- * cas de régression, laquelle des deux transformations l'a causée.
+ * Les neuf appelants ne changent pas, et ne peuvent pas savoir laquelle des
+ * deux ils tiennent. C'est exactement ce que le patron dépôt existait pour
+ * permettre.
  *
- * Le stockage est résolu à chaque appel, jamais capturé à l'import : un rendu
- * serveur trouverait alors l'oubli et le garderait pour toute la vie du module,
- * y compris une fois revenu dans le navigateur.
+ * Résolu à chaque appel, jamais capturé à l'import : un module chargé pendant
+ * un rendu serveur resterait sinon coincé sur la source qu'il a trouvée la
+ * première fois, y compris une fois revenu dans le navigateur.
  */
 function repository(): EmployeeRepository {
+  if (supabaseConfigured() && typeof window !== "undefined") {
+    return createSupabaseEmployeeRepository(createSupabaseBrowserClient())
+  }
   return createEmployeeRepository(browserStore())
 }
 
