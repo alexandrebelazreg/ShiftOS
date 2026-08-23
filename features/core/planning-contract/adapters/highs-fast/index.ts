@@ -5,10 +5,13 @@ import {
 import type { CpSatRunner } from "@/features/core/planning-contract/adapters/python/run-python"
 import type { EnginePreservationSupport } from "@/features/core/planning-contract/adapters/from-audited-v3"
 import { toSolvePlanningResponse } from "@/features/core/planning-contract/adapters/from-audited-v3"
+import { applyLocks } from "@/features/core/planning-contract/locks"
+import type { LockApplication } from "@/features/core/planning-contract/locks"
 import { toBackendErrorResponse } from "@/features/core/planning-contract/errors"
 import type { SolvePlanningRequest } from "@/features/core/planning-contract/types/solve-request"
 import type {
   PlanningSolveAdapter,
+  SolveDiagnostic,
   SolvePlanningResponse,
   SolveTechnicalFact,
 } from "@/features/core/planning-contract/types/solve-response"
@@ -59,7 +62,16 @@ import type {
  * because the demand model and the allocation MILP each prove theirs outright.
  */
 export const HIGHS_FAST_PRESERVATION_SUPPORT: EnginePreservationSupport = {
-  locks: false,
+  // Les verrous sont désormais tenus — non par une règle ajoutée au solveur,
+  // mais en TRADUISANT chaque créneau verrouillé en heures imposées sur la
+  // journée concernée. Le moteur honore ce mécanisme depuis toujours ; il n'a
+  // pas eu à changer, donc il n'a pas eu à être re-prouvé.
+  //
+  // Un verrou qu'on ne peut pas tenir exactement — créneau coupé, journée
+  // absente du problème, horaire déjà imposé par la fiche — n'est pas approché
+  // en silence : il est refusé, dit, et la capacité retombe à faux pour CETTE
+  // demande. Voir `applyLocks`.
+  locks: true,
   manualEdits: false,
   minimizeOtherChanges: false,
 }
@@ -122,10 +134,18 @@ export function createHighsFastAdapter(
       return failure(request, "engine-cancelled", "Résolution annulée avant le lancement.")
     }
 
+    // Les verrous sont traduits AVANT tout le reste, et le problème épinglé
+    // remplace l'original pour la suite : envoi, empreinte, et surtout
+    // validation. Valider contre le problème d'origine laisserait passer un
+    // moteur qui aurait ignoré un verrou — c'est justement ce qu'on veut
+    // rendre impossible.
+    const locks = applyLocks(request.problem, request.regeneration, request.baseline)
+    const effective: SolvePlanningRequest = { ...request, problem: locks.problem }
+
     const envelope: HighsFastRequestEnvelope = {
       protocolVersion: HIGHS_FAST_PROTOCOL_VERSION,
-      requestId: fingerprintProblem(request.problem),
-      problem: request.problem,
+      requestId: fingerprintProblem(effective.problem),
+      problem: effective.problem,
       options: { timeoutSeconds },
     }
 
@@ -160,13 +180,14 @@ export function createHighsFastAdapter(
       return failure(request, "engine-transport-failure", `${parsed.code} — ${parsed.message}`)
     }
 
-    return fromEnvelope(request, parsed.envelope)
+    return fromEnvelope(effective, parsed.envelope, locks)
   }
 }
 
 function fromEnvelope(
   request: SolvePlanningRequest,
-  envelope: HighsFastResponseEnvelope
+  envelope: HighsFastResponseEnvelope,
+  locks: LockApplication
 ): SolvePlanningResponse {
   if (envelope.status === "error") {
     return failure(
@@ -177,17 +198,40 @@ function fromEnvelope(
   }
 
   const audited = auditEnvelope(request, envelope)
-  const response = toSolvePlanningResponse(
-    "highs-fast",
-    request,
-    audited,
-    HIGHS_FAST_PRESERVATION_SUPPORT
-  )
+
+  // La capacité déclarée vaut pour le moteur ; celle-ci vaut pour CETTE demande.
+  // Un verrou refusé — créneau coupé, journée absente, horaire déjà imposé par
+  // la fiche — doit faire retomber la promesse à faux, sinon l'écran annoncerait
+  // « verrous tenus » alors qu'un l'a été et l'autre pas.
+  const support: EnginePreservationSupport = {
+    ...HIGHS_FAST_PRESERVATION_SUPPORT,
+    locks: HIGHS_FAST_PRESERVATION_SUPPORT.locks && locks.refused.length === 0,
+  }
+
+  const response = toSolvePlanningResponse("highs-fast", request, audited, support)
+
+  // Chaque refus est NOMMÉ, avec sa raison. « Les verrous n'ont pas été tenus »
+  // ne dit pas lequel, et le gérant ne saurait pas quoi corriger.
+  const refusals: SolveDiagnostic[] = locks.refused.map((refusal) => ({
+    code: "lock-refused",
+    severity: "degradation",
+    message: `Un créneau verrouillé n'a pas pu être figé : ${refusal.reason}.`,
+    requiresExplicitAcceptance: false,
+  }))
+
   return {
     ...response,
     diagnostics: {
       ...response.diagnostics,
-      technical: [...response.diagnostics.technical, ...technicalFacts(envelope)],
+      entries: [...response.diagnostics.entries, ...refusals],
+      technical: [
+        ...response.diagnostics.technical,
+        ...technicalFacts(envelope),
+        {
+          label: "Créneaux verrouillés figés",
+          value: `${locks.honoured.length} tenus, ${locks.refused.length} refusés`,
+        },
+      ],
     },
   }
 }
