@@ -11,7 +11,8 @@ import { cn } from "@/lib/utils"
 import { weekDayOf } from "@/features/core/shared"
 import { useEmployees } from "@/features/employees/hooks/useEmployees"
 import { adaptEditorStateToBoard } from "@/features/planning/board"
-import { createHolidayRepository } from "@/features/planning/holidays/holiday.repository"
+import type { StoredHolidays } from "@/features/planning/holidays/holiday.repository"
+import { holidayStore } from "@/features/planning/holidays/holiday.store"
 import { frenchHolidaysOf } from "@/features/planning/holidays/model/french-holidays"
 import { holidayPlanForPeriod } from "@/features/planning/holidays/model/holiday-plan"
 import { isoWeekNumber } from "@/features/planning/board/model/week"
@@ -42,8 +43,29 @@ export function PublicationView({ initialStore }: { readonly initialStore: Store
   const [published, setPublished] = useState<readonly PlanningSummary[] | null>(null)
   const [record, setRecord] = useState<PlanningRecord | null>(null)
   const [error, setError] = useState<string | null>(null)
+  /**
+   * Les fériés que la feuille doit dire.
+   *
+   * Lus dans un état plutôt qu'au rendu : la source est devenue la base. Sans
+   * cette conversion, la valeur passée au calcul était une PROMESSE — et
+   * TypeScript ne pouvait pas s'en apercevoir, `StoredHolidays` étant indexé par
+   * des dates dont une promesse ne porte évidemment aucune. Le type était
+   * satisfait par le vide, et le mur aurait présenté chaque férié comme un jour
+   * ordinaire.
+   */
+  const [storedHolidays, setStoredHolidays] = useState<StoredHolidays>({})
 
   // La liste des semaines publiées, la plus récente en premier.
+  useEffect(() => {
+    let active = true
+    void holidayStore.read().then((stored) => {
+      if (active) setStoredHolidays(stored)
+    })
+    return () => {
+      active = false
+    }
+  }, [])
+
   useEffect(() => {
     let active = true
     void planningStore
@@ -104,9 +126,7 @@ export function PublicationView({ initialStore }: { readonly initialStore: Store
     // Les fériés voyagent avec la feuille : ce que la grille dit d'une journée
     // fériée, le mur doit le dire aussi, avec les mêmes mots.
     const period = { start: record.state.planning.periodStart, end: record.state.planning.periodEnd }
-    const stored =
-      typeof window === "undefined" ? {} : createHolidayRepository(window.localStorage).read()
-    const holidays = holidayPlanForPeriod(period, stored, (date) => {
+    const holidays = holidayPlanForPeriod(period, storedHolidays, (date) => {
       const day = initialStore?.openingHours.find((hours) => hours.day === weekDayOf(date))
       return day && !day.closed && day.opensAt && day.closesAt
         ? { opensAt: day.opensAt, closesAt: day.closesAt }
@@ -141,7 +161,7 @@ export function PublicationView({ initialStore }: { readonly initialStore: Store
             ),
           }
     )
-  }, [record, setup.sectors, initialStore, employees])
+  }, [record, setup.sectors, initialStore, employees, storedHolidays])
 
   return (
     <div className="space-y-6">
