@@ -198,6 +198,13 @@ describe("rééquilibrage — sur un planning où il agit vraiment", () => {
       // beaucoup fermé ferment MOINS que lorsque l'historique est ignoré.
       expect(withHistory.heavy).toBeLessThan(without.heavy)
 
+      // Et pas « un peu moins » : les deux plus chargés doivent s'effacer
+      // devant les trois autres. C'est ce que le critère de décision décide.
+      // Tant qu'il regardait l'ÉCART (max moins min), deux salariés à égalité
+      // au sommet le paralysaient : alléger l'un ne changeait pas le maximum,
+      // donc pas l'écart, et l'échange était rejeté malgré son bienfait.
+      expect(withHistory.heavy).toBeLessThanOrEqual(1)
+
       // Et cela sans rien casser : le planning reste légal et chaque contrat
       // est servi à la minute près.
       expect(withHistory.report.validHardConstraints).toBe(true)

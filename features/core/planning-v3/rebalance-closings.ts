@@ -104,7 +104,46 @@ function closingsByEmployee(
 }
 
 /**
- * L'écart d'équité de cette semaine, en pour mille.
+ * Le coût d'iniquité : la somme des carrés des charges, en pour mille.
+ *
+ * L'ÉCART (max moins min) semblait la mesure naturelle — c'est celle que le
+ * rapport affiche — mais il fait un très mauvais critère de décision. Avec deux
+ * salariés à égalité au sommet, alléger l'un des deux ne change pas le maximum,
+ * donc pas l'écart : l'échange était rejeté alors qu'il rapprochait tout le
+ * monde. Sur une équipe où deux personnes partagent la charge la plus lourde et
+ * une autre la plus légère, PRESQUE TOUS les progrès étaient ainsi refusés.
+ *
+ * La somme des carrés n'a pas ce défaut : déplacer une fermeture de quelqu'un
+ * de plus chargé vers quelqu'un de plus léger la fait toujours baisser, où que
+ * ces deux-là se situent dans le classement. Elle est minimale quand les
+ * charges sont égales, ce qui est exactement la définition de l'équité voulue.
+ *
+ * En pour mille entiers, donc en entiers : la décision ne doit pas dépendre
+ * d'un arrondi flottant.
+ */
+function unfairnessOf(
+  problem: PlanningProblemV3,
+  assignments: readonly PlanningAssignmentV3[],
+  opportunities: Readonly<Record<string, number>>,
+  closerIds: readonly EmployeeId[]
+): number {
+  const loads = loadsAfterWeek(
+    problem.closingHistory ?? [],
+    closingsByEmployee(problem, assignments),
+    opportunities,
+    closerIds
+  )
+  return loads
+    .filter((load) => load.opportunities > 0)
+    .reduce((sum, load) => {
+      const permille = Math.round((load.closings * 1000) / load.opportunities)
+      return sum + permille * permille
+    }, 0)
+}
+
+/**
+ * L'écart d'équité de cette semaine, en pour mille. RAPPORTÉ, jamais utilisé
+ * pour décider — voir `unfairnessOf` pour pourquoi il ne peut pas trancher.
  *
  * Le dénominateur ne dépend PAS de qui ferme — un échange ne change ni les
  * disponibilités ni les contrats — donc il est calculé une fois et réutilisé.
@@ -236,6 +275,7 @@ export function rebalanceClosings(
   }
 
   const before = spreadOf(problem, solution.assignments, opportunities, closerIds)
+  let cost = unfairnessOf(problem, solution.assignments, opportunities, closerIds)
 
   // Un planning déjà en faute ne se rééquilibre pas : on ne bâtit rien sur une
   // base invalide, et le gérant a d'abord une violation à lire.
@@ -247,7 +287,7 @@ export function rebalanceClosings(
   const swaps: ClosingSwap[] = []
 
   for (let pass = 0; pass < MAX_PASSES; pass += 1) {
-    let improvement: { solution: PlanningSolutionV3; swap: ClosingSwap; spread: number } | null = null
+    let improvement: { solution: PlanningSolutionV3; swap: ClosingSwap; cost: number } | null = null
 
     const openDays = problem.days.filter((day) => !day.closed && day.closesAtMinutes !== null)
     // Au-delà de deux semaines, on renonce à l'exploration exhaustive : elle
@@ -273,8 +313,8 @@ export function rebalanceClosings(
         for (const subset of balancedSubsets(deltas, anchor, exhaustive)) {
           const dates = subset.map((index) => openDays[index].date)
           const candidate = exchanged(current, dates, closer.employeeId, partner.id)
-          const candidateSpread = spreadOf(problem, candidate.assignments, opportunities, closerIds)
-          if (candidateSpread >= spread) continue
+          const candidateCost = unfairnessOf(problem, candidate.assignments, opportunities, closerIds)
+          if (candidateCost >= cost) continue
 
           // Le validateur tranche. Un échange qui introduirait la moindre
           // violation, ou qui coûterait une seule minute de couverture, est
@@ -285,11 +325,11 @@ export function rebalanceClosings(
           if (report.metrics.totalDeficitMinutes > baseline.metrics.totalDeficitMinutes) continue
           if (report.degradations.length > baseline.degradations.length) continue
 
-          if (improvement === null || candidateSpread < improvement.spread) {
+          if (improvement === null || candidateCost < improvement.cost) {
             improvement = {
               solution: candidate,
               swap: { date: day.date, from: closer.employeeId, to: partner.id },
-              spread: candidateSpread,
+              cost: candidateCost,
             }
           }
           break
@@ -299,7 +339,8 @@ export function rebalanceClosings(
 
     if (improvement === null) break
     current = improvement.solution
-    spread = improvement.spread
+    cost = improvement.cost
+    spread = spreadOf(problem, current.assignments, opportunities, closerIds)
     swaps.push(improvement.swap)
   }
 
