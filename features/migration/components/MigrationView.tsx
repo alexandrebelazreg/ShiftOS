@@ -7,7 +7,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { PageHeader } from "@/components/layout/page-header"
 import { createSupabaseBrowserClient } from "@/features/auth/supabase/browser"
 import { importSnapshot, type ImportStep } from "@/features/migration/import"
-import { importStoreFromCookie } from "@/features/migration/store-action"
+import { hasStoreInCookie, importStoreFromCookie } from "@/features/migration/store-action"
 import {
   isEmpty,
   readLocalSnapshot,
@@ -42,7 +42,12 @@ export function MigrationView() {
     queueMicrotask(() => {
       const found = readLocalSnapshot(window.localStorage)
       setSnapshot(found)
-      setCounts(summarize(found))
+      // Le magasin se demande au serveur : il vit dans un cookie que cette page
+      // ne peut pas lire. Sans cette question, le relevé taisait la seule
+      // famille dont l'absence bloque tout.
+      void hasStoreInCookie().then((present) =>
+        setCounts([{ label: "Magasin", count: present ? 1 : 0 }, ...summarize(found)])
+      )
     })
   }, [])
 

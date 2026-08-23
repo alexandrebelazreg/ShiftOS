@@ -39,3 +39,15 @@ export async function importStoreFromCookie(): Promise<{ imported: boolean; reas
 
   return { imported: true }
 }
+
+/**
+ * Y a-t-il un magasin à reprendre sur ce poste ?
+ *
+ * Le relevé montrait huit familles et taisait la neuvième, parce que celle-ci
+ * vit dans un cookie `httpOnly` que la page ne peut pas lire. On ne voyait donc
+ * « Magasin » qu'APRÈS avoir cliqué — et en cas d'absence, on découvrait après
+ * coup que la seule chose qui manquait n'avait jamais été là.
+ */
+export async function hasStoreInCookie(): Promise<boolean> {
+  return (await cookieStoreRepository.getStore()) !== null
+}
