@@ -425,33 +425,69 @@ export function validatePlanningSolutionV3(
     const closers = problem.employees.filter((employee) => employee.canClose)
     const closerIds = closers.map((employee) => employee.id)
 
+    // Qui a fermé, quel jour. Calculé une fois et servant à deux comptes : les
+    // fermetures du samedi, et la dépense du plafond hebdomadaire.
+    const closedOn = new Set<string>()
+    for (const [key, segments] of worked) {
+      if (segments.length === 0) continue
+      const [, date] = splitKey(key)
+      const day = dayByDate.get(date)
+      if (!day || day.closesAtMinutes === null) continue
+      if (segments[segments.length - 1].endMinutes === day.closesAtMinutes) closedOn.add(key)
+    }
+
     /** Saturday closings this week, per employee. */
     const addedSaturdayClosings: Record<string, number> = {}
-    for (const [key, segments] of worked) {
+    for (const key of closedOn) {
       const [employeeId, date] = splitKey(key)
-      if (!saturdays.has(date as IsoDate) || segments.length === 0) continue
-      const day = problem.days.find((entry) => entry.date === date)
-      const last = segments[segments.length - 1]
-      if (day?.closesAtMinutes !== null && day?.closesAtMinutes === last.endMinutes) {
+      if (saturdays.has(date as IsoDate)) {
         addedSaturdayClosings[employeeId] = (addedSaturdayClosings[employeeId] ?? 0) + 1
       }
     }
 
     // Every open day someone was available for is an opportunity they had this
-    // week, exactly as the history counts past ones.
+    // week, exactly as the history counts past ones — LE PLAFOND HEBDOMADAIRE
+    // COMPRIS, qui se dépense au fil de la semaine.
+    //
+    // Il était ignoré ici alors que l'historique l'applique, si bien que la même
+    // semaine se comptait de deux façons : le rapport annonçait une charge, puis
+    // la semaine d'après — celle-ci devenue de l'historique — en affichait une
+    // autre sans que rien n'ait bougé. Chez quelqu'un plafonné à une fermeture,
+    // l'écart dépasse cent pour mille, et il porte toujours dans le même sens :
+    // la charge affichée est trop BASSE, donc la personne paraît devoir des
+    // fermetures qu'elle n'a jamais eu le droit de prendre.
+    //
+    // Les jours sont donc parcourus DANS L'ORDRE, et le plafond se réinitialise
+    // à chaque semaine, comme l'historique le fait à chaque enregistrement.
     const addedOpportunities: Record<string, number> = {}
     const addedSaturdayOpportunities: Record<string, number> = {}
+    const spentThisWeek: Record<string, number> = {}
+    const employeeDaysByDate = new Map<string, (typeof problem.employeeDays)[number][]>()
     for (const entry of problem.employeeDays) {
-      if (!entry.available) continue
-      const employee = employeeById.get(String(entry.employeeId))
-      if (!employee?.canClose) continue
-      const day = problem.days.find((item) => item.date === entry.date)
-      if (!day || day.closed) continue
-      if (day.closesAtMinutes !== null && entry.latestEndMinutes < day.closesAtMinutes) continue
-      addedOpportunities[String(entry.employeeId)] = (addedOpportunities[String(entry.employeeId)] ?? 0) + 1
-      if (day.weekDay === "saturday") {
-        addedSaturdayOpportunities[String(entry.employeeId)] =
-          (addedSaturdayOpportunities[String(entry.employeeId)] ?? 0) + 1
+      const list = employeeDaysByDate.get(entry.date) ?? []
+      list.push(entry)
+      employeeDaysByDate.set(entry.date, list)
+    }
+    for (const day of [...problem.days].sort((left, right) => left.date.localeCompare(right.date))) {
+      if (day.closed) continue
+      for (const entry of employeeDaysByDate.get(day.date) ?? []) {
+        if (!entry.available) continue
+        const id = String(entry.employeeId)
+        const employee = employeeById.get(id)
+        if (!employee?.canClose) continue
+        if (day.closesAtMinutes !== null && entry.latestEndMinutes < day.closesAtMinutes) continue
+        const spentKey = `${id}|${day.weekKey}`
+        if (employee.maximumClosings !== null && (spentThisWeek[spentKey] ?? 0) >= employee.maximumClosings) {
+          continue
+        }
+
+        addedOpportunities[id] = (addedOpportunities[id] ?? 0) + 1
+        if (day.weekDay === "saturday") {
+          addedSaturdayOpportunities[id] = (addedSaturdayOpportunities[id] ?? 0) + 1
+        }
+        if (closedOn.has(`${id}|${day.date}`)) {
+          spentThisWeek[spentKey] = (spentThisWeek[spentKey] ?? 0) + 1
+        }
       }
     }
 

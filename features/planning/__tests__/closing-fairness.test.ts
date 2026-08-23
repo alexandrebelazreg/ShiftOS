@@ -399,6 +399,47 @@ describe("validateur — rapporte, ne juge pas", () => {
     expect(messages).toContain("après")
   })
 
+  it("dépense le plafond hebdomadaire, exactement comme l'historique", () => {
+    // Le comptage des occasions de la semaine en cours ignorait le plafond,
+    // alors que l'historique l'applique : la même semaine se comptait donc de
+    // deux façons, et la charge affichée changeait toute seule une fois la
+    // semaine passée dans l'historique. L'écart va dans un seul sens — la
+    // charge paraît trop BASSE, donc la personne semble devoir des fermetures
+    // qu'elle n'avait pas le droit de prendre.
+    const problem = problemWith({ balanceClosings: true, balanceSaturdayClosings: false })
+    const report = validatePlanningSolutionV3(problem, referenceSolution(fingerprintProblem(problem)))
+    const lineFor = (name: string, from: typeof report) =>
+      from.informations.find((entry) => entry.message.startsWith(name))!.message
+
+    // dylan est plafonné à deux fermetures et prend les deux : les jours
+    // suivants cessent d'être des occasions, donc sa charge est pleine.
+    expect(lineFor("dylan", report)).toContain("charge finale 1000 ‰")
+
+    // Sans plafond, les mêmes deux fermetures se rapportent à toute la semaine.
+    const uncapped = {
+      ...problem,
+      employees: problem.employees.map((employee) => ({ ...employee, maximumClosings: null })),
+    } as typeof problem
+    const without = validatePlanningSolutionV3(uncapped, referenceSolution(fingerprintProblem(uncapped)))
+    expect(lineFor("dylan", without)).not.toContain("charge finale 1000 ‰")
+  })
+
+  it("ne compte pas d'occasion tant que le plafond n'est pas entamé", () => {
+    // Le plafond ne retire RIEN à qui n'a pas encore fermé : c'est ce qui évite
+    // de punir quelqu'un pour une limite qu'il n'a pas utilisée. Un salarié
+    // plafonné mais sans fermeture cette semaine garde toutes ses occasions.
+    const problem = problemWith({ balanceClosings: true, balanceSaturdayClosings: false })
+    const idle = {
+      ...problem,
+      employees: problem.employees.map((employee) => ({ ...employee, maximumClosings: 1 })),
+    } as typeof problem
+    const report = validatePlanningSolutionV3(idle, referenceSolution(fingerprintProblem(idle)))
+    const bruno = report.informations.find((entry) => entry.message.startsWith("bruno"))!.message
+    // bruno ferme une fois, dans les limites de son plafond : sa charge reste
+    // celle d'une semaine entière d'occasions, pas celle d'un jour.
+    expect(bruno).toContain("charge finale 167 ‰")
+  })
+
   it("ne rapporte rien du tout quand l'équité est éteinte", () => {
     const problem = problemWith({ balanceClosings: false, balanceSaturdayClosings: false })
     const report = validatePlanningSolutionV3(problem, referenceSolution(fingerprintProblem(problem)))
