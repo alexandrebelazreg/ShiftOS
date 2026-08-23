@@ -5,7 +5,8 @@ import { fileURLToPath } from "node:url"
 import { describe, expect, it } from "vitest"
 
 import { employeeSchema } from "@/features/employees/schemas/employee.schema"
-import { employeeService } from "@/features/employees/services/employee.service"
+import { memoryStore } from "@/features/core/shared/key-value-store"
+import { createEmployeeRepository } from "@/features/employees/persistence/employee.repository"
 import type { EmployeeRecord } from "@/features/employees/types/employee.types"
 import {
   ADVANCED_CONSTRAINTS_DEFAULTS,
@@ -33,6 +34,16 @@ function formValues(overrides: Record<string, unknown> = {}) {
     ...overrides,
   }
 }
+
+/**
+ * Le stockage est DIT, au lieu d'être subi.
+ *
+ * Ces tests s'appuyaient sans le savoir sur un tableau de module : sans
+ * `window`, l'ancien service n'écrivait nulle part et relisait sa propre
+ * mémoire. Un stockage en mémoire explicite dit la même chose, mais le dit —
+ * et il repart vide à chaque fichier au lieu de traîner d'un test à l'autre.
+ */
+const employeeService = createEmployeeRepository(memoryStore())
 
 describe("contraintes avancées — la section", () => {
   it("est fermée par défaut", () => {

@@ -1,12 +1,35 @@
 import { describe, expect, it } from "vitest"
 
-import { employeeService, normalizeContract } from "@/features/employees/services/employee.service"
+import { memoryStore } from "@/features/core/shared/key-value-store"
+import { createEmployeeRepository } from "@/features/employees/persistence/employee.repository"
+import { normalizeContract } from "@/features/employees/services/employee.service"
 import { employeeToFormValues } from "@/features/employees/utils/employee.mappers"
+
+/**
+ * Le stockage est DIT, au lieu d'être subi.
+ *
+ * Ces tests s'appuyaient sans le savoir sur un tableau de module : sans
+ * `window`, l'ancien service n'écrivait nulle part et relisait sa propre
+ * mémoire. Un stockage en mémoire explicite dit la même chose, mais le dit —
+ * et il repart vide à chaque fichier au lieu de traîner d'un test à l'autre.
+ */
+const employeeService = createEmployeeRepository(memoryStore())
 
 describe("profil employé", () => {
   it("crée puis met à jour le profil utilisé par la page dédiée", async () => {
     const created = await employeeService.create({ firstName: "Lina", lastName: "Durand", phone: "", email: "", status: "active", weeklyHours: 24, contractType: "part_time", sectors: ["Caisse"], competencies: { Caisse: ["Encaissement"] }, canOpen: true, canClose: false, splitShiftAllowed: false, fixedDaysOff: ["sunday"], forbiddenDays: [], maxOpenings: null, maxClosings: 0, preferOpening: false, preferClosing: true, notes: "" })
-    const updated = await employeeService.update(created.id, { ...created, sectors: ["Caisse", "Accueil"], competencies: { Caisse: ["Encaissement"], Accueil: ["Accueil client"] }, weeklyHours: 28 })
+    // `weeklyMinutes` est RETIRÉ du brouillon, et c'est le sujet du test.
+    //
+    // Étaler la fiche puis ne changer que `weeklyHours` produit un brouillon qui
+    // se contredit : 28 heures annoncées, 1 440 minutes héritées. Les minutes
+    // font foi, donc la fiche resterait à 24 h — silencieusement.
+    //
+    // Le formulaire ne produit jamais cela : le schéma calcule les deux ensemble
+    // (`weeklyMinutes` puis `weeklyHours = weeklyMinutes / 60`). Le test dit donc
+    // « je change la durée » comme l'écran le dit, en laissant les minutes se
+    // déduire des heures.
+    const base = { ...created, weeklyMinutes: undefined }
+    const updated = await employeeService.update(created.id, { ...base, sectors: ["Caisse", "Accueil"], competencies: { Caisse: ["Encaissement"], Accueil: ["Accueil client"] }, weeklyHours: 28 })
     expect(updated.sectors).toEqual(["Caisse", "Accueil"])
     expect(updated.competencies).toEqual({ Caisse: ["Encaissement"], Accueil: ["Accueil client"] })
     expect(updated.workingDays).not.toContain("sunday")
