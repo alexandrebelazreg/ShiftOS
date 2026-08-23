@@ -18,7 +18,7 @@ import type { IsoDate } from "@/features/core/models"
 import { employeeService } from "@/features/employees/services/employee.service"
 import type { EmployeeRecord } from "@/features/employees/types/employee.types"
 import { validatedPaidLeaveAbsences } from "@/features/paid-leave/dashboard/validated-paid-leave"
-import { createPaidLeaveRepository } from "@/features/paid-leave/persistence/paid-leave-repository"
+import { paidLeaveStore } from "@/features/paid-leave/persistence/paid-leave.store"
 import { cn } from "@/lib/utils"
 
 export function TeamAbsenceSummary({ today }: { readonly today: IsoDate }) {
@@ -33,12 +33,10 @@ export function TeamAbsenceSummary({ today }: { readonly today: IsoDate }) {
 
   useEffect(() => {
     let active = true
-    void Promise.all([employeeService.list(), absenceService.list()])
-      .then(([employeeList, absenceList]) => {
+    void Promise.all([employeeService.list(), absenceService.list(), paidLeaveStore.list()])
+      .then(([employeeList, absenceList, campaigns]) => {
         if (!active) return
-        const validatedPaidLeave = validatedPaidLeaveAbsences(
-          createPaidLeaveRepository(window.localStorage).list()
-        )
+        const validatedPaidLeave = validatedPaidLeaveAbsences(campaigns)
         setEmployees(employeeList)
         setAbsences([
           ...absenceList.filter((absence) => absence.type !== "paid_leave"),

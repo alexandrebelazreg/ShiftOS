@@ -119,7 +119,7 @@ describe("pourcentages — une modification rééquilibre le reste", () => {
 })
 
 describe("pourcentages — ils survivent à l'enregistrement", () => {
-  it("persiste la part et son verrouillage", () => {
+  it("persiste la part et son verrouillage", async () => {
     // Sans cela la forme de la journée serait perdue au rechargement, et le
     // chiffre existerait le temps d'une session — donc ne servirait à rien pour
     // absorber une absence la semaine suivante.
@@ -137,9 +137,9 @@ describe("pourcentages — ils survivent à l'enregistrement", () => {
       getItem: () => stored,
       setItem: (_key, next) => { stored = next },
     })
-    repository.save([sector])
+    await repository.save([sector])
 
-    const reloaded = repository.list()[0].coverage.profiles.monday!
+    const reloaded = (await repository.list())[0].coverage.profiles.monday!
     expect(reloaded[0].percent).toBe(70)
     expect(reloaded[0].percentLocked).toBe(true)
     expect(coveragePercentages(reloaded).reduce((total, value) => total + value, 0)).toBe(100)

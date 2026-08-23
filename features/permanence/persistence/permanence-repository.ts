@@ -17,11 +17,11 @@ import {
 const KEY_PREFIX = "shiftos_permanence_"
 
 export interface PermanenceRepository {
-  get(year: number, month: number): PermanenceMonth | null
+  get(year: number, month: number): Promise<PermanenceMonth | null>
   /** Les douze mois d'une année, ceux qui existent seulement. */
-  year(year: number): readonly PermanenceMonth[]
-  save(month: PermanenceMonth): void
-  remove(year: number, month: number): void
+  year(year: number): Promise<readonly PermanenceMonth[]>
+  save(month: PermanenceMonth): Promise<void>
+  remove(year: number, month: number): Promise<void>
 }
 
 export function createPermanenceRepository(
@@ -41,16 +41,18 @@ export function createPermanenceRepository(
   }
 
   return {
-    get,
-    year(year) {
+    async get(year, month) {
+      return get(year, month)
+    },
+    async year(year) {
       return Array.from({ length: 12 }, (_, index) => get(year, index + 1)).filter(
         (month): month is PermanenceMonth => month !== null
       )
     },
-    save(month) {
+    async save(month) {
       storage.setItem(`${KEY_PREFIX}${month.id}`, JSON.stringify(month))
     },
-    remove(year, month) {
+    async remove(year, month) {
       storage.removeItem(`${KEY_PREFIX}${permanenceMonthId(year, month)}`)
     },
   }

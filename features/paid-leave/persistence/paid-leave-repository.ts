@@ -5,12 +5,12 @@ const ACTIVE_KEY = "shiftos_paid_leave_active_campaign"
 const KEY_PREFIX = "shiftos_paid_leave_campaign_"
 
 export interface PaidLeaveRepository {
-  list(): PaidLeaveCampaign[]
-  get(id: string): PaidLeaveCampaign | null
-  save(campaign: PaidLeaveCampaign): void
-  remove(id: string): void
-  activeId(): string | null
-  setActiveId(id: string): void
+  list(): Promise<PaidLeaveCampaign[]>
+  get(id: string): Promise<PaidLeaveCampaign | null>
+  save(campaign: PaidLeaveCampaign): Promise<void>
+  remove(id: string): Promise<void>
+  activeId(): Promise<string | null>
+  setActiveId(id: string): Promise<void>
 }
 
 export function createPaidLeaveRepository(
@@ -37,7 +37,7 @@ export function createPaidLeaveRepository(
   }
 
   return {
-    list() {
+    async list() {
       return readIndex()
         .flatMap((id) => {
           const campaign = get(id)
@@ -45,23 +45,25 @@ export function createPaidLeaveRepository(
         })
         .sort((left, right) => right.updatedAt.localeCompare(left.updatedAt))
     },
-    get,
-    save(campaign) {
+    async get(id) {
+      return get(id)
+    },
+    async save(campaign) {
       storage.setItem(`${KEY_PREFIX}${campaign.id}`, JSON.stringify(campaign))
       const index = readIndex()
       if (!index.includes(campaign.id)) {
         storage.setItem(INDEX_KEY, JSON.stringify([campaign.id, ...index]))
       }
     },
-    remove(id) {
+    async remove(id) {
       storage.removeItem(`${KEY_PREFIX}${id}`)
       storage.setItem(INDEX_KEY, JSON.stringify(readIndex().filter((entry) => entry !== id)))
       if (storage.getItem(ACTIVE_KEY) === id) storage.removeItem(ACTIVE_KEY)
     },
-    activeId() {
+    async activeId() {
       return storage.getItem(ACTIVE_KEY)
     },
-    setActiveId(id) {
+    async setActiveId(id) {
       storage.setItem(ACTIVE_KEY, id)
     },
   }

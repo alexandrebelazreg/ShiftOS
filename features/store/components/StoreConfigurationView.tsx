@@ -40,7 +40,7 @@ export function StoreConfigurationView({ store }: { readonly store: StoreConfig 
 
   useEffect(() => {
     queueMicrotask(() => {
-      setSectors(createSetupRepository(window.localStorage).listSectors())
+      void createSetupRepository().listSectors().then(setSectors)
     })
   }, [])
 

@@ -68,7 +68,8 @@ import type {
   PaidLeaveRequest,
   PaidLeaveWeekId,
 } from "@/features/paid-leave/models/paid-leave-campaign"
-import { createPaidLeaveRepository } from "@/features/paid-leave/persistence/paid-leave-repository"
+import { paidLeaveStore } from "@/features/paid-leave/persistence/paid-leave.store"
+import { sectorStore } from "@/features/sectors/sector.store"
 import { applyOptimalPaidLeaveSolution } from "@/features/paid-leave/solver/apply-solution"
 import {
   buildPaidLeaveSolveRequest,
@@ -76,7 +77,6 @@ import {
   solvePaidLeaveCampaign,
 } from "@/features/paid-leave/solver/paid-leave-solver-contract"
 import {
-  createSectorRepository,
   type SectorDemandConfiguration,
 } from "@/features/sectors"
 import type { StoreConfig } from "@/features/store/schemas/store.schema"
@@ -101,14 +101,16 @@ export function PaidLeavePlanningView({ initialStore }: { readonly initialStore:
     async function load() {
       const loadedEmployees = await employeeService.list()
       if (!active) return
-      const loadedSectors = createSectorRepository(window.localStorage).list()
-      const repository = createPaidLeaveRepository(window.localStorage)
-      const stored = repository.list()
+      const loadedSectors = await sectorStore.list()
+      const stored = await paidLeaveStore.list()
       const synchronized = stored.map((campaign) =>
         synchronizePaidLeaveCampaign(campaign, loadedEmployees, loadedSectors, stored)
       )
-      synchronized.forEach((campaign) => repository.save(campaign))
-      const requestedId = repository.activeId()
+      // Séquentiel et attendu : ces écritures rectifient les campagnes après un
+      // changement d'équipe ou de secteurs. Les lancer sans les attendre
+      // laisserait l'écran s'afficher sur un état que la base n'a pas encore.
+      for (const campaign of synchronized) await paidLeaveStore.save(campaign)
+      const requestedId = await paidLeaveStore.activeId()
       setEmployees(loadedEmployees)
       setSectors(loadedSectors)
       setCampaigns(synchronized)
@@ -146,7 +148,7 @@ export function PaidLeavePlanningView({ initialStore }: { readonly initialStore:
   )
 
   const saveCampaign = (next: PaidLeaveCampaign) => {
-    createPaidLeaveRepository(window.localStorage).save(next)
+    void paidLeaveStore.save(next)
     setCampaigns((current) =>
       [next, ...current.filter((item) => item.id !== next.id)]
         .sort((left, right) => right.updatedAt.localeCompare(left.updatedAt))
@@ -170,12 +172,12 @@ export function PaidLeavePlanningView({ initialStore }: { readonly initialStore:
       now,
     })
     saveCampaign(next)
-    createPaidLeaveRepository(window.localStorage).setActiveId(next.id)
+    void paidLeaveStore.setActiveId(next.id)
     setActiveId(next.id)
   }
 
   const chooseCampaign = (id: string) => {
-    createPaidLeaveRepository(window.localStorage).setActiveId(id)
+    void paidLeaveStore.setActiveId(id)
     setActiveId(id)
     setSolveMessage(null)
   }

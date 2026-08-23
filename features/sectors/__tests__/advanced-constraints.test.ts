@@ -2,9 +2,10 @@ import { readFileSync } from "node:fs"
 import { dirname, join } from "node:path"
 import { fileURLToPath } from "node:url"
 
-import { describe, expect, it } from "vitest"
+import { beforeAll, describe, expect, it } from "vitest"
 
 import { WEEK_DAYS } from "@/features/core/models"
+import type { SectorDemandConfiguration } from "@/features/sectors"
 import {
   createEmptySector,
   createSectorRepository,
@@ -52,7 +53,12 @@ const LEGACY_SECTOR = {
 }
 
 describe("secteur — un ancien enregistrement traverse la migration", () => {
-  const migrated = createSectorRepository(storageWith([LEGACY_SECTOR])).list()[0]
+  // Chargé une fois avant les cas : la lecture est désormais asynchrone, et une
+  // constante de `describe` ne peut plus l'attendre.
+  let migrated: SectorDemandConfiguration
+  beforeAll(async () => {
+    migrated = (await createSectorRepository(storageWith([LEGACY_SECTOR])).list())[0]
+  })
 
   it("se charge sans erreur", () => {
     expect(migrated).toBeDefined()
@@ -91,18 +97,18 @@ describe("secteur — un ancien enregistrement traverse la migration", () => {
     })
   })
 
-  it("ne perd pas les planchers d'un secteur qui en déclarait", () => {
-    const withFloor = createSectorRepository(
+  it("ne perd pas les planchers d'un secteur qui en déclarait", async () => {
+    const withFloor = (await createSectorRepository(
       storageWith([{ ...LEGACY_SECTOR, minimumPresence: [{ id: "p", days: [], from: null, to: null, employees: 1 }] }])
-    ).list()[0]
+    ).list())[0]
     expect(withFloor.minimumPresence).toEqual([{ id: "p", days: [], from: null, to: null, employees: 1 }])
   })
 
-  it("survit à un aller-retour d'enregistrement", () => {
+  it("survit à un aller-retour d'enregistrement", async () => {
     const storage = storageWith([LEGACY_SECTOR])
     const repository = createSectorRepository(storage)
-    repository.save(repository.list())
-    expect(createSectorRepository(storage).list()[0]).toEqual(migrated)
+    await repository.save(await repository.list())
+    expect((await createSectorRepository(storage).list())[0]).toEqual(migrated)
   })
 })
 

@@ -33,14 +33,14 @@ function campaign(id: string): PaidLeaveCampaign {
 }
 
 describe("persistance des campagnes de congés", () => {
-  it("enregistre chaque campagne séparément et mémorise la campagne active", () => {
+  it("enregistre chaque campagne séparément et mémorise la campagne active", async () => {
     const repository = createPaidLeaveRepository(memoryStorage())
-    repository.save(campaign("summer"))
-    repository.save({ ...campaign("winter"), name: "Hiver 2026–2027" })
-    repository.setActiveId("winter")
+    await repository.save(campaign("summer"))
+    await repository.save({ ...campaign("winter"), name: "Hiver 2026–2027" })
+    await repository.setActiveId("winter")
 
-    expect(repository.list().map((item) => item.id)).toEqual(["winter", "summer"])
-    expect(repository.get("summer")?.name).toBe("Été 2026")
-    expect(repository.activeId()).toBe("winter")
+    expect((await repository.list()).map((item) => item.id)).toEqual(["winter", "summer"])
+    expect((await repository.get("summer"))?.name).toBe("Été 2026")
+    expect(await repository.activeId()).toBe("winter")
   })
 })

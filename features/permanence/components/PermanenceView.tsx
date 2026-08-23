@@ -12,7 +12,7 @@ import type { AbsenceRecord } from "@/features/absences/types/absence-record"
 import { useEmployees } from "@/features/employees/hooks/useEmployees"
 import { validatedPaidLeaveAbsences } from "@/features/paid-leave/dashboard/validated-paid-leave"
 import type { PaidLeaveCampaign } from "@/features/paid-leave/models/paid-leave-campaign"
-import { createPaidLeaveRepository } from "@/features/paid-leave/persistence/paid-leave-repository"
+import { paidLeaveStore } from "@/features/paid-leave/persistence/paid-leave.store"
 import { type StoredHolidays } from "@/features/planning/holidays/holiday.repository"
 import { holidayStore } from "@/features/planning/holidays/holiday.store"
 import { defaultHolidaySchedules } from "@/features/planning/holidays/model/holiday-schedule"
@@ -38,7 +38,7 @@ import {
   EMPTY_WEEK_SLOTS,
   type PermanenceMonth,
 } from "@/features/permanence/models/permanence-month"
-import { createPermanenceRepository } from "@/features/permanence/persistence/permanence-repository"
+import { permanenceStore } from "@/features/permanence/persistence/permanence.store"
 import { PermanenceSheet } from "@/features/permanence/publication/PermanenceSheet"
 import { buildPermanenceSheet } from "@/features/permanence/publication/permanence-sheet"
 import {
@@ -72,11 +72,6 @@ export function PermanenceView({ initialStore }: { readonly initialStore: StoreC
   const [campaigns, setCampaigns] = useState<readonly PaidLeaveCampaign[]>([])
   const [sheet, setSheet] = useState<PermanenceMonth | null>(null)
   const [yearSheets, setYearSheets] = useState<readonly PermanenceMonth[]>([])
-
-  const repository = useMemo(
-    () => (typeof window === "undefined" ? null : createPermanenceRepository(window.localStorage)),
-    []
-  )
   useEffect(() => {
     if (typeof window === "undefined") return
     queueMicrotask(() => {
@@ -84,7 +79,7 @@ export function PermanenceView({ initialStore }: { readonly initialStore: StoreC
       // Les congés viennent de leur propre écran : la permanence les LIT, pour
       // remplir sa colonne « CP » et pour ne confier les clés à personne qui
       // soit en vacances cette semaine-là.
-      setCampaigns(createPaidLeaveRepository(window.localStorage).list())
+      void paidLeaveStore.list().then(setCampaigns)
     })
     absenceService.list().then(setAbsences)
   }, [])
@@ -92,12 +87,15 @@ export function PermanenceView({ initialStore }: { readonly initialStore: StoreC
   // Le mois affiché et l'année entière se relisent ensemble : le récapitulatif
   // annuel et le passif du générateur viennent tous deux des mois voisins.
   useEffect(() => {
-    if (!repository) return
-    queueMicrotask(() => {
-      setSheet(repository.get(year, month) ?? emptyPermanenceMonth(year, month, new Date().toISOString()))
-      setYearSheets(repository.year(year))
+        queueMicrotask(() => {
+      void permanenceStore
+        .get(year, month)
+        .then((found) =>
+          setSheet(found ?? emptyPermanenceMonth(year, month, new Date().toISOString()))
+        )
+      void permanenceStore.year(year).then(setYearSheets)
     })
-  }, [repository, year, month])
+  }, [year, month])
 
   const opensOn = useCallback(
     (day: WeekDay): boolean => storeOpensOn(initialStore, day),
@@ -198,14 +196,14 @@ export function PermanenceView({ initialStore }: { readonly initialStore: StoreC
   const write = useCallback(
     (next: PermanenceMonth) => {
       const stamped = { ...next, updatedAt: new Date().toISOString() }
-      repository?.save(stamped)
+      void permanenceStore.save(stamped)
       setSheet(stamped)
       setYearSheets((current) => {
         const others = current.filter((entry) => entry.id !== stamped.id)
         return [...others, stamped].sort((left, right) => left.month - right.month)
       })
     },
-    [repository]
+    []
   )
 
   const generate = () => {

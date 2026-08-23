@@ -6,7 +6,8 @@ import { useEffect, useMemo, useState } from "react"
 import { Archive, ArrowDown, ArrowUp, Plus } from "lucide-react"
 import { WEEK_DAYS, type WeekDay } from "@/features/core/models"
 import type { StoreConfig } from "@/features/store/schemas/store.schema"
-import { applyHoursToEveryDay, buildHourlyProfile, copyCoverageProfile, coveragePercentages, createEmptySector, createSectorRepository, releaseCoveragePercentages, validateSectorDemand, withCoveragePercent, type CoverageSlot, type SectorDemandConfiguration } from "@/features/sectors"
+import { applyHoursToEveryDay, buildHourlyProfile, copyCoverageProfile, coveragePercentages, createEmptySector, releaseCoveragePercentages, validateSectorDemand, withCoveragePercent, type CoverageSlot, type SectorDemandConfiguration } from "@/features/sectors"
+import { sectorStore } from "@/features/sectors/sector.store"
 import { SectorAdvancedConstraints } from "@/features/sectors/SectorAdvancedConstraints"
 import { Empty, Field, Section } from "@/features/sectors/sector-layout"
 import { Button } from "@/components/ui/button"
@@ -19,12 +20,12 @@ const LABELS: Record<WeekDay, string> = { monday: "Lundi", tuesday: "Mardi", wed
 export function SectorConfigurationView({ store }: { store: StoreConfig | null }) {
   const [sectors, setSectors] = useState<SectorDemandConfiguration[]>([]), [selectedId, setSelectedId] = useState<string | null>(null)
   const [saved, setSaved] = useState(false)
-  useEffect(() => { queueMicrotask(() => { const list = createSectorRepository(window.localStorage).list(); setSectors(list); setSelectedId(list[0]?.id ?? null) }) }, [])
+  useEffect(() => { queueMicrotask(() => { void sectorStore.list().then((list) => { setSectors(list); setSelectedId(list[0]?.id ?? null) }) }) }, [])
   const selected = sectors.find((sector) => sector.id === selectedId) ?? null
   const issues = useMemo(() => selected ? validateSectorDemand(selected, store) : [], [selected, store])
   const update = (next: SectorDemandConfiguration) => { setSaved(false); setSectors((current) => current.map((sector) => sector.id === next.id ? next : sector)) }
   const create = () => { const sector = createEmptySector(); setSectors((current) => [...current, sector]); setSelectedId(sector.id); setSaved(false) }
-  const save = () => { if (!selected || issues.length) return; createSectorRepository(window.localStorage).save(sectors); setSaved(true) }
+  const save = () => { if (!selected || issues.length) return; void sectorStore.save(sectors); setSaved(true) }
   return <div className="space-y-6">
     {/* Le sélecteur de secteur est de la NAVIGATION, pas du contenu. En colonne
         de gauche il coûtait un cinquième de la page en permanence pour deux ou

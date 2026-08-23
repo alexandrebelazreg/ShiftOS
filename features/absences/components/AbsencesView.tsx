@@ -11,7 +11,7 @@ import { weekDayOf } from "@/features/core/shared"
 import { useEmployees } from "@/features/employees/hooks/useEmployees"
 import { getFullName } from "@/features/employees/utils/employee.format"
 import { validatedPaidLeaveAbsences } from "@/features/paid-leave/dashboard/validated-paid-leave"
-import { createPaidLeaveRepository } from "@/features/paid-leave/persistence/paid-leave-repository"
+import { paidLeaveStore } from "@/features/paid-leave/persistence/paid-leave.store"
 import { type StoredHolidays } from "@/features/planning/holidays/holiday.repository"
 import { holidayStore } from "@/features/planning/holidays/holiday.store"
 import {
@@ -94,7 +94,7 @@ export function AbsencesView({ initialStore }: { readonly initialStore: StoreCon
       void absenceRulesStore.read().then(setRules)
       // Les congés validés viennent de leur propre écran : cet écran les LIT,
       // pour ne pas annoncer une équipe au complet la semaine du 15 juillet.
-      setCampaignLeave(validatedPaidLeaveAbsences(createPaidLeaveRepository(window.localStorage).list()))
+      void paidLeaveStore.list().then((campaigns) => setCampaignLeave(validatedPaidLeaveAbsences(campaigns)))
       // Les fériés viennent aussi de leur propre écran : sur un férié
       // travaillé, ceux qui ne se sont pas portés volontaires ne viennent pas.
       void holidayStore.read().then(setHolidays)

@@ -14,7 +14,7 @@ import { Button } from "@/components/ui/button"
 export function SecteursTab() {
   const { control } = useFormContext<EmployeeFormValues>()
   const [availableSectors, setAvailableSectors] = useState<readonly SetupSector[]>([])
-  useEffect(() => queueMicrotask(() => setAvailableSectors(createSetupRepository(window.localStorage).listSectors())), [])
+  useEffect(() => queueMicrotask(() => { void createSetupRepository().listSectors().then(setAvailableSectors) }), [])
   return (
     <FormRow label="Secteurs maîtrisés" description="Sélectionnez les secteurs déjà configurés.">
       <Controller

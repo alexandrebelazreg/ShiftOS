@@ -26,7 +26,7 @@ export function FirstRunSetup({ store }: { store: StoreConfig }) {
   const [isPending, startTransition] = useTransition()
 
   useEffect(() => {
-    queueMicrotask(() => setSectors(createSetupRepository(window.localStorage).listSectors()))
+    queueMicrotask(() => { void createSetupRepository().listSectors().then(setSectors) })
   }, [])
 
   const readiness = useMemo(
@@ -44,7 +44,7 @@ export function FirstRunSetup({ store }: { store: StoreConfig }) {
       ...sectors,
       { ...createEmptySector(), name, competencies: skills.split(",").map((skill) => skill.trim()).filter(Boolean).map((skill, order) => ({ id: `competency_${crypto.randomUUID()}`, name: skill, archived: false, order })) },
     ]
-    createSetupRepository(window.localStorage).saveSectors(next)
+    createSetupRepository().saveSectors(next)
     setSectors(next)
     setSectorName("")
     setSkills("")

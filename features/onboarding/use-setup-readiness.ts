@@ -14,7 +14,7 @@ export function useSetupReadiness(store: StoreConfig | null) {
   const [isSetupLoading, setIsSetupLoading] = useState(true)
 
   useEffect(() => {
-    queueMicrotask(() => { setSectors(createSetupRepository(window.localStorage).listSectors()); setIsSetupLoading(false) })
+    queueMicrotask(() => { void createSetupRepository().listSectors().then((list) => { setSectors(list); setIsSetupLoading(false) }) })
   }, [])
 
   const readiness = useMemo(
