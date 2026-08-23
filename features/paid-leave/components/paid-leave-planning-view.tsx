@@ -70,6 +70,7 @@ import type {
 } from "@/features/paid-leave/models/paid-leave-campaign"
 import { paidLeaveStore } from "@/features/paid-leave/persistence/paid-leave.store"
 import { SaveFailureBanner } from "@/components/feedback/save-failure-banner"
+import { ConfirmDialog } from "@/components/ui/confirm-dialog"
 import { useSaveFailure } from "@/components/feedback/use-save-failure"
 import { sectorStore } from "@/features/sectors/sector.store"
 import { applyOptimalPaidLeaveSolution } from "@/features/paid-leave/solver/apply-solution"
@@ -136,6 +137,7 @@ export function PaidLeavePlanningView({ initialStore }: { readonly initialStore:
     return () => window.clearInterval(timer)
   }, [solveStartedAt])
 
+  const [pendingDeletion, setPendingDeletion] = useState(false)
   const campaign = campaigns.find((item) => item.id === activeId) ?? null
   const weeks = useMemo(
     () => campaign ? campaignWeeks(campaign.year, campaign.period) : [],
@@ -177,6 +179,35 @@ export function PaidLeavePlanningView({ initialStore }: { readonly initialStore:
     saveCampaign(next)
     void guard(() => paidLeaveStore.setActiveId(next.id))
     setActiveId(next.id)
+  }
+
+  /**
+   * Supprimer une campagne EN PRÉPARATION.
+   *
+   * Une campagne validée n'est pas un brouillon : c'est un arbitrage déjà rendu,
+   * et la feuille de permanence lit sa colonne « CP » dans les campagnes
+   * validées. L'effacer viderait ces feuilles sans rien dire. Elle se déverrouille
+   * d'abord — le bouton existe déjà — ce qui rend la décision réversible avant
+   * de la détruire.
+   */
+  const deleteCampaign = async () => {
+    if (!campaign || campaign.status === "validated") return
+    const removedId = campaign.id
+    // `guard` rend `undefined` en cas de succès pour un appel sans valeur : on
+    // renvoie donc `true` explicitement, sans quoi la réussite serait lue
+    // comme un échec.
+    const done = await guard(async () => {
+      await paidLeaveStore.remove(removedId)
+      return true
+    })
+    if (!done) return
+
+    const remaining = campaigns.filter((item) => item.id !== removedId)
+    setCampaigns(remaining)
+    const next = remaining[0]?.id ?? null
+    if (next) void guard(() => paidLeaveStore.setActiveId(next))
+    setActiveId(next)
+    setPendingDeletion(false)
   }
 
   const chooseCampaign = (id: string) => {
@@ -254,6 +285,7 @@ export function PaidLeavePlanningView({ initialStore }: { readonly initialStore:
         onYearChange={setCreationYear}
         onKindChange={setCreationKind}
         onCreate={createCampaign}
+        onDelete={campaign ? () => setPendingDeletion(true) : undefined}
       />
 
       {!campaign ? (
@@ -273,6 +305,21 @@ export function PaidLeavePlanningView({ initialStore }: { readonly initialStore:
           onSolve={runSolver}
         />
       )}
+
+      <ConfirmDialog
+        open={pendingDeletion}
+        onOpenChange={setPendingDeletion}
+        title={campaign ? `Supprimer la campagne « ${campaign.name} » ?` : "Supprimer la campagne ?"}
+        description={
+          campaign?.status === "validated"
+            ? "Cette campagne est validée : les semaines de congés ont été arbitrées, et la feuille de permanence lit sa colonne « CP » ici. La supprimer viderait ces feuilles sans le dire. Déverrouillez-la d’abord — la décision redeviendra modifiable."
+            : "Cette action est définitive. Les demandes, les arbitrages et les réglages de cette campagne seront perdus ; les fiches des salariés, elles, ne changent pas."
+        }
+        blockedBy={campaign?.status === "validated" ? ["Campagne validée — déverrouillez-la avant de la supprimer."] : []}
+        blockedTitle="Ce n’est pas possible en l’état :"
+        confirmLabel="Supprimer la campagne"
+        onConfirm={() => void deleteCampaign()}
+      />
     </div>
   )
 }
@@ -286,6 +333,7 @@ function CampaignToolbar({
   onYearChange,
   onKindChange,
   onCreate,
+  onDelete,
 }: {
   readonly campaigns: readonly PaidLeaveCampaign[]
   readonly activeId: string | null
@@ -295,6 +343,8 @@ function CampaignToolbar({
   readonly onYearChange: (year: number) => void
   readonly onKindChange: (kind: PaidLeavePeriodKind) => void
   readonly onCreate: () => void
+  /** Absent quand aucune campagne n'est ouverte : il n'y a rien à supprimer. */
+  readonly onDelete?: () => void
 }) {
   return (
     <Card className="print:hidden">
@@ -320,6 +370,11 @@ function CampaignToolbar({
           <Input type="number" min={2020} max={2100} value={creationYear} onChange={(event) => onYearChange(Number(event.target.value))} />
         </Field>
         <Button onClick={onCreate}><Plus /> Créer</Button>
+        {onDelete ? (
+          <Button variant="ghost" onClick={onDelete} aria-label="Supprimer la campagne ouverte">
+            <Trash2 /> Supprimer
+          </Button>
+        ) : null}
       </CardContent>
     </Card>
   )
