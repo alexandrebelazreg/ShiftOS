@@ -77,3 +77,6 @@ __pycache__/
 # mesures du benchmark Planning V3 décomposé : régénérées à chaque exécution,
 # machine-dépendantes, et déjà résumées dans docs/architecture/PLANNING_V3_DECOMPOSED.md
 /planning-v3-decomposed-benchmark.json
+
+# fichiers de travail du CLI Supabase
+/supabase/.temp/
