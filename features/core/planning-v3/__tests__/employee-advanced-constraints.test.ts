@@ -397,6 +397,8 @@ describe("héritage des plafonds — le zéro traverse toute la chaîne", () => 
   it("conserve le zéro de la fiche jusqu'au problème canonique, secteur permissif compris", () => {
     const sector = smallSector()
     const prepared = preparePlanningGeneration({
+      // Aucune semaine publiée : ces tests ne portent pas sur l'équité.
+      savedPlannings: [],
       store: storeConfig(),
       employees: smallSectorEmployees().map((person) =>
         person.id === "e1" ? { ...person, maxOpenings: 0 } : person
@@ -428,6 +430,8 @@ describe("héritage des plafonds — le zéro traverse toute la chaîne", () => 
 
   it("laisse tout le monde sans plafond quand le secteur n'en déclare aucun", () => {
     const prepared = preparePlanningGeneration({
+      // Aucune semaine publiée : ces tests ne portent pas sur l'équité.
+      savedPlannings: [],
       store: storeConfig(),
       employees: smallSectorEmployees(),
       sectors: [smallSector()],

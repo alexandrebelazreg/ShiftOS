@@ -194,6 +194,8 @@ describe("l'aménagement dans le planning", () => {
 
   function contractsFor(employees: readonly EmployeeRecord[]) {
     const prepared = preparePlanningGeneration({
+      // Aucune semaine publiée : ces tests ne portent pas sur l'équité.
+      savedPlannings: [],
       store: storeConfig(),
       employees,
       sectors: [smallSector()],

@@ -12,6 +12,13 @@ import { fingerprintProblem, validatePlanningSolutionV3 } from "@/features/core/
 import { buildClosingHistory, type ClosingHistoryEntry } from "@/features/planning/closing-history/build-closing-history"
 import type { PlanningRecord, PlanningStatus } from "@/features/planning/persistence/planning-record"
 import { referenceInput, referenceSolution } from "@/features/core/planning-v3/__tests__/reference-scenario"
+import { preparePlanningGeneration } from "@/features/planning/flow/planning-flow"
+import {
+  sectorStoreConfig,
+  smallSector,
+  smallSectorEmployees,
+  SMALL_SECTOR_SCOPE,
+} from "@/features/planning/__tests__/planning-fixtures"
 
 /**
  * Closing fairness, from persisted weeks to the objective vector.
@@ -464,6 +471,77 @@ describe("audit de migration — l'historique publié n'est jamais réécrit", (
     )
     for (const forbidden of ["SectorDemandConfiguration", "SectorShiftRules", "validateSectorDemand", "maximumContinuousDuration", "maximumSplitsPerDay"]) {
       expect(source).not.toContain(forbidden)
+    }
+  })
+})
+
+describe("le joint — l'historique arrive-t-il vraiment jusqu'au problème", () => {
+  /**
+   * Les deux côtés de ce joint étaient testés, le joint ne l'était pas — et il
+   * était cassé. `buildClosingHistory` savait compter, le constructeur savait
+   * embarquer, mais RIEN ne passait les semaines enregistrées au flux : les
+   * tests écrivaient `closingHistory` à la main dans l'entrée du problème.
+   * L'équité paraissait donc réglable et n'avait aucune matière ; tout le monde
+   * ressortait à égalité, quelles que soient les semaines déjà publiées.
+   *
+   * Ce test part de là où part l'application : des enregistrements.
+   */
+  const sector = {
+    ...smallSector(),
+    closingFairness: { balanceClosings: true, balanceSaturdayClosings: false, lookbackWeeks: 8 },
+  }
+
+  // Une semaine publiée AVANT celle qu'on génère, où e1 a tout fermé.
+  const published = week({
+    id: "semaine-passee",
+    status: "published",
+    sectorIds: [sector.id],
+    periodStart: "2026-06-29",
+    periodEnd: "2026-07-05",
+    employees: ["e1", "e2"],
+    closers: {
+      "2026-06-29": "e1",
+      "2026-06-30": "e1",
+      "2026-07-01": "e1",
+      "2026-07-02": "e1",
+      "2026-07-03": "e1",
+    },
+  })
+
+  const prepare = (savedPlannings: readonly PlanningRecord[]) =>
+    preparePlanningGeneration({
+      store: sectorStoreConfig(),
+      employees: smallSectorEmployees(),
+      sectors: [sector],
+      scope: SMALL_SECTOR_SCOPE,
+      savedPlannings,
+    })
+
+  it("porte l'historique jusqu'à l'entrée du problème", () => {
+    const prepared = prepare([published])
+    expect(prepared.status).toBe("ready")
+    if (prepared.status !== "ready") return
+
+    const entries = prepared.generationInput.closingHistory ?? []
+    expect(entries.length, "aucun historique n'a traversé le flux").toBeGreaterThan(0)
+
+    // Le signal lui-même : celui qui a fermé toute la semaine passée doit
+    // ressortir plus chargé que celui qui n'a jamais fermé. Une longueur non
+    // nulle ne suffirait pas — un historique tout à zéro la satisferait aussi.
+    const e1 = entries.find((entry) => String(entry.employeeId) === "e1")!
+    const e2 = entries.find((entry) => String(entry.employeeId) === "e2")!
+    expect(e1.closings).toBeGreaterThan(e2.closings)
+    expect(e1.opportunities).toBeGreaterThan(0)
+  })
+
+  it("laisse tout le monde à égalité quand aucune semaine n'a encore été publiée", () => {
+    // L'ancien comportement, désormais réservé au cas où il est vrai : un
+    // magasin qui démarre n'a pas d'historique, et ce n'est pas une panne.
+    const prepared = prepare([])
+    expect(prepared.status).toBe("ready")
+    if (prepared.status !== "ready") return
+    for (const entry of prepared.generationInput.closingHistory ?? []) {
+      expect(entry.closings).toBe(0)
     }
   })
 })

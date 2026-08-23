@@ -63,6 +63,8 @@ function buildOk(input: PlanningGenerationInput): PlanningProblemV3 {
 /** The whole application chain, from a persisted sector to a canonical problem. */
 function throughTheApplication(sector: SectorDemandConfiguration): PlanningProblemV3 {
   const prepared = preparePlanningGeneration({
+    // Aucune semaine publiée : ces tests ne portent pas sur l'équité.
+    savedPlannings: [],
     store: storeConfig(),
     employees: smallSectorEmployees(),
     sectors: [sector],
@@ -146,6 +148,8 @@ describe("secteur — rétrocompatibilité", () => {
       employee("secondaire-3", { weeklyMinutes: 2_100, sectors: ["Drive", sector.name], workingDays: openDays }),
     ]
     const prepared = preparePlanningGeneration({
+      // Aucune semaine publiée : ces tests ne portent pas sur l'équité.
+      savedPlannings: [],
       store: sectorStoreConfig(),
       employees,
       sectors: [sector],

@@ -47,6 +47,8 @@ export function buildMarketZoneCanonicalProblem(): PlanningProblemV3 {
     }))
   })
   const prepared = preparePlanningGeneration({
+    // Aucune semaine publiée : ces tests ne portent pas sur l'équité.
+    savedPlannings: [],
     store: sectorStoreConfig(),
     employees,
     sectors,

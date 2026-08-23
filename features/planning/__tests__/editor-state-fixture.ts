@@ -40,6 +40,8 @@ export function editorStateFixture(options: {
   readonly shiftMinutes?: number
 }): EditorState {
   const prepared = preparePlanningGeneration({
+    // Aucune semaine publiée : ces tests ne portent pas sur l'équité.
+    savedPlannings: [],
     store: options.store,
     employees: options.employees,
     scope: options.scope,

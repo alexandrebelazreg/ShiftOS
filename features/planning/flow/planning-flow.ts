@@ -57,9 +57,15 @@ export interface PlanningFlowRequest {
    *
    * Passed in rather than fetched: the flow orchestrates, it owns no
    * repository, and a test must be able to state exactly which weeks exist.
-   * Absent means no history — every employee starts level.
+   *
+   * OBLIGATOIRE, et le tableau vide est la façon de dire « aucune semaine ».
+   * Le champ a longtemps été optionnel, et personne ne le remplissait : l'écran
+   * de planning appelait sans lui, l'historique sortait vide, et l'équité des
+   * fermetures se réglait sans jamais rien départager. Rien ne le signalait —
+   * un historique vide est indistinguable d'un magasin qui démarre. L'exiger
+   * force chaque appelant à dire laquelle des deux situations est la sienne.
    */
-  readonly savedPlannings?: readonly PlanningRecord[]
+  readonly savedPlannings: readonly PlanningRecord[]
   /**
    * Les jours fériés de la période, tels que le magasin les a réglés.
    *
@@ -355,7 +361,7 @@ function closingHistoryFor(request: PlanningFlowRequest) {
     const fairness = sector.closingFairness
     if (!fairness.balanceClosings && !fairness.balanceSaturdayClosings) return []
     return buildClosingHistory({
-      records: request.savedPlannings ?? [],
+      records: request.savedPlannings,
       sectorId: sector.id,
       weekStart: request.scope.period.start as IsoDate,
       lookbackWeeks: fairness.lookbackWeeks,

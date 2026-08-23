@@ -438,11 +438,19 @@ export function PlanningView({
       }
     )
 
+    // Les semaines déjà publiées, dont se déduit l'historique des fermetures.
+    // Sans elles, `buildClosingHistory` ne compte rien, tout le monde ressort à
+    // égalité et le classement d'équité ne départage personne : le réglage
+    // paraît actif alors qu'il n'a aucune matière. Relu au moment de générer,
+    // comme les fériés, pour qu'une semaine publiée juste avant compte déjà.
+    const savedPlannings = await planningStore.records()
+
     const prepared = preparePlanningGeneration({
       store: initialStore,
       employees: generationScope.employees,
       sectors: generationScope.sectors,
       scope,
+      savedPlannings,
       holidayPlan,
     })
     if (prepared.status === "error") {

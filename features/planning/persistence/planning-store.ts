@@ -29,6 +29,14 @@ export interface PlanningStore {
   editPublished(id: string): Promise<PlanningRecord>
   reopen(id: string): Promise<PlanningRecord | null>
   list(): Promise<PlanningSummary[]>
+  /**
+   * Les plannings ENTIERS, et non leurs résumés.
+   *
+   * L'équité des fermetures se calcule sur les créneaux eux-mêmes — qui a
+   * fermé, quels jours, et quels jours il aurait pu fermer. Un résumé ne porte
+   * pas les créneaux : c'est pour cela que `list` ne suffit pas ici.
+   */
+  records(): Promise<PlanningRecord[]>
   remove(id: string): Promise<void>
 }
 
@@ -86,6 +94,9 @@ export function createPlanningStore(
     },
     async list() {
       return (await repository.list()).map(toSummary)
+    },
+    async records() {
+      return repository.list()
     },
     async remove(id) {
       await repository.delete(id)
