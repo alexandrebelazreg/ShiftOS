@@ -31,8 +31,26 @@ export function createLocalStoragePlanningRepository(storage: Storage): Planning
 
   return {
     async save(record: PlanningRecord): Promise<void> {
-      storage.setItem(KEY_PREFIX + record.id, serializePlanning(record))
-      writeIndex([...readIndex(), record.id])
+      try {
+        storage.setItem(KEY_PREFIX + record.id, serializePlanning(record))
+        writeIndex([...readIndex(), record.id])
+      } catch (error) {
+        // Le navigateur plafonne son stockage à quelques mégaoctets, et un
+        // planning enregistré en pèse plus de cent kilos. Passé une trentaine
+        // de semaines, `setItem` lève — et l'exception brute (`QuotaExceededError`)
+        // ne dit rien au gérant de ce qu'il doit faire.
+        //
+        // Traduite ici plutôt qu'à l'écran : c'est ce dépôt qui connaît la
+        // cause, et l'écran ne saurait pas la distinguer d'une panne réseau.
+        const full =
+          error instanceof DOMException &&
+          (error.name === "QuotaExceededError" || error.name === "NS_ERROR_DOM_QUOTA_REACHED")
+        throw new Error(
+          full
+            ? "La mémoire de ce navigateur est pleine. Connectez ShiftOS à sa base de données, ou supprimez d’anciens plannings."
+            : `Enregistrement impossible dans ce navigateur : ${error instanceof Error ? error.message : String(error)}`
+        )
+      }
     },
     async get(id: string): Promise<PlanningRecord | null> {
       const raw = storage.getItem(KEY_PREFIX + id)
