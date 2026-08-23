@@ -26,7 +26,15 @@ export async function importStoreFromCookie(): Promise<{ imported: boolean; reas
   const storeId = profile?.store_id as string | undefined
   if (!storeId) return { imported: false, reason: "aucun magasin rattaché à ce compte" }
 
-  const { error } = await supabase.from("stores").update(toStoreRow(store)).eq("id", storeId)
+  const { error } = await supabase
+    .from("stores")
+    // Le parcours d'installation est marqué TERMINÉ du même geste, et ce n'est
+    // pas une commodité : un magasin qu'on reprend est un magasin déjà
+    // configuré — il a des secteurs, une équipe, des plannings passés. Sans
+    // cette marque, la connexion suivante renverrait vers les six étapes de la
+    // première installation, ce qui serait faux et surtout décourageant.
+    .update({ ...toStoreRow(store), first_run_completed_at: new Date().toISOString() })
+    .eq("id", storeId)
   if (error) return { imported: false, reason: error.message }
 
   return { imported: true }

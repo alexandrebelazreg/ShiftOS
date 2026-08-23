@@ -155,6 +155,22 @@ export function MigrationView() {
               </div>
             ) : null}
 
+            {failed.some((step) => step.label === "Magasin") ? (
+              <div className="mt-4 space-y-2 rounded-md border border-warning/40 bg-muted px-3 py-2 text-sm">
+                <p>
+                  <strong>Le magasin n’a pas été trouvé sur ce poste.</strong> Sa configuration
+                  vit dans un cookie, et un cookie ne suit pas d’une adresse à l’autre : celui
+                  qui la porte est le navigateur où vous l’avez saisie.
+                </p>
+                <p className="text-muted-foreground">
+                  Ouvrez cette page depuis ce poste-là — souvent{" "}
+                  <span className="font-mono text-xs">http://localhost:3000/reprise</span>. Si
+                  vous ne le retrouvez pas, la configuration se ressaisit une fois et ira
+                  directement en base.
+                </p>
+              </div>
+            ) : null}
+
             {done && failed.length === 0 ? (
               <p className="mt-4 rounded-md border border-emerald-500/40 bg-emerald-500/10 px-3 py-2 text-sm text-emerald-700 dark:text-emerald-400">
                 Tout est en base. Vos données restent aussi dans ce navigateur : ne l’effacez
