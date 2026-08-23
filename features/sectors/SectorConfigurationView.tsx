@@ -3,7 +3,7 @@
 import { cn } from "@/lib/utils"
 
 import { useEffect, useMemo, useState } from "react"
-import { Archive, ArrowDown, ArrowUp, Plus } from "lucide-react"
+import { Archive, ArrowDown, ArrowUp, Plus, Trash2 } from "lucide-react"
 import { WEEK_DAYS, type WeekDay } from "@/features/core/models"
 import type { StoreConfig } from "@/features/store/schemas/store.schema"
 import { applyHoursToEveryDay, buildHourlyProfile, copyCoverageProfile, coveragePercentages, createEmptySector, releaseCoveragePercentages, validateSectorDemand, withCoveragePercent, type CoverageSlot, type SectorDemandConfiguration } from "@/features/sectors"
@@ -14,6 +14,9 @@ import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
+import { ConfirmDialog } from "@/components/ui/confirm-dialog"
+import { loadSectorCitationSources } from "@/features/employees/citation-sources"
+import { sectorCitationFamilyLabel, sectorDeletionVerdict, type SectorCitation } from "@/features/sectors/deletion"
 
 const LABELS: Record<WeekDay, string> = { monday: "Lundi", tuesday: "Mardi", wednesday: "Mercredi", thursday: "Jeudi", friday: "Vendredi", saturday: "Samedi", sunday: "Dimanche" }
 
@@ -26,6 +29,39 @@ export function SectorConfigurationView({ store }: { store: StoreConfig | null }
   const update = (next: SectorDemandConfiguration) => { setSaved(false); setSectors((current) => current.map((sector) => sector.id === next.id ? next : sector)) }
   const create = () => { const sector = createEmptySector(); setSectors((current) => [...current, sector]); setSelectedId(sector.id); setSaved(false) }
   const save = () => { if (!selected || issues.length) return; void sectorStore.save(sectors); setSaved(true) }
+
+  const [pendingDeletion, setPendingDeletion] = useState<SectorDemandConfiguration | null>(null)
+  const [refusal, setRefusal] = useState<readonly SectorCitation[]>([])
+  const [isDeleting, setIsDeleting] = useState(false)
+
+  /**
+   * Supprimer un secteur, mais seulement s'il ne sert à personne.
+   *
+   * Le dépôt enregistre la LISTE ENTIÈRE : retirer une entrée puis sauver
+   * suffit à l'effacer, sans qu'aucune vérification ne soit imposée nulle part.
+   * C'est pour cela que le verdict est consulté ici, juste avant l'écriture, et
+   * relu au moment du clic — un salarié a pu être rattaché depuis un autre
+   * onglet entre l'avertissement et la confirmation.
+   */
+  async function confirmDeletion() {
+    if (!pendingDeletion) return
+    setIsDeleting(true)
+    try {
+      const verdict = sectorDeletionVerdict(pendingDeletion, await loadSectorCitationSources())
+      if (!verdict.deletable) {
+        setRefusal(verdict.citations)
+        return
+      }
+      const remaining = sectors.filter((sector) => sector.id !== pendingDeletion.id)
+      await sectorStore.save(remaining)
+      setSectors(remaining)
+      setSelectedId(remaining[0]?.id ?? null)
+      setPendingDeletion(null)
+      setSaved(true)
+    } finally {
+      setIsDeleting(false)
+    }
+  }
   return <div className="space-y-6">
     {/* Le sélecteur de secteur est de la NAVIGATION, pas du contenu. En colonne
         de gauche il coûtait un cinquième de la page en permanence pour deux ou
@@ -69,6 +105,16 @@ export function SectorConfigurationView({ store }: { store: StoreConfig | null }
           Zone marché
         </label>
         {selected.marketZone ? <p className="w-full text-xs text-muted-foreground">Ce secteur sera proposé avec les autres secteurs « Zone marché » pour une génération commune.</p> : null}
+        <Button
+          size="sm"
+          variant="ghost"
+          className="ml-auto"
+          onClick={() => { setRefusal([]); setPendingDeletion(selected) }}
+          aria-label={`Supprimer le secteur ${selected.name || "sans nom"}`}
+        >
+          <Trash2 />
+          Supprimer
+        </Button>
         <label className="w-full space-y-1.5 text-sm">
           <span className="text-xs font-medium text-muted-foreground">Description</span>
           <Textarea rows={2} value={selected.description} onChange={(e) => update({ ...selected, description: e.target.value })} />
@@ -159,6 +205,21 @@ export function SectorConfigurationView({ store }: { store: StoreConfig | null }
       {issues.length ? <div role="alert" className="rounded-lg border border-destructive/40 bg-destructive/5 p-4"><p className="font-medium text-destructive">Corrigez ces éléments avant d’enregistrer :</p><ul className="mt-2 list-disc space-y-1 pl-5 text-sm">{issues.map((issue, index) => <li key={`${issue.path}-${index}`}>{issue.message}</li>)}</ul></div> : null}
       <div className="flex items-center justify-end gap-3">{saved ? <span className="text-sm text-emerald-600 dark:text-emerald-400">Configuration enregistrée.</span> : null}<Button size="lg" disabled={issues.length > 0} onClick={save}>Enregistrer le secteur</Button></div>
     </div>}
+
+    <ConfirmDialog
+      open={pendingDeletion !== null}
+      onOpenChange={(open) => { if (!open) { setPendingDeletion(null); setRefusal([]) } }}
+      title={pendingDeletion ? `Supprimer le secteur « ${pendingDeletion.name || "sans nom"} » ?` : "Supprimer le secteur ?"}
+      description={
+        refusal.length > 0
+          ? "Ce secteur sert encore. Le supprimer viderait le rattachement des salariés qui y travaillent — le rattachement se fait par NOM — et rendrait inattribuables les semaines déjà publiées. Décochez plutôt « Secteur actif » : il sortira des générations sans rien effacer."
+          : "Cette action est définitive et ne peut pas être annulée. Elle n’est proposée que parce que rien ne cite encore ce secteur."
+      }
+      blockedBy={refusal.map((citation) => `${sectorCitationFamilyLabel(citation.family)} — ${citation.label}`)}
+      blockedTitle="Ce secteur est cité par :"
+      onConfirm={() => void confirmDeletion()}
+      isPending={isDeleting}
+    />
   </div>
 }
 

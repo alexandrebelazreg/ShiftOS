@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState } from "react"
 
 import type { EmployeeDraft } from "@/features/employees/schemas/employee.schema"
 import { employeeService } from "@/features/employees/services/employee.service"
+import { employeeDeletionVerdict } from "@/features/employees/deletion"
 import type { EmployeeRecord } from "@/features/employees/types/employee.types"
 import type { EmployeeScheduleType } from "@/features/employees/types/employee.types"
 
@@ -60,6 +61,32 @@ export function useEmployees() {
     [refresh]
   )
 
+  /**
+   * Efface la fiche — après vérification, jamais à l'aveugle.
+   *
+   * Le verdict est rendu ICI, et non par l'écran : un appelant distrait qui
+   * oublierait de le consulter emporterait des absences que la cascade SQL
+   * effacerait sans un mot. L'écran s'en sert pour prévenir AVANT de proposer
+   * le geste ; cette seconde lecture est ce qui garantit que l'état n'a pas
+   * changé entre l'avertissement et le clic.
+   */
+  const removeEmployee = useCallback(
+    async (id: string) => {
+      // Chargé au clic, et non à l'import : ce module tire les plannings, les
+      // absences, les permanences et les congés. Les faire entrer dans le
+      // paquet de tous les écrans qui listent l'équipe ferait payer à chacun
+      // d'eux un code que seule la suppression exécute.
+      const { loadEmployeeCitationSources } = await import("@/features/employees/citation-sources")
+      const sources = await loadEmployeeCitationSources()
+      const verdict = employeeDeletionVerdict(id, sources)
+      if (!verdict.deletable) return verdict
+      await employeeService.remove(id)
+      await refresh()
+      return verdict
+    },
+    [refresh]
+  )
+
   const setEmployeeScheduleType = useCallback(
     async (id: string, scheduleType: EmployeeScheduleType) => {
       const updated = await employeeService.setScheduleType(id, scheduleType)
@@ -75,6 +102,7 @@ export function useEmployees() {
     createEmployee,
     updateEmployee,
     disableEmployee,
+    removeEmployee,
     setEmployeeScheduleType,
   }
 }

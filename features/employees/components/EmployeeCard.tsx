@@ -1,6 +1,6 @@
 "use client"
 
-import { CalendarDays, Clock, MapPin, Pencil } from "lucide-react"
+import { CalendarDays, Clock, MapPin, Pencil, Trash2 } from "lucide-react"
 import Link from "next/link"
 
 import { CapabilityBadges } from "@/features/employees/components/CapabilityBadges"
@@ -27,9 +27,12 @@ import { cn } from "@/lib/utils"
 export function EmployeeCard({
   employee,
   onScheduleTypeChange,
+  onDelete,
 }: {
   employee: EmployeeRecord
   onScheduleTypeChange: (value: EmployeeScheduleType) => void | Promise<unknown>
+  /** Absent, la carte ne propose pas la suppression du tout. */
+  onDelete?: () => void
 }) {
   const isInactive = employee.status === "inactive"
   const sectors = employee.sectors ?? []
@@ -98,7 +101,13 @@ export function EmployeeCard({
         />
 
         {/* Action */}
-        <div className="flex justify-end border-t border-border pt-3">
+        <div className="flex justify-end gap-2 border-t border-border pt-3">
+          {onDelete ? (
+            <Button variant="ghost" size="sm" onClick={onDelete} aria-label={`Supprimer la fiche de ${getFullName(employee)}`}>
+              <Trash2 />
+              Supprimer
+            </Button>
+          ) : null}
           <Button variant="outline" size="sm" render={<Link href={`/configuration/employes/${employee.id}`} />}>
             <Pencil />
             Voir le profil

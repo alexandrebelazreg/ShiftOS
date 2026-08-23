@@ -17,9 +17,18 @@ const EMPLOYEES_KEY = "shiftos_employees"
  * base pour la suite. C'était la condition pour que la mise en base ne se
  * heurte pas deux fois à ce module.
  *
- * La suppression n'existe pas, et c'est une règle métier : un salarié se
- * désactive. Retirer sa fiche emporterait l'histoire des plannings qui la
- * citent, et rendrait illisible un planning de l'an dernier.
+ * Un salarié se DÉSACTIVE : retirer sa fiche emporterait l'histoire des
+ * plannings qui la citent, et rendrait illisible un planning de l'an dernier.
+ * C'est pour cela que `disable` est le geste ordinaire, et le seul que
+ * l'écran propose sur une fiche qui a servi.
+ *
+ * `remove` existe pour le seul cas que cette règle punissait injustement : la
+ * fiche créée à l'instant avec une faute de frappe, que rien ne cite encore et
+ * qu'on gardait pourtant à vie. Le dépôt ne juge pas — il exécute. C'est
+ * `employeeDeletionVerdict` qui cherche les citations, et l'appelant qui doit
+ * l'avoir consulté : la base ne peut pas servir de garde-fou, puisque
+ * `absences.employee_id` porte `on delete cascade` et emporterait les absences
+ * sans un mot.
  */
 export interface EmployeeRepository {
   list(): Promise<EmployeeRecord[]>
@@ -27,6 +36,8 @@ export interface EmployeeRepository {
   create(draft: EmployeeDraft): Promise<EmployeeRecord>
   update(id: string, draft: EmployeeDraft): Promise<EmployeeRecord>
   disable(id: string): Promise<EmployeeRecord>
+  /** Efface la fiche. À n'appeler qu'après un verdict de suppression favorable. */
+  remove(id: string): Promise<void>
   setScheduleType(id: string, scheduleType: EmployeeScheduleType): Promise<EmployeeRecord>
 }
 
@@ -128,6 +139,14 @@ export function createEmployeeRepository(
         status: "inactive",
         updatedAt: now(),
       }))
+    },
+
+    async remove(id) {
+      const employees = readAll()
+      if (!employees.some((employee) => employee.id === id)) {
+        throw new Error(`Employee not found: ${id}`)
+      }
+      writeAll(employees.filter((employee) => employee.id !== id))
     },
 
     async setScheduleType(id, scheduleType) {

@@ -37,6 +37,7 @@ export const employeeService: EmployeeRepository = {
   create: (draft) => repository().create(draft),
   update: (id, draft) => repository().update(id, draft),
   disable: (id) => repository().disable(id),
+  remove: (id) => repository().remove(id),
   setScheduleType: (id, scheduleType) => repository().setScheduleType(id, scheduleType),
 }
 

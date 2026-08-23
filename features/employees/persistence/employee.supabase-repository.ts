@@ -182,6 +182,16 @@ export function createSupabaseEmployeeRepository(client: SupabaseClient): Employ
       return toRecord(data as EmployeeRow)
     },
 
+    async remove(id: string) {
+      // La cascade SQL sur `absences` rend cette ligne dangereuse par elle-même :
+      // elle emporterait les absences du salarié sans rien signaler. Le
+      // verdict de suppression doit avoir été rendu AVANT — il l'est côté
+      // application, seule place d'où l'on voit aussi les plannings et les
+      // tours de permanence, rangés en JSON et invisibles à la base.
+      const { error } = await client.from("employees").delete().eq("id", id)
+      if (error) throw new Error(error.message)
+    },
+
     async setScheduleType(id: string, scheduleType: EmployeeScheduleType) {
       const previous = await fetchOne(id)
       const storeId = await requireStoreId(client)
