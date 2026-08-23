@@ -726,7 +726,7 @@ export function PlanningView({
           <CardHeader><CardTitle className="text-base">Configuration requise avant la génération</CardTitle></CardHeader>
           <CardContent>
             <p className="text-sm text-muted-foreground">Complétez les éléments suivants dans le parcours de configuration :</p>
-            <ul className="mt-3 list-disc space-y-1 pl-5 text-sm">{selectionReadiness.blockers.map((blocker) => <li key={blocker}>{blocker}</li>)}</ul>
+            <ul className="mt-3 list-disc space-y-1 pl-5 text-sm">{selectionReadiness.blockers.map((blocker) => <li key={blocker.message}>{blocker.message}</li>)}</ul>
             <div className="mt-4 flex flex-wrap gap-2"><Button variant="outline" render={<Link href="/configuration/secteurs" />}>Configurer les secteurs</Button><Button variant="outline" render={<Link href="/configuration/employes" />}>Affecter les salariés</Button></div>
           </CardContent>
         </Card>

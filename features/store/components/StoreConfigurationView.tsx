@@ -84,7 +84,7 @@ export function StoreConfigurationView({ store }: { readonly store: StoreConfig 
           </CardHeader>
           <CardContent className="space-y-3">
             <ul className="list-disc space-y-1 pl-5 text-sm">
-              {readiness.blockers.map((blocker) => <li key={blocker}>{blocker}</li>)}
+              {readiness.blockers.map((blocker) => <li key={blocker.message}>{blocker.message}</li>)}
             </ul>
             <div className="flex flex-wrap gap-2">
               <Button size="sm" variant="outline" render={<Link href="/configuration/secteurs" />}>
