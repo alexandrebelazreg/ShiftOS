@@ -34,9 +34,25 @@ nulle part qu'ici, et surtout pas dans une conversation.**
 
 ### Depuis un poste où l'outil Supabase est disponible
 
+**Il faut DEUX fichiers, et c'est le piège de cette commande.** Sans
+`--data-only`, `db dump` n'exporte que la structure : on obtient un fichier
+volumineux, d'apparence rassurante, qui restaure des tables vides. Le défaut ne
+se voit qu'à la restauration — c'est-à-dire le jour de l'incident.
+
 ```
-npx supabase db dump --db-url "LA_CHAINE_DE_CONNEXION" -f shiftos-AAAA-MM-JJ.sql
+npx supabase db dump --db-url "LA_CHAINE_DE_CONNEXION" -f shiftos-AAAA-MM-JJ-structure.sql
 ```
+
+```
+npx supabase db dump --data-only --db-url "LA_CHAINE_DE_CONNEXION" -f shiftos-AAAA-MM-JJ-donnees.sql
+```
+
+Utiliser l'onglet **`Direct connection`** de la chaîne, jamais le pooler en mode
+transaction : `pg_dump` a besoin d'une session complète, et le pooler la refuse.
+
+**Contrôle immédiat** : le fichier de données doit contenir des lignes `INSERT`
+ou `COPY` portant des noms qu'on reconnaît. S'il n'en contient aucune, il n'y a
+rien dedans, quelle que soit sa taille.
 
 ### Ou depuis n'importe quelle machine dotée de Docker
 
@@ -55,7 +71,8 @@ côté de ce qu'il protège ne protège de rien.
 
 1. Créer un **second projet Supabase**, en région européenne, nommé
    `shiftos-restauration`.
-2. Y appliquer l'export : `SQL Editor`, coller le contenu du fichier, exécuter.
+2. Y appliquer les deux fichiers, **dans cet ordre** : la structure d'abord,
+   les données ensuite. L'inverse échoue sur des tables qui n'existent pas.
 3. Copier les deux valeurs de connexion de ce projet dans un `.env.local` de
    test, puis `npm run dev`.
 4. Recréer un compte dans ce projet (`Authentication` → `Add user`, avec
