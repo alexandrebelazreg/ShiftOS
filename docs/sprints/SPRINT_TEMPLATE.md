@@ -1,6 +1,6 @@
 # Sprint X.Y — <Titre du sprint>
 
-> Modèle officiel des sprints ShiftOS. Copier ce fichier dans `docs/sprints/` en le
+> Modèle officiel des sprints Planiteo. Copier ce fichier dans `docs/sprints/` en le
 > renommant (ex. `SPRINT_2_4.md`) puis remplir chaque section. Laisser `TODO` pour toute
 > information non connue — ne jamais inventer.
 

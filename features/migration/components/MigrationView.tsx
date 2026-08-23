@@ -38,7 +38,7 @@ export function MigrationView() {
     if (typeof window === "undefined") return
     // Différé d'un tour : la lecture du stockage est instantanée, mais la poser
     // pendant l'effet déclenche un rendu en cascade. C'est le même report que
-    // les autres écrans de ShiftOS emploient pour la même raison.
+    // les autres écrans de Planiteo emploient pour la même raison.
     queueMicrotask(() => {
       const found = readLocalSnapshot(window.localStorage)
       setSnapshot(found)

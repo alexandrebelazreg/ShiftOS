@@ -1,4 +1,4 @@
-"""Exact lexicographic MILP for ShiftOS paid-leave campaigns.
+"""Exact lexicographic MILP for Planiteo paid-leave campaigns.
 
 Reads one JSON request on stdin and writes one JSON response on stdout. SciPy's
 HiGHS backend must prove every lexicographic stage optimal; a feasible incumbent

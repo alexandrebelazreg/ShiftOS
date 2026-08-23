@@ -704,7 +704,7 @@ def _walk(
 def _probe(model: AllocationModel, pick: Callable[[Any], int]) -> Allocation:
     """A stand-in allocation built from the cell bounds, not from a solver.
 
-    The support of the matrix is settled by availability alone — ShiftOS has no
+    The support of the matrix is settled by availability alone — Planiteo has no
     optional days — so "who is on the floor which day" is known before any
     allocation exists. Only the durations are unknown, and the two questions the
     skeleton machinery asks about durations want opposite extremes.

@@ -15,7 +15,7 @@ import { buildDriveWithAbsencesProblem } from "@/features/core/planning-v3/__tes
  * word. `shiftos_highs.evaluate` is a second implementation of the rules, and a
  * second implementation can be wrong in the same way as the first — so the
  * schedule is re-checked here, by the one implementation that decides what
- * "legal" means in ShiftOS.
+ * "legal" means in Planiteo.
  *
  * The experiment is NOT wired into the application. These tests read artefacts
  * the solver writes under `experiments/planning-v3-highs/results/` and SKIP when

@@ -10,7 +10,7 @@ const items = [
   { title: "Employés", description: "Profils, contrats, affectations et contraintes.", href: "/configuration/employes", icon: UsersRound },
   { title: "Secteurs", description: "Zones à couvrir et compétences requises.", href: "/configuration/secteurs", icon: Layers3 },
   { title: "Reporting", description: "Statistiques et audit de vos plannings.", href: "/configuration/reporting", icon: ChartNoAxesCombined },
-  { title: "Paramètres", description: "Préférences générales de ShiftOS.", href: "/configuration/parametres", icon: ClipboardCheck },
+  { title: "Paramètres", description: "Préférences générales de Planiteo.", href: "/configuration/parametres", icon: ClipboardCheck },
 ]
 
 export default function ConfigurationPage() {

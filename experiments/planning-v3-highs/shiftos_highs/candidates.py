@@ -57,7 +57,7 @@ def generate_candidates(problem: dict[str, Any]) -> tuple[list[Candidate], dict[
         for date in sorted(days):
             day = days[date]
             entry = employee_days[(employee_id, date)]
-            # ShiftOS has no optional days.
+            # Planiteo has no optional days.
             #
             # A fixed rest day, a complete unavailability or a full-day absence
             # forbids work outright; every other open day is worked. The solver

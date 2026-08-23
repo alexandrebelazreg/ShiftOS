@@ -32,7 +32,7 @@ import {
  * problem drops is a constraint no engine can honour, however well the engines
  * are written. The VALIDATOR half proves the rule bites: it is the one
  * implementation that decides what "legal" means, so a schedule it accepts is a
- * schedule ShiftOS will publish.
+ * schedule Planiteo will publish.
  *
  * Every case starts from the reference scenario, whose baseline schedule is
  * legal on every rule at once, and changes exactly one thing.
@@ -557,7 +557,7 @@ describe("data bridge — traduction des bornes horaires", () => {
   })
 })
 
-describe("ShiftOS ne connaît pas de jour facultatif", () => {
+describe("Planiteo ne connaît pas de jour facultatif", () => {
   it("rend obligatoire tout jour ouvert qui n'est ni repos fixe ni indisponibilité", () => {
     const problem = buildOk(referenceInput())
     for (const entry of problem.employeeDays) {

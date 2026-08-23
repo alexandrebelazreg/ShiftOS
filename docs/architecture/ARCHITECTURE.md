@@ -1,4 +1,4 @@
-# Architecture — ShiftOS
+# Architecture — Planiteo
 
 > Statut : à jour au 2026-07-16 · Décrit **uniquement l'architecture actuelle**.
 > L'architecture future (backend, base de données, authentification) n'est pas décrite ici.
@@ -8,7 +8,7 @@
 
 ## 1. Vue d'ensemble
 
-ShiftOS est une application **front-end Next.js** (App Router) en TypeScript.
+Planiteo est une application **front-end Next.js** (App Router) en TypeScript.
 À ce stade, il n'y a **ni backend applicatif, ni base de données, ni authentification** :
 la persistance est **simulée (mock)** via un module dédié.
 

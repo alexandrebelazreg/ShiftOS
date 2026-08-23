@@ -1,4 +1,4 @@
-# Règles du projet — ShiftOS
+# Règles du projet — Planiteo
 
 > Statut : à jour au 2026-07-16
 > Ce document **consolide et organise** les règles en vigueur. Aucune règle existante n'a

@@ -1,5 +1,5 @@
 /**
- * Barrel for the ShiftOS core domain model. Import domain types from
+ * Barrel for the Planiteo core domain model. Import domain types from
  * `@/features/core/models` rather than reaching into individual files.
  */
 export * from "@/features/core/models/common"

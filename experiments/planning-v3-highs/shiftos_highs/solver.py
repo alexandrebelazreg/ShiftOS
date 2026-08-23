@@ -294,7 +294,7 @@ def _tie_break_costs(
     }
     step = int(problem["timeStepMinutes"])
 
-    # Availability alone — ShiftOS has no optional days, so every open day an
+    # Availability alone — Planiteo has no optional days, so every open day an
     # employee is available for is a day they work.
     worked_day_counts: dict[str, int] = defaultdict(int)
     for (employee_id, _date), entry in employee_days.items():

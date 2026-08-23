@@ -10,7 +10,7 @@ from shiftos_highs_fast import solve_fast
 
 def main() -> int:
     parser = argparse.ArgumentParser(
-        description="ShiftOS Planning V3 — moteur decompose v3-highs-fast"
+        description="Planiteo Planning V3 — moteur decompose v3-highs-fast"
     )
     parser.add_argument("problem", type=Path, help="PlanningProblemV3 JSON file")
     parser.add_argument("--output", type=Path, help="Write the full result JSON here")

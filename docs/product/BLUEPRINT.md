@@ -1,4 +1,4 @@
-# ShiftOS Blueprint
+# Planiteo Blueprint
 
 Version : 1.0
 
@@ -6,7 +6,7 @@ Version : 1.0
 
 # Vision
 
-ShiftOS est un moteur intelligent de planification destiné aux managers.
+Planiteo est un moteur intelligent de planification destiné aux managers.
 
 L'objectif n'est pas de créer un planning.
 
@@ -38,7 +38,7 @@ Le manager ne construit pas le planning.
 
 Il définit les règles.
 
-ShiftOS construit le meilleur planning possible.
+Planiteo construit le meilleur planning possible.
 
 Le manager garde toujours le dernier mot.
 
@@ -82,15 +82,15 @@ Créer :
 
 ---
 
-# Ce que ShiftOS n'est pas
+# Ce que Planiteo n'est pas
 
-ShiftOS n'est pas :
+Planiteo n'est pas :
 
 - un tableau Excel
 - un logiciel rigide
 - un générateur d'horaires
 
-ShiftOS est un moteur de décision.
+Planiteo est un moteur de décision.
 
 ---
 
@@ -114,7 +114,7 @@ Il devient la référence principale du projet.
 
 # Principe d'architecture
 
-Le Core de ShiftOS ne doit contenir aucune règle spécifique à un métier.
+Le Core de Planiteo ne doit contenir aucune règle spécifique à un métier.
 
 Le Core manipule uniquement des concepts universels :
 

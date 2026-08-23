@@ -7,7 +7,7 @@ import { Button } from "@/components/ui/button"
  *
  * Posé à la racine pour couvrir aussi ce qui vit hors du groupe `(app)` —
  * la connexion, l'onboarding. Un lien de retour plutôt qu'une impasse : la
- * plupart des 404 de ShiftOS viennent d'un signet vers un planning supprimé,
+ * plupart des 404 de Planiteo viennent d'un signet vers un planning supprimé,
  * et le gérant cherche alors la liste, pas une explication.
  */
 export default function NotFound() {

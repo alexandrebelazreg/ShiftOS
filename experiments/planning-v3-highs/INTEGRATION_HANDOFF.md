@@ -22,7 +22,7 @@ Résultat attendu :
 - 0 minute ;
 - aucune violation Python.
 
-Ensuite, installer le test `integration/drive-highs-validation.test.ts` dans la suite Vitest ShiftOS et vérifier l'acceptation par le validateur officiel.
+Ensuite, installer le test `integration/drive-highs-validation.test.ts` dans la suite Vitest Planiteo et vérifier l'acceptation par le validateur officiel.
 
 ## Règle d'intégration
 

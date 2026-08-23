@@ -4,7 +4,7 @@ Version : 2.0
 
 ## Objectif
 
-Ce document contient toutes les règles métier utilisées par le moteur de ShiftOS.
+Ce document contient toutes les règles métier utilisées par le moteur de Planiteo.
 
 Les règles sont indépendantes du code.
 

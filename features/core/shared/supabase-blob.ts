@@ -5,7 +5,7 @@ import { requireStoreId } from "@/features/auth/supabase/current-store"
 /**
  * Un seul bloc de configuration par magasin, lu et écrit d'un trait.
  *
- * Trois des réglages de ShiftOS ont cette forme : les écarts au tableau des
+ * Trois des réglages de Planiteo ont cette forme : les écarts au tableau des
  * motifs d'absence, les décisions sur les jours fériés, et demain d'autres.
  * Ils se lisent TOUS ensemble à l'ouverture d'un écran, ne se cherchent jamais
  * par morceaux, et tiennent dans un objet. Les éclater en lignes obligerait à

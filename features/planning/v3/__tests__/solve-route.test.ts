@@ -13,7 +13,7 @@ const auth = vi.hoisted(() => ({
     userId: "user-de-test",
     storeId: "magasin-de-test",
     role: "manager",
-    email: "test@shiftos.fr",
+    email: "test@planiteo.fr",
   } as { userId: string; storeId: string; role: string; email: string } | null,
 }))
 

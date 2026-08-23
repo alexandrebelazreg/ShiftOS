@@ -1,8 +1,8 @@
-# Langage ubiquitaire — ShiftOS
+# Langage ubiquitaire — Planiteo
 
 > Version : 1.0 · Dernière mise à jour : 2026-07-17
 >
-> Ce document est le **vocabulaire officiel** de ShiftOS (Domain-Driven Design).
+> Ce document est le **vocabulaire officiel** de Planiteo (Domain-Driven Design).
 > Chaque concept métier y possède **un seul nom canonique**, en anglais (aligné
 > sur le code du Core). Les définitions sont en français.
 >
@@ -146,7 +146,7 @@
 
 - **Définition** : l'emploi du temps d'un magasin sur une période donnée ;
   l'ensemble cohérent des affectations produit par le moteur.
-- **Rôle** : livrable central de ShiftOS ; objet évalué et optimisé.
+- **Rôle** : livrable central de Planiteo ; objet évalué et optimisé.
 - **Relations** : appartient à un **Store** ; possède plusieurs **Assignment**.
   (`core/models/Planning.ts`)
 - **Ce que ce n'est pas** : ce n'est pas une **Assignment** isolée ; ce n'est pas

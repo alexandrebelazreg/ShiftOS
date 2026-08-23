@@ -1,13 +1,13 @@
-# Vision produit — ShiftOS
+# Vision produit — Planiteo
 
 > Statut : brouillon vivant · Dernière mise à jour : 2026-07-16
 > Ce document décrit l'intention produit. Toute information non confirmée est marquée `TODO`.
 
 ---
 
-## 1. Pourquoi ShiftOS existe
+## 1. Pourquoi Planiteo existe
 
-ShiftOS est un SaaS de **planification du personnel assisté par IA** (« AI Planning Engine »).
+Planiteo est un SaaS de **planification du personnel assisté par IA** (« AI Planning Engine »).
 L'application accompagne un responsable dans la configuration de son lieu de travail, puis
 dans la génération de ses plannings.
 
@@ -18,7 +18,7 @@ Justification détaillée du marché et de l'opportunité : `TODO`.
 Construire manuellement des plannings d'équipe est chronophage et sujet aux erreurs :
 horaires d'ouverture variables, règles de temps de travail, coupures, disponibilités.
 
-ShiftOS vise à centraliser cette configuration (magasin, horaires, mode de planification,
+Planiteo vise à centraliser cette configuration (magasin, horaires, mode de planification,
 politique de coupure, règles générales) afin de générer des plannings conformes aux
 contraintes définies.
 

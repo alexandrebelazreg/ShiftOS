@@ -1,4 +1,4 @@
-# ShiftOS HiGHS Solver — jalon de parité Drive
+# Planiteo HiGHS Solver — jalon de parité Drive
 
 Ce paquet est un solveur Python autonome pour `PlanningProblemV3`, construit avec :
 
@@ -271,7 +271,7 @@ Le paquet contient :
 integration/drive-highs-validation.test.ts
 ```
 
-Après avoir placé le dossier sous `shiftos-highs-solver/` à la racine de ShiftOS, copier le test dans le dépôt :
+Après avoir placé le dossier sous `shiftos-highs-solver/` à la racine de Planiteo, copier le test dans le dépôt :
 
 ```bash
 cp shiftos-highs-solver/integration/drive-highs-validation.test.ts \

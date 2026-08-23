@@ -1,7 +1,7 @@
 [project]
 name = "shiftos-highs-solver"
 version = "0.1.0"
-description = "ShiftOS Planning V3 parity solver using SciPy/HiGHS"
+description = "Planiteo Planning V3 parity solver using SciPy/HiGHS"
 requires-python = ">=3.12,<3.14"
 dependencies = [
   "numpy==2.3.5",

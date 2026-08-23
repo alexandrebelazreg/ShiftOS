@@ -24,7 +24,7 @@ export function SidebarNav({ onNavigate }: { onNavigate?: () => void }) {
         <div className="flex size-7 items-center justify-center rounded-md bg-sidebar-primary text-sm font-bold text-sidebar-primary-foreground">
           S
         </div>
-        <span className="text-sm font-semibold tracking-tight">ShiftOS</span>
+        <span className="text-sm font-semibold tracking-tight">Planiteo</span>
       </div>
 
       {/* Navigation */}
@@ -62,7 +62,7 @@ export function SidebarNav({ onNavigate }: { onNavigate?: () => void }) {
             SO
           </div>
           <div className="min-w-0">
-            <p className="truncate text-sm font-medium">ShiftOS</p>
+            <p className="truncate text-sm font-medium">Planiteo</p>
             <p className="truncate text-xs text-sidebar-foreground/60">
               Espace de travail
             </p>

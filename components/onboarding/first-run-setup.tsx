@@ -65,7 +65,7 @@ export function FirstRunSetup({ store }: { store: StoreConfig }) {
         <StepProgress current={current} total={SETUP_STEPS.length} labels={SETUP_STEPS.map((step) => step.label)} />
         <header className="mt-8 mb-8 space-y-2">
           <h1 className="text-3xl font-semibold tracking-tight">Préparons votre premier planning</h1>
-          <p className="text-muted-foreground">Suivez ces étapes : ShiftOS vérifiera que tout est prêt avant la génération.</p>
+          <p className="text-muted-foreground">Suivez ces étapes : Planiteo vérifiera que tout est prêt avant la génération.</p>
         </header>
 
         <div className="space-y-4">

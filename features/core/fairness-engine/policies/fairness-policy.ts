@@ -1,7 +1,7 @@
 /**
  * FairnessPolicy — the DECISIONS the engine needs that are not computations. It
  * carries no domain data. Every value is configurable so the engine hardcodes
- * no business threshold (a founding ShiftOS rule).
+ * no business threshold (a founding Planiteo rule).
  *
  * Note: the policy tunes MEASUREMENT (weights, thresholds). It never expresses
  * business policy about what a fair planning "should" be — the engine measures,

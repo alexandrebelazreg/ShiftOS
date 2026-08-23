@@ -243,7 +243,7 @@ function fromEnvelope(
  * A Python schedule is never accepted on its own word. `shiftos_highs.evaluate`
  * is a second implementation of the rules and a second implementation can be
  * wrong in the same way as the first, so the one authority on what "legal"
- * means in ShiftOS gets the final say — and a disagreement surfaces as
+ * means in Planiteo gets the final say — and a disagreement surfaces as
  * `solverContradictedByValidator`, which the contract turns into a refusal
  * rather than into a schedule.
  */

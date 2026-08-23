@@ -1,4 +1,4 @@
-# ShiftOS — image unique : le serveur Next et le solveur Python dans le même
+# Planiteo — image unique : le serveur Next et le solveur Python dans le même
 # conteneur.
 #
 # Pourquoi les deux ensemble et non deux services : l'adaptateur `highs-fast`

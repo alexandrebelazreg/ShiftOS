@@ -42,7 +42,7 @@ export interface PaidLeaveCoverageSummary {
 }
 
 /**
- * Weekly paid-leave coverage using each employee's primary ShiftOS sector.
+ * Weekly paid-leave coverage using each employee's primary Planiteo sector.
  * Reinforcement pools are spread only where a deficit exists and are never
  * consumed merely because they are available.
  */

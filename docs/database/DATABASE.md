@@ -1,4 +1,4 @@
-# Base de données — ShiftOS
+# Base de données — Planiteo
 
 > Statut : brouillon vivant · Dernière mise à jour : 2026-07-16
 > **Aucune base de données n'existe à ce stade.** La persistance est simulée (mock).

@@ -8,7 +8,7 @@ import type {
 
 /**
  * The verdict of a business policy. Carries an optional human-readable `reason`
- * so decisions can always be explained (a founding ShiftOS principle).
+ * so decisions can always be explained (a founding Planiteo principle).
  */
 export interface PolicyDecision {
   readonly allowed: boolean

@@ -89,7 +89,7 @@ export const TIME_GRANULARITIES = [15, 30, 60] as const
 export type TimeGranularity = (typeof TIME_GRANULARITIES)[number]
 
 /**
- * The canonical time step every time of day entered in ShiftOS must land on.
+ * The canonical time step every time of day entered in Planiteo must land on.
  *
  * Distinct from `TIME_GRANULARITIES`, which is how coarsely a sector may
  * GENERATE shifts: a sector planning on the hour still expresses "ne commence

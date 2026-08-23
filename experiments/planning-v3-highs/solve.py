@@ -9,7 +9,7 @@ from shiftos_highs import solve
 
 
 def main() -> int:
-    parser = argparse.ArgumentParser(description="ShiftOS Planning V3 parity solver using SciPy/HiGHS")
+    parser = argparse.ArgumentParser(description="Planiteo Planning V3 parity solver using SciPy/HiGHS")
     parser.add_argument("problem", type=Path, help="PlanningProblemV3 JSON file")
     parser.add_argument("--output", type=Path, help="Write the full result JSON to this path")
     parser.add_argument("--time-limit", type=float, default=45.0)

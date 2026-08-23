@@ -33,7 +33,7 @@ export default function AppError({
     // Journalisé côté navigateur en attendant un service de collecte. Le
     // `digest` est la seule prise sur l'erreur réelle en production, où le
     // message est masqué : sans lui, un rapport d'incident ne mène nulle part.
-    console.error("ShiftOS — écran en erreur", error.digest ?? "", error)
+    console.error("Planiteo — écran en erreur", error.digest ?? "", error)
   }, [error])
 
   return (
@@ -41,7 +41,7 @@ export default function AppError({
       <div className="space-y-2">
         <h1 className="text-xl font-semibold tracking-tight">Cet écran n’a pas pu s’afficher</h1>
         <p className="text-sm text-muted-foreground">
-          Le reste de ShiftOS fonctionne : vous pouvez réessayer, ou passer à un autre écran par
+          Le reste de Planiteo fonctionne : vous pouvez réessayer, ou passer à un autre écran par
           le menu. Rien de ce qui était enregistré n’est perdu.
         </p>
       </div>

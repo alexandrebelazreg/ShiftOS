@@ -47,7 +47,7 @@ export function createLocalStoragePlanningRepository(storage: Storage): Planning
           (error.name === "QuotaExceededError" || error.name === "NS_ERROR_DOM_QUOTA_REACHED")
         throw new Error(
           full
-            ? "La mémoire de ce navigateur est pleine. Connectez ShiftOS à sa base de données, ou supprimez d’anciens plannings."
+            ? "La mémoire de ce navigateur est pleine. Connectez Planiteo à sa base de données, ou supprimez d’anciens plannings."
             : `Enregistrement impossible dans ce navigateur : ${error instanceof Error ? error.message : String(error)}`
         )
       }

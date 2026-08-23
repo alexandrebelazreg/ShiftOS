@@ -109,7 +109,7 @@ export interface SectorDemandConfiguration {
 export interface SectorValidationIssue { readonly path: string; readonly message: string }
 
 /**
- * The rules ShiftOS runs on today, stated once.
+ * The rules Planiteo runs on today, stated once.
  *
  * These are not invented defaults: they are the values the business already
  * applies and that the canonical Drive and Accueil problems encode. Two of them

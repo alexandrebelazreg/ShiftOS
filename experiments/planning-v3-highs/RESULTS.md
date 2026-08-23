@@ -1,4 +1,4 @@
-# Résultats — solveur ShiftOS Python/SciPy/HiGHS
+# Résultats — solveur Planiteo Python/SciPy/HiGHS
 
 ## Parité canonique Drive
 

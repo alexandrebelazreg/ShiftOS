@@ -37,10 +37,10 @@ export default function GlobalError({
           color: "#141821",
         }}
       >
-        <title>ShiftOS — incident</title>
+        <title>Planiteo — incident</title>
         <main style={{ maxWidth: "28rem" }}>
           <h1 style={{ fontSize: "1.25rem", margin: "0 0 0.5rem", letterSpacing: "-0.02em" }}>
-            ShiftOS n’a pas pu démarrer
+            Planiteo n’a pas pu démarrer
           </h1>
           <p style={{ margin: "0 0 1.25rem", fontSize: "0.95rem", lineHeight: 1.6, color: "#565e70" }}>
             L’incident touche l’application entière, pas seulement cet écran. Vos données sont

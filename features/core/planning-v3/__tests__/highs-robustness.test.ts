@@ -17,7 +17,7 @@ import { validatePlanningSolutionV3 } from "@/features/core/planning-v3/validato
  *
  * So the Python campaign walks out from Drive along six axes and this file asks
  * the only questions that matter about each answer, using the one implementation
- * that decides what "legal" means in ShiftOS:
+ * that decides what "legal" means in Planiteo:
  *
  * - a schedule, if there is one, breaks no hard rule;
  * - `infeasible-proven` is never said about a week that arithmetic says is

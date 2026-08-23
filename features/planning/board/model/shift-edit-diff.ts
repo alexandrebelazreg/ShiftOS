@@ -58,7 +58,7 @@ export function deltaLabel(deltaMinutes: number): string {
  * being warned about a deviation that did not exist.
  *
  * Now it answers the question the position asks: is this person at their
- * contracted hours? Weekly, because every contract rule in ShiftOS is weekly,
+ * contracted hours? Weekly, because every contract rule in Planiteo is weekly,
  * and stable across day tabs, because a week is not a property of a Thursday.
  * The edit itself is still reported, where it belongs — the footer's last-edit
  * line and the outline drawn around a touched shift.

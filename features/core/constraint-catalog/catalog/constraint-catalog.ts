@@ -7,7 +7,7 @@ import type { ConstraintDefinition } from "@/features/core/constraint-catalog/ty
 
 /**
  * ConstraintCatalog — the official source of every constraint available in
- * ShiftOS. The Planning Engine knows only the catalog; it never imports a
+ * Planiteo. The Planning Engine knows only the catalog; it never imports a
  * business constraint directly.
  */
 export interface ConstraintCatalog {

@@ -20,7 +20,7 @@
  *
  * 1. NO PYTHON, NO PLANNING. `v3-decomposed` was the only engine that ran
  *    without an interpreter. The repository still carries no deployment
- *    configuration, so the day ShiftOS ships, the image must provide Python
+ *    configuration, so the day Planiteo ships, the image must provide Python
  *    with scipy and HiGHS — otherwise the failure mode is `python-not-found` in
  *    front of the first manager who clicks Generate, not an error at build time.
  * 2. NO ORACLE. `v3` proved its optimum, which is what made it able to show

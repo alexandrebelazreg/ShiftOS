@@ -7,7 +7,7 @@ the rule can be read, and disputed, without reading a model builder.
 What changed
 ------------
 The parity milestone imposed ``requiredEmployees`` as a HARD lower bound on every
-atomic interval. That is not the ShiftOS contract, and it fails in the direction
+atomic interval. That is not the Planiteo contract, and it fails in the direction
 that matters: a week the team cannot fully cover comes back ``infeasible``, when
 the truthful answer is a legal schedule with a measured shortfall. A manager
 whose shop can open does not want to be told it cannot.

@@ -1,4 +1,4 @@
-# ShiftOS - Project Rules
+# Planiteo - Project Rules
 
 ## General
 

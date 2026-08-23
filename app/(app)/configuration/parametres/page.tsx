@@ -10,7 +10,7 @@ export default function SettingsPage() {
     <div className="mx-auto max-w-5xl space-y-6">
       <PageHeader
         title="Paramètres"
-        description="Les règles que ShiftOS applique, et que votre convention peut contredire."
+        description="Les règles que Planiteo applique, et que votre convention peut contredire."
       />
       <AbsenceRulesSettings />
     </div>

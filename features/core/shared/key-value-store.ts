@@ -1,7 +1,7 @@
 /**
  * Le peu de `Storage` dont un dépôt a besoin, et de quoi s'en passer.
  *
- * Les dépôts de ShiftOS reçoivent leur stockage plutôt que d'aller le chercher.
+ * Les dépôts de Planiteo reçoivent leur stockage plutôt que d'aller le chercher.
  * C'est ce qui les rend testables sans navigateur — et c'est la couture par
  * laquelle Postgres remplacera `localStorage` sans qu'un seul appelant change.
  *

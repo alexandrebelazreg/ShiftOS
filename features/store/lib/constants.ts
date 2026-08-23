@@ -29,7 +29,7 @@ export const PLANNING_MODE_OPTIONS: {
   {
     value: "dynamic",
     label: "Génération automatique",
-    description: "Laisser ShiftOS créer les services dans les limites configurées.",
+    description: "Laisser Planiteo créer les services dans les limites configurées.",
   },
 ]
 
@@ -51,12 +51,12 @@ export const SPLIT_SHIFT_POLICY_OPTIONS: {
   {
     value: "allowed",
     label: "Autorisées",
-    description: "ShiftOS peut en proposer dans les limites indiquées.",
+    description: "Planiteo peut en proposer dans les limites indiquées.",
   },
   {
     value: "free",
     label: "Libres",
-    description: "ShiftOS peut en proposer librement, dans les bornes indiquées.",
+    description: "Planiteo peut en proposer librement, dans les bornes indiquées.",
   },
 ]
 

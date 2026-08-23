@@ -387,7 +387,7 @@ function EmptyCampaign({ employees, sectors }: { readonly employees: readonly Em
         <Palmtree className="size-8 text-muted-foreground" />
         <p className="font-medium">Créez la première campagne de congés payés</p>
         <p className="max-w-xl text-sm text-muted-foreground">
-          {employees.length} personne{employees.length === 1 ? "" : "s"} active{employees.length === 1 ? "" : "s"} et {sectors.length} secteur{sectors.length === 1 ? "" : "s"} seront repris depuis ShiftOS.
+          {employees.length} personne{employees.length === 1 ? "" : "s"} active{employees.length === 1 ? "" : "s"} et {sectors.length} secteur{sectors.length === 1 ? "" : "s"} seront repris depuis Planiteo.
         </p>
       </CardContent>
     </Card>
@@ -515,7 +515,7 @@ function ConfigurationTab({ campaign, weeks, sectors, locked, onUpdate }: TabPro
           {sectors.map((sector) => (
             <CoverageRuleGrid key={sector.id} campaign={campaign} weeks={weeks} sector={sector} locked={locked} onUpdate={onUpdate} />
           ))}
-          {sectors.length === 0 ? <EmptyLine>Configurez au moins un secteur actif dans ShiftOS.</EmptyLine> : null}
+          {sectors.length === 0 ? <EmptyLine>Configurez au moins un secteur actif dans Planiteo.</EmptyLine> : null}
         </CardContent>
       </Card>
 
@@ -640,7 +640,7 @@ function ReinforcementPools({ campaign, weeks, sectors, locked, onUpdate }: { re
 function EmployeesTab({ campaign, employees, sectors, locked, onUpdate }: EmployeeTabProps) {
   return (
     <div className="space-y-3 pt-4">
-      <Card size="sm"><CardHeader><CardTitle>Paramètres des employés</CardTitle><CardDescription>Le premier secteur ShiftOS est le secteur principal. « Prioritaire » est indépendant du lien entre deux personnes ; le lien reste réciproque.</CardDescription></CardHeader></Card>
+      <Card size="sm"><CardHeader><CardTitle>Paramètres des employés</CardTitle><CardDescription>Le premier secteur Planiteo est le secteur principal. « Prioritaire » est indépendant du lien entre deux personnes ; le lien reste réciproque.</CardDescription></CardHeader></Card>
       {groupEmployees(employees, sectors).map(({ sectorName, employees: team }) => (
         <Card key={sectorName} size="sm">
           <CardHeader className="flex-row items-center justify-between"><CardTitle>{sectorName}</CardTitle><CardDescription>{team.length} personne{team.length === 1 ? "" : "s"}</CardDescription></CardHeader>

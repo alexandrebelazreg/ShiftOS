@@ -9,7 +9,7 @@ import type {
 /**
  * A single breach of a constraint. Carries a human-readable `message` so the
  * engine can always explain WHY a decision was made (explainability is a
- * founding principle of ShiftOS).
+ * founding principle of Planiteo).
  */
 export interface ConstraintViolation {
   readonly constraintId: ConstraintId

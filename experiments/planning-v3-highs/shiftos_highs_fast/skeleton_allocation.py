@@ -21,7 +21,7 @@ objective can reward the minutes that will actually land on demand.
 
 What makes this legal to do in this order
 -----------------------------------------
-ShiftOS has no optional days. A fixed rest, an unavailability or an absence
+Planiteo has no optional days. A fixed rest, an unavailability or an absence
 forbids work; every other available day is worked, and every cell carries at
 least ``minimumDailyMinutes``. So the SUPPORT of the allocation matrix — who
 works which days — is settled by availability alone, before any MILP. Which is

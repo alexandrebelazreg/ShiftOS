@@ -20,7 +20,7 @@ export function GeneralRulesSection() {
       id="limites-travail"
       step={4}
       title="Durées et limites de travail"
-      description="Ces limites encadrent toutes les journées proposées par ShiftOS."
+      description="Ces limites encadrent toutes les journées proposées par Planiteo."
     >
       <div className="rounded-lg border bg-muted/25 p-4">
         <p className="text-sm font-medium">Deux maximums à ne pas confondre</p>

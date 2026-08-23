@@ -5,7 +5,7 @@ import type { ConstraintPack } from "@/features/core/constraint-catalog/types"
 
 /**
  * Registers every definition of a pack into a catalog. This is how packs
- * (Retail, Hospital, …) extend ShiftOS without changing the Core.
+ * (Retail, Hospital, …) extend Planiteo without changing the Core.
  */
 export function loadPack(
   catalog: ConstraintCatalog,

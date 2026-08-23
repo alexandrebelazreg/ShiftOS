@@ -1,6 +1,6 @@
 /**
  * Constraint Catalog — the official source of every constraint available in
- * ShiftOS.
+ * Planiteo.
  *
  * Constraints are declared as `ConstraintDefinition`s (metadata + parameters +
  * factory), bundled into packs, and registered into a catalog. The Planning

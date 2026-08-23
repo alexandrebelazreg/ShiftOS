@@ -1,6 +1,6 @@
 # Sauvegardes — et la seule qui compte
 
-Tout ShiftOS vit désormais dans une base. Un incident qui l'atteint atteint tout :
+Tout Planiteo vit désormais dans une base. Un incident qui l'atteint atteint tout :
 le magasin, l'équipe, les absences, chaque planning passé.
 
 **Une sauvegarde jamais restaurée n'est pas une sauvegarde.** Tant qu'une
@@ -82,7 +82,7 @@ côté de ce qu'il protège ne protège de rien.
    une absence connue.
 7. Supprimer le projet de restauration.
 
-Ce qui compte n'est pas que l'export existe : c'est que **ShiftOS démarre
+Ce qui compte n'est pas que l'export existe : c'est que **Planiteo démarre
 dessus**. Une base restaurée dont l'application ne veut pas ne sauve rien.
 
 ## Le piège qui fait échouer l'exercice

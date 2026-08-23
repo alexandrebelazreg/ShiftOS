@@ -1,4 +1,4 @@
-# Déploiement — ShiftOS
+# Déploiement — Planiteo
 
 Cible : **Hetzner CX22 (Allemagne) + Coolify**, un seul conteneur qui porte le
 serveur Next et le solveur Python. ~4,40 €/mois.
@@ -59,11 +59,11 @@ pas à traiter lui-même.
 ## 3. Connecter le dépôt
 
 Dans Coolify : **Sources** → **GitHub** → installer la GitHub App sur
-`alexandrebelazreg/ShiftOS`.
+`alexandrebelazreg/Planiteo`.
 
 ## 4. Créer la ressource
 
-**+ New** → **Application** → dépôt `ShiftOS`, branche `main`.
+**+ New** → **Application** → dépôt `Planiteo`, branche `main`.
 
 - Build Pack : **Dockerfile**
 - Dockerfile : `./Dockerfile`
@@ -86,7 +86,7 @@ fichiers ensuite.
 
 ## 6. Domaine et HTTPS
 
-Un enregistrement DNS `A` de `shiftos.<ton-domaine>` vers l'IP du serveur, puis
+Un enregistrement DNS `A` de `planiteo.<ton-domaine>` vers l'IP du serveur, puis
 le même nom dans le champ **Domains** de Coolify. Le certificat Let's Encrypt
 est demandé automatiquement.
 
@@ -96,7 +96,7 @@ clair.
 
 ## 7. Fermer l'accès — à faire AVANT d'ouvrir au public
 
-ShiftOS n'a **aucune authentification** aujourd'hui, et `/api/planning/v3/solve`
+Planiteo n'a **aucune authentification** aujourd'hui, et `/api/planning/v3/solve`
 comme `/api/conges/solve` acceptent 2 Mo de JSON de n'importe qui pour lancer un
 processus de calcul. Exposer cette version telle quelle, c'est offrir un moyen
 de saturer la machine.
@@ -111,7 +111,7 @@ choisir l'une de ces protections dans Coolify :
 ## 8. Vérifier
 
 ```
-curl https://shiftos.<ton-domaine>/api/health
+curl https://planiteo.<ton-domaine>/api/health
 ```
 
 Réponse attendue : `{"status":"ok","solver":"ready"}`.

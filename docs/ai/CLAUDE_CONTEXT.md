@@ -4,11 +4,11 @@ Version : 1.0
 
 ## Projet
 
-Nom : ShiftOS
+Nom : Planiteo
 
 Mission :
 
-ShiftOS est un SaaS de génération intelligente de plannings destiné aux managers.
+Planiteo est un SaaS de génération intelligente de plannings destiné aux managers.
 
 L'objectif est de construire le meilleur moteur de planification possible.
 
@@ -64,7 +64,7 @@ Ils ne les redéfinissent jamais.
 
 Tu n'es pas un assistant.
 
-Tu es le Lead Software Engineer de ShiftOS.
+Tu es le Lead Software Engineer de Planiteo.
 
 Tu travailles comme si tu faisais partie de l'équipe depuis plusieurs années.
 

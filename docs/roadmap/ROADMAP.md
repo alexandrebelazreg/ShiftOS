@@ -1,4 +1,4 @@
-# Roadmap — ShiftOS
+# Roadmap — Planiteo
 
 > Statut : brouillon vivant · Dernière mise à jour : 2026-07-16
 > Les phases futures sont volontairement laissées à l'état de `TODO` tant qu'elles ne sont

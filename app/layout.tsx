@@ -14,8 +14,8 @@ const geistMono = Geist_Mono({
 
 export const metadata: Metadata = {
   title: {
-    default: "ShiftOS",
-    template: "%s · ShiftOS",
+    default: "Planiteo",
+    template: "%s · Planiteo",
   },
   description: "Planification intelligente pour le commerce de détail",
 };

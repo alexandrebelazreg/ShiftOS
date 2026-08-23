@@ -297,7 +297,7 @@ describe("contraintes avancées — rétrocompatibilité", () => {
   })
 })
 
-describe("ShiftOS ne connaît pas de jour facultatif", () => {
+describe("Planiteo ne connaît pas de jour facultatif", () => {
   /**
    * Un jour est travaillé ou il ne l'est pas : repos fixe, indisponibilité ou
    * absence. Rien ne doit offrir au moteur un jour qu'il pourrait choisir de ne

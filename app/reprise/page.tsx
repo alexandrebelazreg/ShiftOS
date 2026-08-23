@@ -21,7 +21,7 @@ export default async function MigrationPage() {
   await verifySession()
   // Hors de l'AppShell, la page n'a ni barre latérale ni marges : elle porte
   // les siennes. Un lien de sortie plutôt qu'une navigation complète — on ne
-  // vient ici qu'une fois, et ce qu'on veut ensuite est entrer dans ShiftOS.
+  // vient ici qu'une fois, et ce qu'on veut ensuite est entrer dans Planiteo.
   return (
     <main className="mx-auto max-w-3xl px-6 py-12">
       <MigrationView />

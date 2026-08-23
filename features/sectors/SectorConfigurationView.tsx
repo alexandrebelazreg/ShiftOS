@@ -199,7 +199,7 @@ export function SectorConfigurationView({ store }: { store: StoreConfig | null }
         {selected.hours.every((day) => day.closed) ? <Empty text="Ouvrez au moins un jour pour configurer sa couverture." /> : <CoverageTable sector={selected} update={update} showPercentages={selected.hourlyPercentagesEnabled} />}
       </Section>
 
-      <Section title="Répartition des heures" description="Choisissez une répartition manuelle ou laissez ShiftOS la déduire de la couverture configurée.">
+      <Section title="Répartition des heures" description="Choisissez une répartition manuelle ou laissez Planiteo la déduire de la couverture configurée.">
         <label className="flex items-start gap-2 text-sm">
           <input
             type="checkbox"
