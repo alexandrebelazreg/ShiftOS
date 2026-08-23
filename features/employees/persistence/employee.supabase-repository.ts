@@ -192,6 +192,19 @@ export function createSupabaseEmployeeRepository(client: SupabaseClient): Employ
       if (error) throw new Error(error.message)
     },
 
+    async setSectors(id: string, sectors: readonly string[]) {
+      const previous = await fetchOne(id)
+      const storeId = await requireStoreId(client)
+      const { data, error } = await client
+        .from("employees")
+        .update(toRow({ ...previous, sectors: [...sectors] }, storeId))
+        .eq("id", id)
+        .select("*")
+        .single()
+      if (error) throw new Error(error.message)
+      return toRecord(data as EmployeeRow)
+    },
+
     async setScheduleType(id: string, scheduleType: EmployeeScheduleType) {
       const previous = await fetchOne(id)
       const storeId = await requireStoreId(client)

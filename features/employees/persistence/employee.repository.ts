@@ -39,6 +39,15 @@ export interface EmployeeRepository {
   /** Efface la fiche. À n'appeler qu'après un verdict de suppression favorable. */
   remove(id: string): Promise<void>
   setScheduleType(id: string, scheduleType: EmployeeScheduleType): Promise<EmployeeRecord>
+  /**
+   * Réécrit les seuls secteurs, sans repasser par `update`.
+   *
+   * `update` redérive les jours travaillés depuis les repos fixes et renormalise
+   * le contrat : légitime quand un formulaire a été soumis, dangereux quand on
+   * ne fait que suivre un secteur renommé. Une opération étroite ne peut pas
+   * emporter un champ qu'on ne voulait pas toucher.
+   */
+  setSectors(id: string, sectors: readonly string[]): Promise<EmployeeRecord>
 }
 
 export interface EmployeeRepositoryOptions {
@@ -151,6 +160,10 @@ export function createEmployeeRepository(
 
     async setScheduleType(id, scheduleType) {
       return replace(id, (previous) => ({ ...previous, scheduleType, updatedAt: now() }))
+    },
+
+    async setSectors(id, sectors) {
+      return replace(id, (previous) => ({ ...previous, sectors: [...sectors], updatedAt: now() }))
     },
   }
 }

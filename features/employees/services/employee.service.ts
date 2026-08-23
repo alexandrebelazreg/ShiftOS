@@ -39,6 +39,7 @@ export const employeeService: EmployeeRepository = {
   disable: (id) => repository().disable(id),
   remove: (id) => repository().remove(id),
   setScheduleType: (id, scheduleType) => repository().setScheduleType(id, scheduleType),
+  setSectors: (id, sectors) => repository().setSectors(id, sectors),
 }
 
 export { normalizeContract }

@@ -2,7 +2,7 @@
 
 import { Controller, useFormContext } from "react-hook-form"
 import { useEffect, useState } from "react"
-import { ArrowDown, ArrowUp } from "lucide-react"
+import { ArrowDown, ArrowUp, X } from "lucide-react"
 
 import { FormRow } from "@/features/employees/components/FormRow"
 import type { EmployeeFormValues } from "@/features/employees/types/employee.types"
@@ -33,6 +33,15 @@ export function SecteursTab() {
             return <p className="rounded-lg border border-dashed p-3 text-sm text-muted-foreground">Aucun secteur configuré. Créez d’abord un secteur dans Configuration.</p>
           }
 
+          // Les noms que la fiche porte sans qu'aucun secteur configuré ne leur
+          // corresponde : un secteur renommé ou supprimé. Ils étaient jusqu'ici
+          // INVISIBLES — le sélecteur ne montrait que les secteurs configurés —
+          // donc impossibles à retirer. Cliquer sur le nouveau nom ajoutait
+          // simplement une seconde entrée à côté de la périmée.
+          const orphans = field.value.filter(
+            (name) => !availableSectors.some((sector) => sector.name === name)
+          )
+
           return <div className="space-y-4">
             <div className="flex flex-wrap gap-2">
               {availableSectors.map((sector) => {
@@ -50,6 +59,19 @@ export function SecteursTab() {
                 </Button>
               })}
             </div>
+
+            {orphans.length > 0 ? <div className="space-y-2 rounded-lg border border-destructive/40 bg-destructive/5 p-3">
+              <p className="text-sm font-medium">Secteurs qui n’existent plus</p>
+              <p className="text-xs text-muted-foreground">Ces noms ne correspondent à aucun secteur configuré — le secteur a été renommé ou supprimé. Tant qu’ils restent, cette fiche paraît rattachée à un secteur de plus qu’en réalité. Cliquez pour les retirer.</p>
+              <div className="flex flex-wrap gap-2">
+                {orphans.map((name) => (
+                  <Button key={name} type="button" size="sm" variant="destructive" aria-label={`Retirer ${name}`} onClick={() => field.onChange(field.value.filter((value) => value !== name))}>
+                    {name}
+                    <X />
+                  </Button>
+                ))}
+              </div>
+            </div> : null}
 
             {field.value.length > 1 ? <div className="space-y-2 rounded-lg border p-3">
               <div>

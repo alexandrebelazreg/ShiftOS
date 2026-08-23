@@ -183,7 +183,7 @@ export function v3TechnicalCaveats(
   response: SolvePlanningResponse,
   problem: PlanningProblemV3
 ): readonly { readonly label: string; readonly value: string }[] {
-  const caveats = [...response.diagnostics.technical]
+  const caveats = [...response.diagnostics.technical, ...closingFairnessFacts(response, problem)]
   if (response.metadata.candidateSpace === "incomplete") {
     caveats.unshift({
       label: "Espace de recherche incomplet",
@@ -191,6 +191,50 @@ export function v3TechnicalCaveats(
     })
   }
   return caveats
+}
+
+const FAIRNESS_CODES = new Set(["closing-fairness", "saturday-closing-fairness"])
+
+/**
+ * L'équité des fermetures, rendue lisible — sinon elle reste invisible.
+ *
+ * Le validateur produisait déjà ces chiffres, un par salarié plus un écart de
+ * synthèse, et **aucun écran ne les lisait**. Le gérant réglait donc une
+ * balance dont il ne pouvait observer ni le fonctionnement ni la panne : la
+ * seule chose dont il disposait était son impression.
+ *
+ * La première ligne compte plus que toutes les autres. Quand la fenêtre
+ * d'historique ne contient aucune semaine publiée, le rapport dit « 0 fermeture
+ * sur 0 occasion » pour TOUT LE MONDE — ce qui se lit à tort comme « c'est
+ * équilibré » alors que cela veut dire « il n'y a rien à équilibrer ». Le dire
+ * en toutes lettres est la différence entre un réglage qu'on croit cassé et un
+ * réglage qui attend simplement sa première semaine.
+ */
+function closingFairnessFacts(
+  response: SolvePlanningResponse,
+  problem: PlanningProblemV3
+): readonly { readonly label: string; readonly value: string }[] {
+  const fairness = problem.rules.closingFairness
+  if (!fairness || (!fairness.balanceClosings && !fairness.balanceSaturdayClosings)) return []
+
+  const facts: { label: string; value: string }[] = []
+  const history = problem.closingHistory ?? []
+  // Une occasion, pas une fermeture : quelqu'un qui n'a jamais pu fermer ne
+  // porte aucune information, et un historique fait uniquement de ceux-là est
+  // aussi vide qu'un historique absent.
+  if (!history.some((entry) => entry.opportunities > 0)) {
+    facts.push({
+      label: "Équité des fermetures — sans effet cette semaine",
+      value: `Aucune semaine publiée dans les ${fairness.lookbackWeeks} dernières semaines : tout le monde part à égalité, donc la balance ne départage personne. Publiez une semaine pour qu'elle commence à compter.`,
+    })
+  }
+
+  for (const entry of response.diagnostics.entries) {
+    if (FAIRNESS_CODES.has(entry.code)) {
+      facts.push({ label: "Équité des fermetures", value: entry.message })
+    }
+  }
+  return facts
 }
 
 /**

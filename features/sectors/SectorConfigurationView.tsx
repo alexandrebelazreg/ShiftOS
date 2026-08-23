@@ -17,18 +17,60 @@ import { Textarea } from "@/components/ui/textarea"
 import { ConfirmDialog } from "@/components/ui/confirm-dialog"
 import { loadSectorCitationSources } from "@/features/employees/citation-sources"
 import { sectorCitationFamilyLabel, sectorDeletionVerdict, type SectorCitation } from "@/features/sectors/deletion"
+import { detectSectorRenames, employeesAffectedByRenames } from "@/features/sectors/rename"
+import { employeeService } from "@/features/employees/services/employee.service"
 
 const LABELS: Record<WeekDay, string> = { monday: "Lundi", tuesday: "Mardi", wednesday: "Mercredi", thursday: "Jeudi", friday: "Vendredi", saturday: "Samedi", sunday: "Dimanche" }
 
 export function SectorConfigurationView({ store }: { store: StoreConfig | null }) {
   const [sectors, setSectors] = useState<SectorDemandConfiguration[]>([]), [selectedId, setSelectedId] = useState<string | null>(null)
   const [saved, setSaved] = useState(false)
-  useEffect(() => { queueMicrotask(() => { void sectorStore.list().then((list) => { setSectors(list); setSelectedId(list[0]?.id ?? null) }) }) }, [])
+  // Les noms tels qu'ils étaient en arrivant : sans eux, impossible de savoir
+  // qu'un nom a changé — donc impossible de suivre le rattachement des salariés,
+  // qui se fait par ce nom.
+  const [namesOnLoad, setNamesOnLoad] = useState<readonly { id: string; name: string }[]>([])
+  const [renameNotice, setRenameNotice] = useState<string | null>(null)
+  useEffect(() => { queueMicrotask(() => { void sectorStore.list().then((list) => { setSectors(list); setNamesOnLoad(list.map((sector) => ({ id: sector.id, name: sector.name }))); setSelectedId(list[0]?.id ?? null) }) }) }, [])
   const selected = sectors.find((sector) => sector.id === selectedId) ?? null
   const issues = useMemo(() => selected ? validateSectorDemand(selected, store) : [], [selected, store])
   const update = (next: SectorDemandConfiguration) => { setSaved(false); setSectors((current) => current.map((sector) => sector.id === next.id ? next : sector)) }
   const create = () => { const sector = createEmptySector(); setSectors((current) => [...current, sector]); setSelectedId(sector.id); setSaved(false) }
-  const save = () => { if (!selected || issues.length) return; void sectorStore.save(sectors); setSaved(true) }
+  /**
+   * Enregistrer, et faire suivre les fiches quand un nom a changé.
+   *
+   * Le rattachement salarié↔secteur est une CHAÎNE. Sans cette cascade, un
+   * renommage laissait chaque fiche pointer vers un nom qui ne désignait plus
+   * rien : le secteur paraissait désert, la mise en route le refusait, et
+   * l'historique des fermetures ne trouvait plus personne à comparer — sans
+   * qu'aucun message ne relie ces effets au renommage.
+   *
+   * Les secteurs sont écrits AVANT les fiches : si l'écriture des fiches
+   * échoue, le nom est déjà à jour et le sélecteur montre l'ancien nom comme
+   * périmé, donc réparable à la main. L'ordre inverse laisserait des fiches
+   * pointant vers un nom que le secteur ne porte pas encore.
+   */
+  const save = async () => {
+    if (!selected || issues.length) return
+    const renames = detectSectorRenames(namesOnLoad, sectors)
+    await sectorStore.save(sectors)
+
+    if (renames.length > 0) {
+      const affected = employeesAffectedByRenames(await employeeService.list(), renames)
+      for (const { employee, sectors: next } of affected) {
+        await employeeService.setSectors(employee.id, next)
+      }
+      setRenameNotice(
+        affected.length === 0
+          ? "Aucune fiche n’était rattachée à l’ancien nom."
+          : `${affected.length} fiche${affected.length > 1 ? "s ont" : " a"} suivi le nouveau nom.`
+      )
+    } else {
+      setRenameNotice(null)
+    }
+
+    setNamesOnLoad(sectors.map((sector) => ({ id: sector.id, name: sector.name })))
+    setSaved(true)
+  }
 
   const [pendingDeletion, setPendingDeletion] = useState<SectorDemandConfiguration | null>(null)
   const [refusal, setRefusal] = useState<readonly SectorCitation[]>([])
@@ -203,7 +245,7 @@ export function SectorConfigurationView({ store }: { store: StoreConfig | null }
       <SectorAdvancedConstraints sector={selected} update={update} />
       <Competencies sector={selected} update={update} />
       {issues.length ? <div role="alert" className="rounded-lg border border-destructive/40 bg-destructive/5 p-4"><p className="font-medium text-destructive">Corrigez ces éléments avant d’enregistrer :</p><ul className="mt-2 list-disc space-y-1 pl-5 text-sm">{issues.map((issue, index) => <li key={`${issue.path}-${index}`}>{issue.message}</li>)}</ul></div> : null}
-      <div className="flex items-center justify-end gap-3">{saved ? <span className="text-sm text-emerald-600 dark:text-emerald-400">Configuration enregistrée.</span> : null}<Button size="lg" disabled={issues.length > 0} onClick={save}>Enregistrer le secteur</Button></div>
+      <div className="flex items-center justify-end gap-3">{saved ? <span className="text-sm text-emerald-600 dark:text-emerald-400">Configuration enregistrée.{renameNotice ? ` ${renameNotice}` : ""}</span> : null}<Button size="lg" disabled={issues.length > 0} onClick={() => void save()}>Enregistrer le secteur</Button></div>
     </div>}
 
     <ConfirmDialog

@@ -253,3 +253,70 @@ describe("dégradations et détail technique", () => {
     expect(caveats.some((entry) => entry.label === "Espace de recherche incomplet")).toBe(false)
   })
 })
+
+/**
+ * L'équité des fermetures, rendue observable.
+ *
+ * Le validateur produisait ces chiffres depuis toujours et AUCUN écran ne les
+ * lisait : la balance se réglait sans qu'on puisse jamais constater qu'elle
+ * agissait — ni qu'elle n'agissait pas. C'est ce qui a permis à une panne
+ * complète de passer des mois pour une simple impression.
+ */
+describe("équité des fermetures — ce que le tiroir technique en dit", () => {
+  const withFairness = (closingHistory: readonly unknown[] = []) =>
+    ({
+      ...tinyProblem(),
+      rules: {
+        ...tinyProblem().rules,
+        closingFairness: { balanceClosings: true, balanceSaturdayClosings: false, lookbackWeeks: 8 },
+      },
+      closingHistory,
+    }) as never
+
+  it("dit qu'elle est SANS EFFET quand aucune semaine n'a été publiée", () => {
+    // Sans cette phrase, le rapport annonce « 0 fermeture sur 0 occasion » pour
+    // tout le monde — ce qui se lit comme « c'est équilibré » alors que cela
+    // veut dire « il n'y a rien à équilibrer ».
+    const facts = v3TechnicalCaveats(response(), withFairness([]))
+    expect(facts.some((fact) => fact.label.includes("sans effet"))).toBe(true)
+  })
+
+  it("ne crie pas au vide dès qu'une occasion réelle existe", () => {
+    const facts = v3TechnicalCaveats(
+      response(),
+      withFairness([{ employeeId: "e1", closings: 2, opportunities: 6, saturdayClosings: 0, saturdayOpportunities: 2 }])
+    )
+    expect(facts.some((fact) => fact.label.includes("sans effet"))).toBe(false)
+  })
+
+  it("ne compte pas comme historique quelqu'un qui n'a jamais eu l'occasion", () => {
+    // Zéro sur zéro ne porte aucune information : un historique fait uniquement
+    // de ces entrées est aussi vide qu'un historique absent.
+    const facts = v3TechnicalCaveats(
+      response(),
+      withFairness([{ employeeId: "e1", closings: 0, opportunities: 0, saturdayClosings: 0, saturdayOpportunities: 0 }])
+    )
+    expect(facts.some((fact) => fact.label.includes("sans effet"))).toBe(true)
+  })
+
+  it("fait remonter le rapport ligne à ligne du validateur", () => {
+    const facts = v3TechnicalCaveats(
+      response({
+        diagnostics: {
+          blocking: false,
+          requiresExplicitAcceptance: false,
+          technical: [],
+          entries: [
+            { code: "closing-fairness", severity: "information", message: "Marie : 3 fermetures sur 8 occasions.", requiresExplicitAcceptance: false },
+          ],
+        },
+      }),
+      withFairness([{ employeeId: "e1", closings: 3, opportunities: 8, saturdayClosings: 0, saturdayOpportunities: 2 }])
+    )
+    expect(facts.some((fact) => fact.value.includes("Marie"))).toBe(true)
+  })
+
+  it("ne dit rien du tout quand la balance est éteinte", () => {
+    expect(v3TechnicalCaveats(response(), tinyProblem() as never)).toEqual([])
+  })
+})
