@@ -31,6 +31,7 @@ export const PLANNING_RULES_V3 = [
   "opening-count",
   "closing-count",
   "closing-fairness",
+  "closing-fairness-day",
   "saturday-closing-fairness",
   "coverage-deficit",
   "hard-coverage-floor",

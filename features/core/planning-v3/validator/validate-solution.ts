@@ -1,4 +1,4 @@
-import type { IsoDate } from "@/features/core/models"
+import type { IsoDate, WeekDay } from "@/features/core/models"
 import { coverageDeficitMinutes, minimumConcurrentPresence } from "@/features/core/shared"
 
 import type {
@@ -506,6 +506,60 @@ export function validatePlanningSolutionV3(
         added
       )
     }
+    // LE DÉTAIL PAR JOUR : qui a fermé, qui pouvait, et pourquoi les autres non.
+    //
+    // Les lignes ci-dessus disent QUE la répartition est celle-là ; elles ne
+    // disent jamais POURQUOI. Un gérant qui voit le plus léger de son équipe ne
+    // rien recevoir ne peut pas distinguer une contrainte réelle d'un défaut du
+    // moteur — et cette question-là ne se tranche sur aucune donnée d'exemple,
+    // seulement sur la sienne.
+    //
+    // La raison donnée est la PREMIÈRE qui s'applique, dans l'ordre où on la
+    // corrigerait : une compétence manquante se règle sur la fiche, un repos
+    // fixe dans les contraintes, une heure de fin dans les préférences. Les
+    // empiler toutes noierait celle sur laquelle agir.
+    const dayEntryByKey = new Map<string, (typeof problem.employeeDays)[number]>()
+    for (const entry of problem.employeeDays) {
+      dayEntryByKey.set(`${String(entry.employeeId)}|${entry.date}`, entry)
+    }
+
+    for (const day of [...problem.days].sort((left, right) => left.date.localeCompare(right.date))) {
+      if (day.closed || day.closesAtMinutes === null) continue
+      const took: string[] = []
+      const could: string[] = []
+      const blocked: string[] = []
+
+      for (const employee of problem.employees) {
+        const id = String(employee.id)
+        const name = `${employee.firstName} ${employee.lastName}`
+        if (closedOn.has(`${id}|${day.date}`)) {
+          took.push(name)
+          continue
+        }
+        const reason = whyNotClosing(
+          employee,
+          dayEntryByKey.get(`${id}|${day.date}`),
+          day.closesAtMinutes,
+          closingsByEmployee[id] ?? 0
+        )
+        if (reason === null) could.push(name)
+        else blocked.push(`${name} (${reason})`)
+      }
+
+      const sentences = [
+        `${WEEK_DAY_LABELS[day.weekDay]} ${day.date} — ${
+          took.length > 0 ? `fermeture par ${took.join(", ")}` : "personne ne ferme"
+        }.`,
+      ]
+      // « Pouvaient aussi » est la ligne qui compte : elle seule dit si le
+      // moteur avait le choix. Vide, la répartition était forcée.
+      sentences.push(
+        could.length > 0 ? `Pouvaient aussi : ${could.join(", ")}.` : "Personne d'autre ne pouvait fermer."
+      )
+      if (blocked.length > 0) sentences.push(`Empêchés : ${blocked.join(", ")}.`)
+      push("closing-fairness-day", sentences.join(" "), took.length)
+    }
+
     if (fairness.balanceClosings) {
       push(
         "closing-fairness",
@@ -818,6 +872,41 @@ function daysBetween(from: IsoDate, to: IsoDate): number {
 function parts(date: IsoDate): [number, number, number] {
   const [year, month, day] = date.split("-").map(Number)
   return [year, month - 1, day]
+}
+
+/**
+ * Pourquoi cette personne n'a pas pu fermer ce jour-là, ou `null` si elle le
+ * pouvait. La première raison qui s'applique, dans l'ordre où on la corrigerait.
+ */
+function whyNotClosing(
+  employee: { readonly canClose: boolean; readonly maximumClosings: number | null },
+  entry: { readonly available: boolean; readonly fixedRest: boolean; readonly latestEndMinutes: number } | undefined,
+  closesAtMinutes: number,
+  closingsThisWeek: number
+): string | null {
+  if (!employee.canClose) return "pas la compétence fermeture"
+  if (!entry) return "hors du planning ce jour-là"
+  if (entry.fixedRest) return "repos fixe"
+  if (!entry.available) return "indisponible"
+  if (entry.latestEndMinutes < closesAtMinutes) return `doit partir avant ${clock(closesAtMinutes)}`
+  if (employee.maximumClosings !== null && closingsThisWeek >= employee.maximumClosings) {
+    // Le plafond est HEBDOMADAIRE : dire « déjà atteint » un lundi laisserait
+    // croire qu'il bloquait ce jour-là, alors que les fermetures peuvent avoir
+    // été prises le vendredi. Ce qui est vrai, et utile, c'est que son quota de
+    // la semaine est entièrement engagé ailleurs.
+    return `plafond hebdomadaire de ${employee.maximumClosings} atteint, ${closingsThisWeek} prise${closingsThisWeek > 1 ? "s" : ""} d'autres jours`
+  }
+  return null
+}
+
+const WEEK_DAY_LABELS: Record<WeekDay, string> = {
+  monday: "Lundi",
+  tuesday: "Mardi",
+  wednesday: "Mercredi",
+  thursday: "Jeudi",
+  friday: "Vendredi",
+  saturday: "Samedi",
+  sunday: "Dimanche",
 }
 
 function clock(minutes: number): string {

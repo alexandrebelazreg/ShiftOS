@@ -466,6 +466,50 @@ describe("validateur — rapporte, ne juge pas", () => {
     expect(dylan).toContain("charge finale 400 ‰")
   })
 
+  it("dit, jour par jour, qui pouvait fermer et pourquoi les autres non", () => {
+    // La question à laquelle rien ne répondait. Les totaux disent QUE la
+    // répartition est celle-là ; seul le détail du jour dit POURQUOI — et sans
+    // lui, un gérant qui voit le plus léger de son équipe ne rien recevoir ne
+    // peut pas distinguer une contrainte réelle d'un défaut du moteur.
+    const problem = problemWith({ balanceClosings: true, balanceSaturdayClosings: false })
+    const report = validatePlanningSolutionV3(problem, referenceSolution(fingerprintProblem(problem)))
+    const days = report.informations.filter((entry) => entry.rule === "closing-fairness-day")
+
+    // Une ligne par jour ouvert, ni plus ni moins.
+    expect(days).toHaveLength(problem.days.filter((day) => !day.closed).length)
+
+    const monday = days[0].message
+    expect(monday).toContain("Lundi")
+    expect(monday).toMatch(/fermeture par |personne ne ferme/)
+    // « Pouvaient aussi » est la ligne qui tranche : elle seule dit si le moteur
+    // avait le choix. Son absence doit être dite, pas laissée au silence.
+    expect(monday).toMatch(/Pouvaient aussi : |Personne d'autre ne pouvait fermer\./)
+  })
+
+  it("n'annonce pas un plafond « déjà atteint » un jour où il ne l'était pas", () => {
+    // Le plafond est HEBDOMADAIRE. Dire « déjà atteint » un lundi laisserait
+    // croire qu'il bloquait ce jour-là, alors que les fermetures ont pu être
+    // prises le vendredi. La phrase doit nommer la semaine, pas le jour.
+    const problem = problemWith({ balanceClosings: true, balanceSaturdayClosings: false })
+    const report = validatePlanningSolutionV3(problem, referenceSolution(fingerprintProblem(problem)))
+    const withCap = report.informations
+      .filter((entry) => entry.rule === "closing-fairness-day")
+      .map((entry) => entry.message)
+      .filter((message) => message.includes("plafond"))
+
+    expect(withCap.length, "aucun plafond dans ce scénario").toBeGreaterThan(0)
+    for (const message of withCap) {
+      expect(message).toContain("plafond hebdomadaire")
+      expect(message).not.toContain("déjà atteint")
+    }
+  })
+
+  it("ne dit rien du jour quand l'équité est éteinte", () => {
+    const problem = problemWith({ balanceClosings: false, balanceSaturdayClosings: false })
+    const report = validatePlanningSolutionV3(problem, referenceSolution(fingerprintProblem(problem)))
+    expect(report.informations.filter((entry) => entry.rule === "closing-fairness-day")).toEqual([])
+  })
+
   it("ne rapporte rien du tout quand l'équité est éteinte", () => {
     const problem = problemWith({ balanceClosings: false, balanceSaturdayClosings: false })
     const report = validatePlanningSolutionV3(problem, referenceSolution(fingerprintProblem(problem)))

@@ -193,7 +193,18 @@ export function v3TechnicalCaveats(
   return caveats
 }
 
-const FAIRNESS_CODES = new Set(["closing-fairness", "saturday-closing-fairness"])
+/**
+ * Les lignes d'équité, et sous quel intitulé elles se lisent.
+ *
+ * Le détail du jour porte le sien : c'est la seule ligne qui répond à
+ * « pourquoi lui et pas elle », et la noyer sous le même titre que les totaux
+ * la ferait passer pour une répétition.
+ */
+const FAIRNESS_LABELS: Record<string, string> = {
+  "closing-fairness": "Équité des fermetures",
+  "saturday-closing-fairness": "Équité des fermetures",
+  "closing-fairness-day": "Équité — qui pouvait fermer ce jour-là",
+}
 
 /**
  * L'équité des fermetures, rendue lisible — sinon elle reste invisible.
@@ -230,9 +241,8 @@ function closingFairnessFacts(
   }
 
   for (const entry of response.diagnostics.entries) {
-    if (FAIRNESS_CODES.has(entry.code)) {
-      facts.push({ label: "Équité des fermetures", value: entry.message })
-    }
+    const label = FAIRNESS_LABELS[entry.code]
+    if (label) facts.push({ label, value: entry.message })
   }
   return facts
 }
