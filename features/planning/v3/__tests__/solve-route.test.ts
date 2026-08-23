@@ -1,4 +1,25 @@
-import { describe, expect, it } from "vitest"
+import { describe, expect, it, vi } from "vitest"
+
+/**
+ * La session, rendue pilotable.
+ *
+ * La route exige désormais un compte : sans ce double, chaque test ci-dessous
+ * mesurerait le refus d'authentification au lieu du comportement qu'il vise.
+ * `vi.hoisted` parce que `vi.mock` est remonté en tête de module et ne peut pas
+ * lire une variable déclarée plus bas.
+ */
+const auth = vi.hoisted(() => ({
+  session: {
+    userId: "user-de-test",
+    storeId: "magasin-de-test",
+    role: "manager",
+    email: "test@shiftos.fr",
+  } as { userId: string; storeId: string; role: string; email: string } | null,
+}))
+
+vi.mock("@/features/auth/dal", () => ({
+  currentSession: async () => auth.session,
+}))
 
 import { tinyProblem } from "@/features/core/planning-v3/__tests__/tiny-problems"
 
@@ -94,5 +115,32 @@ describe("route V3 — refus, sans jamais lancer Python", () => {
   it("ne rend jamais une infaisabilité pour un refus de frontière", async () => {
     const response = await POST(post({ endpointVersion: "mauvaise" }))
     expect(JSON.stringify(await response.json())).not.toContain("infeasible")
+  })
+})
+
+describe("route V3 — la porte", () => {
+  it("refuse un appel sans session, en JSON et non par une redirection", async () => {
+    // Le proxy laisse volontairement passer /api/ sans rediriger : un appelant
+    // d'API suivrait la redirection et recevrait la page de connexion en HTML
+    // là où il attend un verdict. Le refus se décide donc ici.
+    //
+    // Ce qui se joue n'est pas la confidentialite d'un planning : c'est qu'un
+    // inconnu pouvait declencher un calcul de cinq minutes a volonte.
+    const previous = auth.session
+    auth.session = null
+    try {
+      const response = await POST(post({ endpointVersion: PLANNING_V3_ENDPOINT_VERSION, problem }))
+      expect(response.status).toBe(401)
+      expect(await response.json()).toMatchObject({ code: "unauthenticated" })
+    } finally {
+      auth.session = previous
+    }
+  })
+
+  it("laisse passer un appel authentifie jusqu au contrat", async () => {
+    // Meme requete, session presente : la route ne s arrete plus a la porte et
+    // rend un refus de CONTRAT, pas d authentification.
+    const response = await POST(post({ endpointVersion: "mauvaise-version" }))
+    expect(response.status).not.toBe(401)
   })
 })

@@ -1,3 +1,4 @@
+import { currentSession } from "@/features/auth/dal"
 import { createHighsFastAdapter } from "@/features/core/planning-contract/adapters/highs-fast"
 import { buildSolvePlanningRequest } from "@/features/core/planning-contract/build-request"
 import { checkSolvePlanningResponse } from "@/features/core/planning-contract/invariants"
@@ -43,6 +44,24 @@ export const runtime = "nodejs"
 export const maxDuration = 300
 
 export async function POST(request: Request): Promise<Response> {
+  // La session, avant tout le reste — avant même de lire le corps.
+  //
+  // Le proxy redirige déjà un anonyme vers la connexion, mais Next 16 dit
+  // explicitement de ne pas s'y fier pour l'autorisation. Et une redirection
+  // n'est pas une réponse d'API : un appelant la suivrait et recevrait du HTML
+  // là où il attend un verdict.
+  //
+  // Ce qui se joue ici n'est pas la confidentialité d'un planning : c'est qu'un
+  // inconnu pouvait lancer un calcul de cinq minutes, autant de fois qu'il le
+  // voulait, sur une machine à deux cœurs.
+  //
+  // `currentSession` et non `verifySession` : le second redirige, et une route
+  // qui répond du JSON doit refuser en JSON.
+  const session = await currentSession()
+  if (!session) {
+    return Response.json({ code: "unauthenticated", message: "Session requise." }, { status: 401 })
+  }
+
   // Read the body as TEXT first: the size limit protects memory, and it can
   // only do that before `JSON.parse` turns megabytes of text into objects.
   const declared = Number(request.headers.get("content-length") ?? "0")

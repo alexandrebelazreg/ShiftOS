@@ -1,3 +1,4 @@
+import { currentSession } from "@/features/auth/dal"
 import { createPythonRunner } from "@/features/core/planning-contract/adapters/python/run-python"
 import { resolveHighsFastPython } from "@/features/core/planning-contract/adapters/python/run-python"
 import {
@@ -11,6 +12,15 @@ export const maxDuration = 300
 const MAX_PAYLOAD_BYTES = 2_000_000
 
 export async function POST(request: Request): Promise<Response> {
+  // Même garde que la route de planning, et pour la même raison : sans elle,
+  // un inconnu déclenche un solveur de plusieurs minutes à volonté. Refuse en
+  // JSON, parce qu'une redirection vers la connexion n'est pas une réponse
+  // qu'un appelant d'API sait lire.
+  const session = await currentSession()
+  if (!session) {
+    return Response.json({ message: "Session requise." }, { status: 401 })
+  }
+
   const declared = Number(request.headers.get("content-length") ?? "0")
   if (Number.isFinite(declared) && declared > MAX_PAYLOAD_BYTES) {
     return Response.json({ message: "La campagne est trop volumineuse." }, { status: 413 })

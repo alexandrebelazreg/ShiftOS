@@ -54,7 +54,15 @@ export async function proxy(request: NextRequest) {
   const path = request.nextUrl.pathname
   const isPublic = path.startsWith("/login") || path.startsWith("/auth")
 
-  if (!data.user && !isPublic) {
+  // Les routes d'API traversent le proxy pour que leur session soit reconduite,
+  // mais ne sont JAMAIS redirigées. Une redirection n'est pas une réponse qu'un
+  // appelant d'API sait lire : il la suivrait et recevrait la page de connexion
+  // en HTML là où il attend un verdict. Elles refusent elles-mêmes, en JSON et
+  // avec un 401 — ce qui est aussi la conduite que Next 16 recommande, puisque
+  // l'autorisation ne doit pas dépendre de ce fichier.
+  const isApi = path.startsWith("/api/")
+
+  if (!data.user && !isPublic && !isApi) {
     const url = request.nextUrl.clone()
     url.pathname = "/login"
     // D'où l'on venait, pour y revenir après la connexion.
