@@ -1,5 +1,8 @@
 import { cookies } from "next/headers"
 
+import { supabaseConfigured } from "@/features/auth/supabase/config"
+import { createSupabaseStoreRepository } from "@/features/store/services/store.supabase-repository"
+
 import {
   storeSchema,
   type StoreConfig,
@@ -92,7 +95,38 @@ class CookieStoreRepository implements StoreRepository {
  * Active repository. Swap this single line for a `SupabaseStoreRepository`
  * (implementing `StoreRepository`) later — no call site changes required.
  */
-export const storeRepository: StoreRepository = new CookieStoreRepository()
+/**
+ * Le dépôt actif.
+ *
+ * La base quand elle est configurée, le cookie sinon — et le cookie n'est plus
+ * là que pour un poste dont les variables ne sont pas posées. Résolu à chaque
+ * appel : ce module est importé par des gardes de route qui s'exécutent avant
+ * tout rendu, et figer le choix à l'import le figerait pour la vie du serveur.
+ *
+ * Le commentaire d'origine de ce fichier annonçait exactement cette ligne :
+ * « seule la liaison change, aucun appelant ne bouge ». Les quatorze appelants
+ * n'ont effectivement pas bougé.
+ */
+/**
+ * Le dépôt cookie, exposé pour une seule raison : la reprise doit pouvoir lire
+ * ce qu'un poste détient encore, même quand la base est déjà branchée.
+ */
+export const cookieStoreRepository: StoreRepository = new CookieStoreRepository()
+
+const cookieRepository = cookieStoreRepository
+
+function active(): StoreRepository {
+  return supabaseConfigured() ? createSupabaseStoreRepository() : cookieRepository
+}
+
+export const storeRepository: StoreRepository = {
+  getStore: () => active().getStore(),
+  hasStore: () => active().hasStore(),
+  isFirstRunComplete: () => active().isFirstRunComplete(),
+  saveStore: (store) => active().saveStore(store),
+  clearStore: () => active().clearStore(),
+  completeFirstRun: () => active().completeFirstRun(),
+}
 
 /** Read-only convenience bindings used by the route guards. */
 export const getStore = (): Promise<StoreConfig | null> =>

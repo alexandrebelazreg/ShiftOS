@@ -7,6 +7,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { PageHeader } from "@/components/layout/page-header"
 import { createSupabaseBrowserClient } from "@/features/auth/supabase/browser"
 import { importSnapshot, type ImportStep } from "@/features/migration/import"
+import { importStoreFromCookie } from "@/features/migration/store-action"
 import {
   isEmpty,
   readLocalSnapshot,
@@ -53,6 +54,19 @@ export function MigrationView() {
     try {
       // Les étapes s'affichent au fur et à mesure : une reprise qui dure et ne
       // dit rien laisse croire qu'elle a planté.
+      // Le magasin d'abord, et pas seulement par goût de l'ordre : tout le
+      // reste s'y rattache, et un écran ouvert sans magasin configuré renvoie
+      // vers l'onboarding avant d'avoir rien montré.
+      //
+      // Il passe par le serveur : il vit dans un cookie `httpOnly`, que cette
+      // page ne peut pas lire par construction.
+      const magasin = await importStoreFromCookie()
+      setSteps([
+        magasin.imported
+          ? { label: "Magasin", written: 1 }
+          : { label: "Magasin", written: 0, error: magasin.reason },
+      ])
+
       await importSnapshot(createSupabaseBrowserClient(), snapshot, (step) =>
         setSteps((current) => [...current, step])
       )
