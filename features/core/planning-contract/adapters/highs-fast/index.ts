@@ -22,6 +22,7 @@ import type {
   PlanningSolverStatusV3,
 } from "@/features/core/planning-v3/types/solver"
 import { fingerprintProblem, validatePlanningSolutionV3 } from "@/features/core/planning-v3/validator"
+import { rebalanceClosings } from "@/features/core/planning-v3/rebalance-closings"
 
 import {
   HIGHS_FAST_PROTOCOL_VERSION,
@@ -267,11 +268,20 @@ function auditEnvelope(
     }
   }
 
-  const solution: PlanningSolutionV3 = {
+  const placed: PlanningSolutionV3 = {
     version: request.problem.version,
     problemFingerprint: fingerprintProblem(request.problem),
     assignments: envelope.assignments,
   }
+
+  // Le moteur s'arrête là ; l'équité, elle, n'a presque plus de liberté une fois
+  // les heures contractuelles posées. Ce dernier passage échange des journées de
+  // MÊME DURÉE entre deux personnes, ce qui ne touche ni la couverture ni aucun
+  // total hebdomadaire, et ne retient un échange que si le validateur le
+  // confirme. Sans équité réglée, il ne fait rien du tout et rend la solution
+  // reçue, à l'identique.
+  const rebalanced = rebalanceClosings(request.problem, placed)
+  const solution = rebalanced.solution
   const report = validatePlanningSolutionV3(request.problem, solution)
 
   return {
