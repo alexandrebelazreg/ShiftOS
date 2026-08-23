@@ -12,10 +12,8 @@ import { useEmployees } from "@/features/employees/hooks/useEmployees"
 import { getFullName } from "@/features/employees/utils/employee.format"
 import { validatedPaidLeaveAbsences } from "@/features/paid-leave/dashboard/validated-paid-leave"
 import { createPaidLeaveRepository } from "@/features/paid-leave/persistence/paid-leave-repository"
-import {
-  createHolidayRepository,
-  type StoredHolidays,
-} from "@/features/planning/holidays/holiday.repository"
+import { type StoredHolidays } from "@/features/planning/holidays/holiday.repository"
+import { holidayStore } from "@/features/planning/holidays/holiday.store"
 import {
   closedHolidayDates,
   holidayAbsences,
@@ -45,7 +43,7 @@ import {
   DEFAULT_ABSENCE_RULES,
   type AbsenceRules,
 } from "@/features/absences/models/absence-rules"
-import { createAbsenceRulesRepository } from "@/features/absences/persistence/absence-rules.repository"
+import { absenceRulesStore } from "@/features/absences/persistence/absence-rules.store"
 import { absenceService, type AbsenceDraft } from "@/features/absences/services/absence.service"
 import {
   ABSENCE_SOURCE_NOTICES,
@@ -93,13 +91,13 @@ export function AbsencesView({ initialStore }: { readonly initialStore: StoreCon
       // Les règles réglées dans les paramètres : sans elles, cet écran
       // annoncerait un justificatif que personne ne réclamera, et en réclamerait
       // un que le gérant a retiré.
-      setRules(createAbsenceRulesRepository(window.localStorage).read())
+      void absenceRulesStore.read().then(setRules)
       // Les congés validés viennent de leur propre écran : cet écran les LIT,
       // pour ne pas annoncer une équipe au complet la semaine du 15 juillet.
       setCampaignLeave(validatedPaidLeaveAbsences(createPaidLeaveRepository(window.localStorage).list()))
       // Les fériés viennent aussi de leur propre écran : sur un férié
       // travaillé, ceux qui ne se sont pas portés volontaires ne viennent pas.
-      setHolidays(createHolidayRepository(window.localStorage).read())
+      void holidayStore.read().then(setHolidays)
     })
     void planningStore.list().then(setPlannings)
   }, [])

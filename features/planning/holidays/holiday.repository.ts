@@ -27,8 +27,8 @@ export interface StoredHolidayDay {
 export type StoredHolidays = Readonly<Record<IsoDate, StoredHolidayDay>>
 
 export interface HolidayRepository {
-  read(): StoredHolidays
-  save(holidays: StoredHolidays): void
+  read(): Promise<StoredHolidays>
+  save(holidays: StoredHolidays): Promise<void>
 }
 
 const KEY = "shiftos_holidays"
@@ -37,7 +37,7 @@ export function createHolidayRepository(
   storage: Pick<Storage, "getItem" | "setItem">
 ): HolidayRepository {
   return {
-    read() {
+    async read() {
       try {
         const parsed: unknown = JSON.parse(storage.getItem(KEY) ?? "{}")
         if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) return {}
@@ -53,7 +53,7 @@ export function createHolidayRepository(
         return {}
       }
     },
-    save(holidays) {
+    async save(holidays) {
       storage.setItem(KEY, JSON.stringify(holidays))
     },
   }

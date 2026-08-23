@@ -1,7 +1,7 @@
 "use client"
 
 import { RotateCcw } from "lucide-react"
-import { useEffect, useMemo, useState } from "react"
+import { useEffect, useState } from "react"
 
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
@@ -19,7 +19,7 @@ import {
   withRule,
   type AbsenceRules,
 } from "@/features/absences/models/absence-rules"
-import { createAbsenceRulesRepository } from "@/features/absences/persistence/absence-rules.repository"
+import { absenceRulesStore } from "@/features/absences/persistence/absence-rules.store"
 import { cn } from "@/lib/utils"
 
 /**
@@ -37,28 +37,43 @@ import { cn } from "@/lib/utils"
 export function AbsenceRulesSettings() {
   const [rules, setRules] = useState<AbsenceRules>(DEFAULT_ABSENCE_RULES)
   const [ready, setReady] = useState(false)
-
-  const repository = useMemo(
-    () => (typeof window === "undefined" ? null : createAbsenceRulesRepository(window.localStorage)),
-    []
-  )
+  /**
+   * L'enregistrement a échoué.
+   *
+   * Cet état n'existait pas tant que le stockage était local : écrire dans le
+   * navigateur ne rate pas. Avec une base derrière un réseau, si — et un
+   * réglage qu'on croit posé alors qu'il n'est pas parti est pire que pas de
+   * réglage du tout.
+   */
+  const [saveFailed, setSaveFailed] = useState(false)
 
   useEffect(() => {
-    if (!repository) return
-    queueMicrotask(() => {
-      setRules(repository.read())
+    // La lecture part vers la base : `active` évite d'écrire dans un composant
+    // démonté entre-temps, ce qu'un aller-retour instantané ne risquait pas.
+    let active = true
+    void absenceRulesStore.read().then((stored) => {
+      if (!active) return
+      setRules(stored)
       setReady(true)
     })
-  }, [repository])
+    return () => {
+      active = false
+    }
+  }, [])
 
   function change(next: AbsenceRules) {
+    setSaveFailed(false)
+    // L'écran suit la saisie sans attendre l'enregistrement : un réglage qui
+    // met un aller-retour à s'afficher donne l'impression de n'avoir pas été
+    // pris. L'écriture suit, et son échec est signalé plutôt qu'avalé.
     setRules(next)
-    repository?.save(next)
+    void absenceRulesStore.save(next).catch(() => setSaveFailed(true))
   }
 
   function resetAll() {
+    setSaveFailed(false)
     setRules(DEFAULT_ABSENCE_RULES)
-    repository?.reset()
+    void absenceRulesStore.reset().catch(() => setSaveFailed(true))
   }
 
   const modifiedCount = SELECTABLE_ABSENCE_MOTIVES.filter((motive) =>
@@ -67,6 +82,15 @@ export function AbsenceRulesSettings() {
 
   return (
     <Card>
+      {saveFailed ? (
+        <div
+          role="alert"
+          className="mx-6 mt-6 rounded-md border border-destructive/40 bg-destructive/10 px-3 py-2 text-sm text-destructive"
+        >
+          Ce réglage n’a pas pu être enregistré. Vérifiez votre connexion, puis modifiez-le
+          à nouveau.
+        </div>
+      ) : null}
       <CardHeader className="flex flex-row items-start justify-between gap-4">
         <div>
           <CardTitle>Règles des absences</CardTitle>

@@ -15,17 +15,17 @@ import {
 const RULES_KEY = "shiftos_absence_rules"
 
 export interface AbsenceRulesRepository {
-  read(): AbsenceRules
-  save(rules: AbsenceRules): void
+  read(): Promise<AbsenceRules>
+  save(rules: AbsenceRules): Promise<void>
   /** Efface tous les écarts : le tableau d'origine s'applique de nouveau. */
-  reset(): void
+  reset(): Promise<void>
 }
 
 export function createAbsenceRulesRepository(
   storage: Pick<Storage, "getItem" | "removeItem" | "setItem">
 ): AbsenceRulesRepository {
   return {
-    read() {
+    async read() {
       try {
         const value: unknown = JSON.parse(storage.getItem(RULES_KEY) ?? "null")
         return isAbsenceRules(value) ? value : DEFAULT_ABSENCE_RULES
@@ -35,10 +35,10 @@ export function createAbsenceRulesRepository(
         return DEFAULT_ABSENCE_RULES
       }
     },
-    save(rules) {
+    async save(rules) {
       storage.setItem(RULES_KEY, JSON.stringify(rules))
     },
-    reset() {
+    async reset() {
       storage.removeItem(RULES_KEY)
     },
   }

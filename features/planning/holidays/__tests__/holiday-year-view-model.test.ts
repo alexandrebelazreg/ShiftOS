@@ -136,24 +136,24 @@ describe("le dépôt des jours fériés", () => {
     }
   }
 
-  it("relit ce qu’il a écrit", () => {
+  it("relit ce qu’il a écrit", async () => {
     const storage = memory()
     const repository = createHolidayRepository(storage)
-    repository.save({ "2026-04-06": { opening: "chome", volunteerIds: ["e1"] } })
+    await repository.save({ "2026-04-06": { opening: "chome", volunteerIds: ["e1"] } })
 
-    expect(createHolidayRepository(storage).read()).toEqual({
+    expect(await createHolidayRepository(storage).read()).toEqual({
       "2026-04-06": { opening: "chome", volunteerIds: ["e1"] },
     })
   })
 
-  it("traite un stockage illisible comme un stockage vide", () => {
+  it("traite un stockage illisible comme un stockage vide", async () => {
     // Le calendrier repart de ses valeurs par défaut plutôt que de faire
     // tomber l'écran.
     const storage = { getItem: () => "{ pas du json", setItem: () => {} }
-    expect(createHolidayRepository(storage).read()).toEqual({})
+    expect(await createHolidayRepository(storage).read()).toEqual({})
   })
 
-  it("écarte une entrée mal formée sans perdre les autres", () => {
+  it("écarte une entrée mal formée sans perdre les autres", async () => {
     const storage = {
       getItem: () =>
         JSON.stringify({
@@ -164,7 +164,7 @@ describe("le dépôt des jours fériés", () => {
       setItem: () => {},
     }
 
-    const read = createHolidayRepository(storage).read()
+    const read = await createHolidayRepository(storage).read()
     expect(read["2026-04-06"]).toEqual({ opening: "chome", volunteerIds: [] })
     expect(read["2026-05-01"]).toBeUndefined()
     // Un statut inconnu retombe sur la proposition par défaut ; les volontaires

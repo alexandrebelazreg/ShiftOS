@@ -13,7 +13,8 @@ import { useEmployees } from "@/features/employees/hooks/useEmployees"
 import { validatedPaidLeaveAbsences } from "@/features/paid-leave/dashboard/validated-paid-leave"
 import type { PaidLeaveCampaign } from "@/features/paid-leave/models/paid-leave-campaign"
 import { createPaidLeaveRepository } from "@/features/paid-leave/persistence/paid-leave-repository"
-import { createHolidayRepository, type StoredHolidays } from "@/features/planning/holidays/holiday.repository"
+import { type StoredHolidays } from "@/features/planning/holidays/holiday.repository"
+import { holidayStore } from "@/features/planning/holidays/holiday.store"
 import { defaultHolidaySchedules } from "@/features/planning/holidays/model/holiday-schedule"
 import {
   buildPermanenceCalendar,
@@ -76,22 +77,17 @@ export function PermanenceView({ initialStore }: { readonly initialStore: StoreC
     () => (typeof window === "undefined" ? null : createPermanenceRepository(window.localStorage)),
     []
   )
-  const holidayRepository = useMemo(
-    () => (typeof window === "undefined" ? null : createHolidayRepository(window.localStorage)),
-    []
-  )
-
   useEffect(() => {
-    if (!holidayRepository) return
+    if (typeof window === "undefined") return
     queueMicrotask(() => {
-      setHolidays(holidayRepository.read())
+      void holidayStore.read().then(setHolidays)
       // Les congés viennent de leur propre écran : la permanence les LIT, pour
       // remplir sa colonne « CP » et pour ne confier les clés à personne qui
       // soit en vacances cette semaine-là.
       setCampaigns(createPaidLeaveRepository(window.localStorage).list())
     })
     absenceService.list().then(setAbsences)
-  }, [holidayRepository])
+  }, [])
 
   // Le mois affiché et l'année entière se relisent ensemble : le récapitulatif
   // annuel et le passif du générateur viennent tous deux des mois voisins.

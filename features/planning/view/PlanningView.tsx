@@ -48,7 +48,8 @@ import {
   type WeekOption,
 } from "@/features/planning/board"
 import { weekDayOf } from "@/features/core/shared"
-import { createHolidayRepository } from "@/features/planning/holidays/holiday.repository"
+import { holidayStore } from "@/features/planning/holidays/holiday.store"
+import type { StoredHolidays } from "@/features/planning/holidays/holiday.repository"
 import { frenchHolidaysOf } from "@/features/planning/holidays/model/french-holidays"
 import { holidayPlanForPeriod } from "@/features/planning/holidays/model/holiday-plan"
 import { evaluateSetupReadiness, useSetupReadiness } from "@/features/onboarding"
@@ -227,18 +228,37 @@ export function PlanningView({
   /**
    * Ce que la grille doit savoir des fériés de la semaine affichée.
    *
-   * Lu au rendu et non gardé en état : le gérant peut régler un férié dans
-   * l'onglet voisin, revenir ici, et la grille doit dire son dernier réglage
-   * sans qu'il ait à régénérer.
+   * L'intention n'a pas changé : le gérant peut régler un férié dans l'onglet
+   * voisin, revenir ici, et la grille doit dire son dernier réglage sans qu'il
+   * ait à régénérer. La lecture au rendu ne le permet plus — elle part vers la
+   * base — donc la valeur est tenue en état et RELUE au retour sur l'onglet.
+   * Sans ce rechargement, la grille afficherait un réglage périmé sans le dire.
    */
+  const [storedHolidays, setStoredHolidays] = useState<StoredHolidays>({})
+
+  useEffect(() => {
+    if (typeof window === "undefined") return
+    let active = true
+    const load = (): void => {
+      void holidayStore.read().then((stored) => {
+        if (active) setStoredHolidays(stored)
+      })
+    }
+    load()
+    window.addEventListener("focus", load)
+    return () => {
+      active = false
+      window.removeEventListener("focus", load)
+    }
+  }, [])
+
   const holidayContext = useMemo(() => {
     if (!editorState) return undefined
     const period = {
       start: editorState.planning.periodStart,
       end: editorState.planning.periodEnd,
     }
-    const stored =
-      typeof window === "undefined" ? {} : createHolidayRepository(window.localStorage).read()
+    const stored = storedHolidays
     const holidays = holidayPlanForPeriod(period, stored, (date) => {
       const day = initialStore?.openingHours.find((hours) => hours.day === weekDayOf(date))
       return day && !day.closed && day.opensAt && day.closesAt
@@ -267,7 +287,7 @@ export function PlanningView({
         ])
       ),
     }
-  }, [editorState, employees, initialStore])
+  }, [editorState, employees, initialStore, storedHolidays])
 
   const boardInput = useMemo(
     () =>
@@ -406,7 +426,10 @@ export function PlanningView({
     const scope = scopeForWeek(targetWeek)
     const holidayPlan = holidayPlanForPeriod(
       scope.period,
-      typeof window === "undefined" ? {} : createHolidayRepository(window.localStorage).read(),
+      // Relu ici plutôt que pris dans l'état : la génération doit partir du
+      // dernier réglage, y compris s'il vient d'être changé dans l'autre onglet
+      // pendant que cet écran attendait.
+      await holidayStore.read(),
       (date) => {
         const day = initialStore.openingHours.find((hours) => hours.day === weekDayOf(date))
         return day && !day.closed && day.opensAt && day.closesAt

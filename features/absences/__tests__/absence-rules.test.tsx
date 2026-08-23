@@ -78,29 +78,29 @@ describe("les règles en vigueur", () => {
 })
 
 describe("le stockage des règles", () => {
-  it("relit ce qu'il a écrit", () => {
+  it("relit ce qu'il a écrit", async () => {
     const repository = createAbsenceRulesRepository(memoryStorage())
     const rules = withRule(DEFAULT_ABSENCE_RULES, "unpaid_leave", { hours: "maintained" })
-    repository.save(rules)
-    expect(repository.read()).toEqual(rules)
+    await repository.save(rules)
+    expect(await repository.read()).toEqual(rules)
   })
 
-  it("revient au tableau d'origine après remise à zéro", () => {
+  it("revient au tableau d'origine après remise à zéro", async () => {
     const repository = createAbsenceRulesRepository(memoryStorage())
-    repository.save(withRule(DEFAULT_ABSENCE_RULES, "training", { hours: "deducted" }))
-    repository.reset()
-    expect(repository.read()).toEqual(DEFAULT_ABSENCE_RULES)
+    await repository.save(withRule(DEFAULT_ABSENCE_RULES, "training", { hours: "deducted" }))
+    await repository.reset()
+    expect(await repository.read()).toEqual(DEFAULT_ABSENCE_RULES)
   })
 
-  it("traite un stockage illisible comme l'absence d'écart", () => {
+  it("traite un stockage illisible comme l'absence d'écart", async () => {
     // Les absences doivent continuer de se saisir : un réglage corrompu ne peut
     // pas empêcher d'enregistrer un arrêt de travail.
     const storage = memoryStorage()
     storage.setItem("shiftos_absence_rules", "{ pas du json")
-    expect(createAbsenceRulesRepository(storage).read()).toEqual(DEFAULT_ABSENCE_RULES)
+    expect(await createAbsenceRulesRepository(storage).read()).toEqual(DEFAULT_ABSENCE_RULES)
 
     storage.setItem("shiftos_absence_rules", JSON.stringify({ sick_leave: { hours: "n'importe" } }))
-    expect(createAbsenceRulesRepository(storage).read()).toEqual(DEFAULT_ABSENCE_RULES)
+    expect(await createAbsenceRulesRepository(storage).read()).toEqual(DEFAULT_ABSENCE_RULES)
   })
 })
 

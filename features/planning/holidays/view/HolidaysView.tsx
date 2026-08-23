@@ -7,7 +7,8 @@ import { cn } from "@/lib/utils"
 
 import type { IsoDate, WeekDay } from "@/features/core/models"
 import { useEmployees } from "@/features/employees/hooks/useEmployees"
-import { createHolidayRepository, type StoredHolidays } from "@/features/planning/holidays/holiday.repository"
+import { type StoredHolidays } from "@/features/planning/holidays/holiday.repository"
+import { holidayStore } from "@/features/planning/holidays/holiday.store"
 import { buildHolidayYear } from "@/features/planning/holidays/model/holiday-year-view-model"
 import type { HolidayOpening } from "@/features/planning/holidays/model/holiday-schedule"
 import { HolidayDayCard } from "@/features/planning/holidays/ui/HolidayDayCard"
@@ -31,15 +32,16 @@ export function HolidaysView({ initialStore }: { readonly initialStore: StoreCon
   const [year, setYear] = useState(() => new Date().getFullYear())
   const [expanded, setExpanded] = useState<IsoDate | null>(null)
 
-  const repository = useMemo(
-    () => (typeof window === "undefined" ? null : createHolidayRepository(window.localStorage)),
-    []
-  )
-
   useEffect(() => {
-    if (!repository) return
-    queueMicrotask(() => setStored(repository.read()))
-  }, [repository])
+    if (typeof window === "undefined") return
+    let active = true
+    void holidayStore.read().then((stored) => {
+      if (active) setStored(stored)
+    })
+    return () => {
+      active = false
+    }
+  }, [])
 
   /**
    * Les horaires habituels du magasin pour cette date : le point de départ
@@ -81,7 +83,7 @@ export function HolidaysView({ initialStore }: { readonly initialStore: StoreCon
         ...(current ?? {}),
         [date]: { ...(current?.[date] ?? {}), ...patch },
       }
-      repository?.save(next)
+      void holidayStore.save(next)
       return next
     })
   }
