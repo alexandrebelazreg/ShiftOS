@@ -4,34 +4,50 @@ Tout ShiftOS vit désormais dans une base. Un incident qui l'atteint atteint tou
 le magasin, l'équipe, les absences, chaque planning passé.
 
 **Une sauvegarde jamais restaurée n'est pas une sauvegarde.** Tant qu'une
-restauration n'a pas été faite pour de vrai, on ne sait pas si les fichiers sont
-lisibles, si la procédure fonctionne, ni combien de temps elle prend — et on
+restauration n'a pas été faite pour de vrai, on ne sait pas si le fichier est
+lisible, si la procédure fonctionne, ni combien de temps elle prend — et on
 l'apprend le jour où c'est urgent.
 
 ---
 
-## Ce que Supabase fait tout seul
+## Ce que Supabase fait, et ne fait pas
 
-| Formule | Sauvegardes | Restauration à un instant précis |
+| Formule | Sauvegardes gérées | Restauration à un instant précis |
 |---|---|---|
-| Free | quotidiennes, conservées 7 jours | non |
-| Pro | quotidiennes, conservées 7 jours | oui, en option |
+| **Free** | **aucune** | non |
+| Pro | quotidiennes, 7 jours de rétention | en option payante |
 
-À vérifier dans `Project Settings` → `Database` → `Backups` : la formule change,
-la rétention aussi.
+La ligne qui compte est la première. **Sur la formule gratuite, il n'existe
+aucune sauvegarde à restaurer** : ni dans le tableau de bord, ni ailleurs. Le
+projet peut être suspendu après une inactivité prolongée, et rien ne le
+rattraperait.
 
-## L'export à garder chez soi
+Exporter n'est donc pas une précaution supplémentaire : c'est la seule qui
+existe.
 
-Une sauvegarde qui vit chez l'hébergeur ne protège pas d'un compte suspendu ni
-d'une suppression de projet. Un export téléchargé, oui.
+## Fabriquer l'export
 
-**Supabase → `Database` → `Backups` → `Download`**, ou en ligne de commande :
+La chaîne de connexion contient le mot de passe de la base. **Elle ne se colle
+nulle part qu'ici, et surtout pas dans une conversation.**
+
+`Project Settings` → `Database` → `Connection string` → onglet `URI`.
+
+### Depuis un poste où l'outil Supabase est disponible
 
 ```
-npx supabase db dump --db-url "postgresql://..." -f shiftos-2026-08-23.sql
+npx supabase db dump --db-url "LA_CHAINE_DE_CONNEXION" -f shiftos-AAAA-MM-JJ.sql
 ```
 
-À garder ailleurs que sur la machine qui sert à travailler.
+### Ou depuis n'importe quelle machine dotée de Docker
+
+Sans rien installer, en empruntant `pg_dump` à une image Postgres :
+
+```
+docker run --rm postgres:16-alpine pg_dump "LA_CHAINE_DE_CONNEXION" > shiftos-AAAA-MM-JJ.sql
+```
+
+Le fichier se garde **ailleurs que sur la machine de travail**. Un export posé à
+côté de ce qu'il protège ne protège de rien.
 
 ## L'exercice de restauration
 
@@ -39,29 +55,42 @@ npx supabase db dump --db-url "postgresql://..." -f shiftos-2026-08-23.sql
 
 1. Créer un **second projet Supabase**, en région européenne, nommé
    `shiftos-restauration`.
-2. Y appliquer l'export : `SQL Editor`, coller le fichier, exécuter.
+2. Y appliquer l'export : `SQL Editor`, coller le contenu du fichier, exécuter.
 3. Copier les deux valeurs de connexion de ce projet dans un `.env.local` de
-   test, et lancer `npm run dev`.
-4. Se connecter, ouvrir `Configuration → Employés`, `Planning`, `Congés`.
-5. **Comparer avec la vraie base.** Le compte des salariés, un planning précis,
+   test, puis `npm run dev`.
+4. Recréer un compte dans ce projet (`Authentication` → `Add user`, avec
+   « Auto Confirm ») et le rattacher — voir la section suivante.
+5. Se connecter, ouvrir `Configuration → Employés`, `Planning`, `Congés`.
+6. **Comparer avec la vraie base** : le nombre de salariés, un planning précis,
    une absence connue.
-6. Supprimer le projet de restauration.
+7. Supprimer le projet de restauration.
 
 Ce qui compte n'est pas que l'export existe : c'est que **ShiftOS démarre
 dessus**. Une base restaurée dont l'application ne veut pas ne sauve rien.
 
-## Ce qu'un incident coûte aujourd'hui
+## Le piège qui fait échouer l'exercice
 
-Sans restauration testée, la réponse honnête à « combien de temps pour
-repartir ? » est **inconnue**. Après l'exercice ci-dessus, elle devient un
-chiffre — et c'est ce chiffre qui permet de décider s'il faut passer en formule
-Pro pour la restauration à un instant précis.
+**Les comptes vivent dans le schéma `auth`, que Supabase possède et que l'export
+n'emporte pas.** Une base restaurée contient donc toutes les données métier et
+aucun moyen de s'y connecter.
 
-## Ce qui reste hors sauvegarde
+Le rattachement se refait à la main :
 
-Les comptes d'authentification vivent dans le schéma `auth`, que l'export
-standard **n'emporte pas**. Après une restauration, il faudra recréer le compte
-manager et relancer `supabase/bootstrap.sql` pour le rattacher au magasin.
+```
+insert into profiles (id, store_id, role, email)
+select u.id, s.id, 'manager', u.email
+from auth.users u, stores s
+where u.email = 'VOTRE_ADRESSE'
+limit 1;
+```
 
-Les données métier, elles, sont intactes : `bootstrap.sql` ne crée un magasin
-que s'il n'en existe pas déjà pour ce compte.
+Le magasin, lui, est déjà là — il vient de l'export. C'est pour cela que
+`bootstrap.sql` ne convient pas ici : il en créerait un second, vide.
+
+## Combien de temps pour repartir
+
+Sans exercice, la réponse honnête est **inconnue**. Après, c'est un chiffre — et
+c'est ce chiffre qui permet de décider si la formule Pro et sa restauration à un
+instant précis valent leur prix.
+
+Noter la durée réelle en bas de ce fichier le jour où l'exercice est fait.
