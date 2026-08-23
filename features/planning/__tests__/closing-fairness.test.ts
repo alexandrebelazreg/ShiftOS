@@ -146,8 +146,12 @@ describe("historique — ce qui compte et ce qui ne compte pas", () => {
     ])
     expect(of(result, "alice").closings).toBe(2)
     expect(of(result, "bruno").closings).toBe(0)
-    // Les deux ont eu l'occasion les deux jours.
-    expect(of(result, "bruno").opportunities).toBe(2)
+    // Une semaine vaut UNE PART, exprimée en cinquièmes : ces salariés ont six
+    // jours au contrat, donc la part pleine. Compter les jours ferait dépendre
+    // le dénominateur de la taille du contrat, ce que l'équité par semaine
+    // existe précisément pour éviter.
+    expect(of(result, "bruno").opportunities).toBe(5)
+    expect(of(result, "alice").opportunities).toBe(5)
   })
 
   it("ignore un brouillon", () => {
@@ -208,9 +212,28 @@ describe("historique — ce qui compte et ce qui ne compte pas", () => {
         absences: [{ employeeId: "bruno", start: MONDAY, end: MONDAY }],
       }),
     ])
-    // Bruno n'a pas « raté » le lundi : il ne pouvait pas le prendre.
-    expect(of(result, "bruno").opportunities).toBe(1)
-    expect(of(result, "alice").opportunities).toBe(2)
+    // Absent le lundi seulement : la semaine lui restait ouverte, il pouvait
+    // fermer les autres jours. Elle compte donc en entier — l'unité est la
+    // semaine, et rogner la part pour une journée ferait revenir par la fenêtre
+    // le comptage par jour qu'on vient d'écarter.
+    expect(of(result, "bruno").opportunities).toBe(5)
+    expect(of(result, "alice").opportunities).toBe(5)
+  })
+
+  it("ne compte pas une semaine où l'absence couvrait tout", () => {
+    // Ce qui doit protéger un absent n'est pas de perdre une part de semaine,
+    // c'est de n'en compter aucune : sans cela, revenir d'un arrêt d'un mois
+    // ferait passer pour « en retard » de fermetures qu'on ne pouvait pas
+    // prendre, et lui vaudrait toutes celles du retour.
+    const result = history([
+      week({
+        id: "w1", status: "published", sectorIds: ["drive"], periodStart: MONDAY, periodEnd: SATURDAY,
+        closers: { [MONDAY]: "alice", [SATURDAY]: "alice" },
+        absences: [{ employeeId: "bruno", start: MONDAY, end: SATURDAY }],
+      }),
+    ])
+    expect(of(result, "bruno").opportunities).toBe(0)
+    expect(of(result, "alice").opportunities).toBe(5)
   })
 
   it("ne compte pas comme éligible un salarié qui ne peut pas fermer", () => {
@@ -229,7 +252,9 @@ describe("historique — ce qui compte et ce qui ne compte pas", () => {
     ])
     expect(of(result, "alice").closings).toBe(1)
     expect(of(result, "alice").saturdayClosings).toBe(1)
-    expect(of(result, "alice").saturdayOpportunities).toBe(1)
+    // Le samedi se mesure comme le reste : une part par semaine où un samedi
+    // était possible, et non une occasion par samedi.
+    expect(of(result, "alice").saturdayOpportunities).toBe(5)
   })
 
   it("est déterministe et trié", () => {
@@ -399,45 +424,46 @@ describe("validateur — rapporte, ne juge pas", () => {
     expect(messages).toContain("après")
   })
 
-  it("dépense le plafond hebdomadaire, exactement comme l'historique", () => {
-    // Le comptage des occasions de la semaine en cours ignorait le plafond,
-    // alors que l'historique l'applique : la même semaine se comptait donc de
-    // deux façons, et la charge affichée changeait toute seule une fois la
-    // semaine passée dans l'historique. L'écart va dans un seul sens — la
-    // charge paraît trop BASSE, donc la personne semble devoir des fermetures
-    // qu'elle n'avait pas le droit de prendre.
+  it("ne laisse PAS le plafond réduire ce qu'on doit à quelqu'un", () => {
+    // Le plafond borne ce qu'on peut DONNER, jamais ce qu'on DOIT. Il entrait
+    // autrefois dans le dénominateur : dès qu'un salarié plafonné à une
+    // fermeture l'avait prise, ses jours restants cessaient d'être des
+    // occasions, sa charge devenait pleine, et il sortait de la file — alors
+    // qu'il était justement celui qui devait rester devant pour se rapprocher
+    // le plus possible de ceux qui en font deux.
     const problem = problemWith({ balanceClosings: true, balanceSaturdayClosings: false })
-    const report = validatePlanningSolutionV3(problem, referenceSolution(fingerprintProblem(problem)))
-    const lineFor = (name: string, from: typeof report) =>
+    const lineFor = (name: string, from: ReturnType<typeof validatePlanningSolutionV3>) =>
       from.informations.find((entry) => entry.message.startsWith(name))!.message
 
-    // dylan est plafonné à deux fermetures et prend les deux : les jours
-    // suivants cessent d'être des occasions, donc sa charge est pleine.
-    expect(lineFor("dylan", report)).toContain("charge finale 1000 ‰")
-
-    // Sans plafond, les mêmes deux fermetures se rapportent à toute la semaine.
-    const uncapped = {
-      ...problem,
-      employees: problem.employees.map((employee) => ({ ...employee, maximumClosings: null })),
-    } as typeof problem
-    const without = validatePlanningSolutionV3(uncapped, referenceSolution(fingerprintProblem(uncapped)))
-    expect(lineFor("dylan", without)).not.toContain("charge finale 1000 ‰")
-  })
-
-  it("ne compte pas d'occasion tant que le plafond n'est pas entamé", () => {
-    // Le plafond ne retire RIEN à qui n'a pas encore fermé : c'est ce qui évite
-    // de punir quelqu'un pour une limite qu'il n'a pas utilisée. Un salarié
-    // plafonné mais sans fermeture cette semaine garde toutes ses occasions.
-    const problem = problemWith({ balanceClosings: true, balanceSaturdayClosings: false })
-    const idle = {
+    const capped = {
       ...problem,
       employees: problem.employees.map((employee) => ({ ...employee, maximumClosings: 1 })),
     } as typeof problem
-    const report = validatePlanningSolutionV3(idle, referenceSolution(fingerprintProblem(idle)))
-    const bruno = report.informations.find((entry) => entry.message.startsWith("bruno"))!.message
-    // bruno ferme une fois, dans les limites de son plafond : sa charge reste
-    // celle d'une semaine entière d'occasions, pas celle d'un jour.
-    expect(bruno).toContain("charge finale 167 ‰")
+    const free = {
+      ...problem,
+      employees: problem.employees.map((employee) => ({ ...employee, maximumClosings: null })),
+    } as typeof problem
+
+    const withCap = validatePlanningSolutionV3(capped, referenceSolution(fingerprintProblem(capped)))
+    const without = validatePlanningSolutionV3(free, referenceSolution(fingerprintProblem(free)))
+
+    for (const name of ["alice", "bruno", "chloe", "dylan"]) {
+      expect(lineFor(name, withCap), `le plafond a changé la charge de ${name}`).toBe(lineFor(name, without))
+    }
+  })
+
+  it("mesure la semaine en cours comme il mesure les semaines passées", () => {
+    // Les deux moitiés du même rapport. Calculées différemment, la charge
+    // affichée changerait toute seule dès que cette semaine deviendrait de
+    // l'historique — c'est exactement la panne qui a précédé.
+    const problem = problemWith({ balanceClosings: true, balanceSaturdayClosings: false })
+    const report = validatePlanningSolutionV3(problem, referenceSolution(fingerprintProblem(problem)))
+    const dylan = report.informations.find((entry) => entry.message.startsWith("dylan"))!.message
+
+    // dylan n'a aucun historique et ferme deux fois sur une semaine de part
+    // pleine : deux fermetures pour cinq cinquièmes, soit 400 pour mille.
+    expect(dylan).toContain("2 ajoutée(s) cette semaine")
+    expect(dylan).toContain("charge finale 400 ‰")
   })
 
   it("ne rapporte rien du tout quand l'équité est éteinte", () => {

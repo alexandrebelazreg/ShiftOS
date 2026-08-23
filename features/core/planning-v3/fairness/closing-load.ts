@@ -19,6 +19,36 @@ import type { PlanningClosingHistoryV3 } from "@/features/core/planning-v3/types
  * a week where they finally can close is the week to give them one.
  */
 
+/**
+ * La part d'une semaine, exprimée en cinquièmes.
+ *
+ * L'unité d'équité est LA SEMAINE, pas le jour. Un salarié à cinq jours et un
+ * salarié à six jours prennent la même part de fermetures : compter les jours
+ * les déclarait à égalité pour des nombres de fermetures très différents — six
+ * fermetures sur dix-huit jours et deux sur six donnent le même rapport, alors
+ * que l'un a fermé trois fois plus souvent. C'est ce que le gérant lisait, et
+ * qu'il refusait à juste titre.
+ *
+ * Sous cinq jours, la part redevient proportionnelle : quelqu'un qui vient deux
+ * jours par semaine ne peut pas porter autant de fermetures que quelqu'un qui
+ * vient six fois, et lui en demander autant reviendrait à le faire fermer
+ * presque à chaque venue.
+ *
+ * Exprimée en CINQUIÈMES et non en fraction décimale : le dénominateur des
+ * charges doit rester entier, parce que les moteurs comparent les charges par
+ * produit en croix — exact en entiers, dépendant de l'arrondi sinon, donc
+ * susceptible de changer d'une machine à l'autre.
+ *
+ * Le plancher à 1 protège un cas de données : quelqu'un qui a réellement fermé
+ * doit avoir une part non nulle, sinon sa fermeture existerait sans rien pour
+ * la rapporter et sa charge deviendrait incalculable.
+ */
+export const FULL_SHARE_WORKING_DAYS = 5
+
+export function weeklyClosingShare(contractedWorkingDays: number): number {
+  return Math.max(1, Math.min(FULL_SHARE_WORKING_DAYS, contractedWorkingDays))
+}
+
 export interface ClosingLoad {
   readonly employeeId: EmployeeId
   readonly closings: number

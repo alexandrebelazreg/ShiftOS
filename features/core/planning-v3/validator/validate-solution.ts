@@ -22,6 +22,7 @@ import {
   closingLoadSpreadPermille,
   loadsAfterWeek,
   saturdayLoadsAfterWeek,
+  weeklyClosingShare,
   type ClosingLoad,
 } from "@/features/core/planning-v3/fairness/closing-load"
 import {
@@ -445,51 +446,43 @@ export function validatePlanningSolutionV3(
       }
     }
 
-    // Every open day someone was available for is an opportunity they had this
-    // week, exactly as the history counts past ones — LE PLAFOND HEBDOMADAIRE
-    // COMPRIS, qui se dépense au fil de la semaine.
+    // La semaine en cours pèse comme les semaines passées : UNE PART PAR SEMAINE,
+    // et non une occasion par jour. Les deux comptes doivent suivre la même règle
+    // — l'historique et cette semaine forment un seul rapport, et les calculer
+    // différemment ferait changer la charge affichée dès que cette semaine
+    // deviendrait de l'historique, sans que rien n'ait bougé.
     //
-    // Il était ignoré ici alors que l'historique l'applique, si bien que la même
-    // semaine se comptait de deux façons : le rapport annonçait une charge, puis
-    // la semaine d'après — celle-ci devenue de l'historique — en affichait une
-    // autre sans que rien n'ait bougé. Chez quelqu'un plafonné à une fermeture,
-    // l'écart dépasse cent pour mille, et il porte toujours dans le même sens :
-    // la charge affichée est trop BASSE, donc la personne paraît devoir des
-    // fermetures qu'elle n'a jamais eu le droit de prendre.
-    //
-    // Les jours sont donc parcourus DANS L'ORDRE, et le plafond se réinitialise
-    // à chaque semaine, comme l'historique le fait à chaque enregistrement.
+    // Un seul jour possible suffit à ouvrir la semaine. Le plafond hebdomadaire
+    // n'intervient plus : il borne ce qu'on peut donner, pas ce qu'on doit.
     const addedOpportunities: Record<string, number> = {}
     const addedSaturdayOpportunities: Record<string, number> = {}
-    const spentThisWeek: Record<string, number> = {}
-    const employeeDaysByDate = new Map<string, (typeof problem.employeeDays)[number][]>()
+    const openWeeks = new Set<string>()
+    const openSaturdayWeeks = new Set<string>()
+    const dayByDateLocal = new Map(problem.days.map((day) => [day.date, day]))
     for (const entry of problem.employeeDays) {
-      const list = employeeDaysByDate.get(entry.date) ?? []
-      list.push(entry)
-      employeeDaysByDate.set(entry.date, list)
-    }
-    for (const day of [...problem.days].sort((left, right) => left.date.localeCompare(right.date))) {
-      if (day.closed) continue
-      for (const entry of employeeDaysByDate.get(day.date) ?? []) {
+      const id = String(entry.employeeId)
+      const day = dayByDateLocal.get(entry.date)
+      if (!day || day.closed) continue
+      const employee = employeeById.get(id)
+      if (!employee?.canClose) continue
+      const closed = closedOn.has(`${id}|${entry.date}`)
+      if (!closed) {
         if (!entry.available) continue
-        const id = String(entry.employeeId)
-        const employee = employeeById.get(id)
-        if (!employee?.canClose) continue
         if (day.closesAtMinutes !== null && entry.latestEndMinutes < day.closesAtMinutes) continue
-        const spentKey = `${id}|${day.weekKey}`
-        if (employee.maximumClosings !== null && (spentThisWeek[spentKey] ?? 0) >= employee.maximumClosings) {
-          continue
-        }
-
-        addedOpportunities[id] = (addedOpportunities[id] ?? 0) + 1
-        if (day.weekDay === "saturday") {
-          addedSaturdayOpportunities[id] = (addedSaturdayOpportunities[id] ?? 0) + 1
-        }
-        if (closedOn.has(`${id}|${day.date}`)) {
-          spentThisWeek[spentKey] = (spentThisWeek[spentKey] ?? 0) + 1
-        }
+      }
+      openWeeks.add(`${id}|${day.weekKey}`)
+      if (day.weekDay === "saturday") openSaturdayWeeks.add(`${id}|${day.weekKey}`)
+    }
+    const addShare = (into: Record<string, number>, keys: Set<string>) => {
+      for (const key of keys) {
+        const id = key.slice(0, key.indexOf("|"))
+        const employee = employeeById.get(id)
+        if (!employee) continue
+        into[id] = (into[id] ?? 0) + weeklyClosingShare(employee.workingDays.length)
       }
     }
+    addShare(addedOpportunities, openWeeks)
+    addShare(addedSaturdayOpportunities, openSaturdayWeeks)
 
     const historyById = new Map(history.map((entry) => [String(entry.employeeId), entry]))
     const before = loadsAfterWeek(history, {}, {}, closerIds)

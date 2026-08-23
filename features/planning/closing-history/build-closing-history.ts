@@ -1,4 +1,5 @@
 import type { EmployeeId, IsoDate, ShiftSegment } from "@/features/core/models"
+import { weeklyClosingShare } from "@/features/core/planning-v3/fairness/closing-load"
 import type { PlanningRecord } from "@/features/planning/persistence/planning-record"
 
 /**
@@ -8,9 +9,13 @@ import type { PlanningRecord } from "@/features/planning/persistence/planning-re
  * The counts alone are useless and, worse, misleading. Someone absent three of
  * the last eight weeks closed fewer times than everyone else; rewarding them
  * with every closing of the coming week is not fairness, it is arithmetic
- * pretending to be fairness. So every closing is paired with the number of real
- * opportunities that produced it, and the engines compare LOADS — closings per
- * opportunity — never raw totals.
+ * pretending to be fairness. So every closing is paired with what that person
+ * OWED over the same period, and the engines compare LOADS — never raw totals.
+ *
+ * **L'unité est la SEMAINE.** Une semaine où fermer était possible vaut une
+ * part ; le nombre de jours travaillés n'entre pas dans le dénominateur, sauf
+ * en dessous de cinq jours où la part décroît. Un plafond de fermetures ne
+ * retire rien non plus : il borne ce qu'on peut donner, pas ce qu'on doit.
  *
  * Read from persisted plannings and nothing else. The solvers never touch a
  * repository: they receive this already reduced to integers, which is what keeps
@@ -21,10 +26,20 @@ import type { PlanningRecord } from "@/features/planning/persistence/planning-re
 export interface ClosingHistoryEntry {
   readonly employeeId: EmployeeId
   readonly closings: number
-  /** Days this employee could have closed, whether or not they did. */
+  /**
+   * Ce que cette personne DEVAIT porter sur la fenêtre, en cinquièmes.
+   *
+   * Une part par SEMAINE où fermer était possible, et non une occasion par
+   * jour. Compter les jours faisait dépendre le dénominateur de la taille du
+   * contrat : six fermetures sur dix-huit jours et deux sur six donnaient le
+   * même rapport, si bien que deux personnes très inégalement sollicitées
+   * étaient déclarées à égalité. La part vaut `min(5, jours au contrat)` — cinq
+   * et six jours prennent la même, en dessous elle décroît.
+   */
   readonly opportunities: number
   /** Saturdays closed. Always also counted in `closings`. */
   readonly saturdayClosings: number
+  /** Comme `opportunities`, sur les seules semaines portant un samedi possible. */
   readonly saturdayOpportunities: number
 }
 
@@ -61,23 +76,33 @@ export function buildClosingHistory(request: ClosingHistoryRequest): readonly Cl
   }
 
   for (const record of eligibleRecords(request)) {
-    // A weekly cap is spent as the week goes. Days walked in order so that once
-    // someone has closed as often as their cap allows, the remaining days stop
-    // being opportunities for them — counting them would depress a load for a
-    // limit they never chose.
-    const spent = new Map<string, number>()
+    // UNE SEMAINE, et non des jours. Le dénominateur ne doit pas dépendre du
+    // nombre de jours travaillés : compter les jours déclarait à égalité
+    // quelqu'un qui avait fermé six fois et quelqu'un qui avait fermé deux fois,
+    // parce que le premier avait aussi trois fois plus de jours au dénominateur.
+    //
+    // Le plafond hebdomadaire N'ENTRE PLUS ICI. Il borne ce qu'on peut donner à
+    // quelqu'un, il ne réduit pas ce qu'on lui doit : le retirer du dénominateur
+    // faisait paraître pleinement chargé un salarié plafonné à une fermeture dès
+    // qu'il l'avait prise, et le sortait de la file alors qu'il était justement
+    // celui qui devait rester devant.
+    const openWeek = new Set<string>()
+    const openSaturday = new Set<string>()
 
     for (const day of closingDaysOf(record, request.sectorId)) {
       for (const employeeId of roster) {
         const bucket = tally.get(employeeId)
         if (!bucket) continue
-        if (!wasEligibleToClose(record, employeeId, day, request.minimumRestMinutes, spent.get(employeeId) ?? 0)) continue
+        const closed = day.closers.has(employeeId)
+        // Avoir fermé prouve qu'on le pouvait. La semaine compte alors quoi que
+        // dise le modèle d'éligibilité — sinon une fermeture existerait sans
+        // aucune part pour la rapporter, et la charge serait incalculable.
+        if (!closed && !couldHaveClosed(record, employeeId, day, request.minimumRestMinutes)) continue
 
-        bucket.opportunities += 1
-        if (day.isSaturday) bucket.saturdayOpportunities += 1
-        if (day.closers.has(employeeId)) {
+        openWeek.add(employeeId)
+        if (day.isSaturday) openSaturday.add(employeeId)
+        if (closed) {
           bucket.closings += 1
-          spent.set(employeeId, (spent.get(employeeId) ?? 0) + 1)
           // A Saturday closing counts in BOTH tallies: it is a closing like any
           // other, and separately the one the Saturday rule is about. Counting
           // it only in the Saturday tally would make Saturdays free in the
@@ -86,11 +111,32 @@ export function buildClosingHistory(request: ClosingHistoryRequest): readonly Cl
         }
       }
     }
+
+    for (const employeeId of openWeek) {
+      tally.get(employeeId)!.opportunities += shareOf(record, employeeId)
+    }
+    for (const employeeId of openSaturday) {
+      tally.get(employeeId)!.saturdayOpportunities += shareOf(record, employeeId)
+    }
   }
 
   return [...tally.entries()]
     .map(([employeeId, counts]) => ({ employeeId: employeeId as unknown as EmployeeId, ...counts }))
     .sort((left, right) => String(left.employeeId).localeCompare(String(right.employeeId)))
+}
+
+/**
+ * La part de cette personne pour cette semaine-là.
+ *
+ * Lue dans le contrat tel qu'il était ENREGISTRÉ dans la semaine, et non tel
+ * qu'il est aujourd'hui : quelqu'un passé de deux à cinq jours le mois dernier
+ * doit voir ses anciennes semaines comptées pour ce qu'elles étaient.
+ */
+function shareOf(record: PlanningRecord, employeeId: string): number {
+  const contract = record.state.coreInput.contracts.find(
+    (entry) => String(entry.employeeId) === employeeId
+  )
+  return weeklyClosingShare(contract?.workingDays.length ?? 0)
 }
 
 /** Published or archived, this sector's, strictly before the generated week, inside the window. */
@@ -194,12 +240,17 @@ function minutesOf(value: string): number | null {
  * nice". An opportunity nobody could have taken is not an opportunity, and
  * counting one would punish the employee it was impossible for.
  */
-function wasEligibleToClose(
+/**
+ * Cette personne aurait-elle pu fermer CE JOUR-LÀ ?
+ *
+ * Sert désormais à une seule question : la semaine comptait-elle pour elle. Un
+ * seul jour possible suffit, parce que l'unité d'équité est la semaine.
+ */
+function couldHaveClosed(
   record: PlanningRecord,
   employeeId: string,
   day: ClosingDay,
-  minimumRestMinutes: number,
-  closingsAlreadyTaken: number
+  minimumRestMinutes: number
 ): boolean {
   const input = record.state.coreInput
   const employee = input.employees.find((entry) => String(entry.id) === employeeId)
@@ -225,10 +276,11 @@ function wasEligibleToClose(
   const latestEnd = constraints.find((entry) => entry.type === "LATEST_END")?.value
   if (typeof latestEnd === "number" && latestEnd < day.closesAtMinutes) return false
 
-  // A cap of 0 is a total ban; a positive cap already spent leaves no room for
-  // the rest of the week. Both make the day a non-opportunity.
+  // Un plafond à ZÉRO est une interdiction : cette personne ne ferme jamais, la
+  // semaine ne compte donc pas pour elle. Un plafond positif, en revanche, ne
+  // retire plus rien — il borne ce qu'on peut lui donner, pas ce qu'on lui doit.
   const cap = constraints.find((entry) => entry.type === "MAX_CLOSINGS")?.value
-  if (typeof cap === "number" && closingsAlreadyTaken >= cap) return false
+  if (cap === 0) return false
 
   // Rest: closing at 20:00 is impossible for someone who actually started at
   // 06:00 the next morning. Checked against what they DID work, because that is
