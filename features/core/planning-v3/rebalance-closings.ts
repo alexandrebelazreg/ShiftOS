@@ -157,6 +157,58 @@ function minutesOn(
   return found ? totalMinutes(found) : 0
 }
 
+/**
+ * Combien de jours au plus avant de renoncer à l'exploration exhaustive.
+ *
+ * Le nombre de combinaisons double à chaque jour ajouté. Une période de
+ * génération en compte sept, donc cent vingt-sept combinaisons — négligeable.
+ * La borne protège d'une période inhabituellement longue, pas du cas courant.
+ */
+const MAX_DAYS_FOR_SUBSETS = 14
+
+/**
+ * Les groupes de jours dont l'échange conserve les DEUX totaux hebdomadaires.
+ *
+ * Un échange ne préserve un contrat que si les durées échangées se compensent
+ * exactement. Chercher une seule journée de compensation ne suffisait pas :
+ * quand deux salariés ont le même contrat hebdomadaire, leurs écarts
+ * quotidiens s'annulent sur la SEMAINE, rarement sur une paire de jours.
+ * C'est ce qui faisait échouer tous les échanges dans une équipe pourtant
+ * homogène — et à la limite, échanger la semaine entière conserve les totaux
+ * par construction.
+ *
+ * Les groupes sont rendus du plus petit au plus grand : à équité égale, le
+ * planning qui bouge le moins est celui que le gérant reconnaît.
+ */
+function balancedSubsets(
+  deltas: readonly number[],
+  anchor: number,
+  exhaustive: boolean
+): number[][] {
+  const found: number[][] = []
+  const limit = exhaustive ? deltas.length : Math.min(deltas.length, 2)
+
+  for (let size = 1; size <= limit; size += 1) {
+    const current: number[] = []
+    const walk = (start: number, sum: number) => {
+      if (current.length === size) {
+        // Le jour de la fermeture DOIT être du voyage, sinon l'échange ne
+        // déplace pas la fermeture qu'on cherche à déplacer.
+        if (sum === 0 && current.includes(anchor)) found.push([...current])
+        return
+      }
+      for (let index = start; index < deltas.length; index += 1) {
+        current.push(index)
+        walk(index + 1, sum + deltas[index])
+        current.pop()
+      }
+    }
+    walk(0, 0)
+    if (found.length > 0) return found
+  }
+  return found
+}
+
 export function rebalanceClosings(
   problem: PlanningProblemV3,
   solution: PlanningSolutionV3
@@ -197,58 +249,50 @@ export function rebalanceClosings(
   for (let pass = 0; pass < MAX_PASSES; pass += 1) {
     let improvement: { solution: PlanningSolutionV3; swap: ClosingSwap; spread: number } | null = null
 
-    for (const day of problem.days) {
-      if (day.closed || day.closesAtMinutes === null) continue
+    const openDays = problem.days.filter((day) => !day.closed && day.closesAtMinutes !== null)
+    // Au-delà de deux semaines, on renonce à l'exploration exhaustive : elle
+    // double à chaque jour ajouté. Une période de génération en fait sept.
+    const exhaustive = openDays.length <= MAX_DAYS_FOR_SUBSETS
+
+    for (const day of openDays) {
       const closer = closerOf(problem, current.assignments, day.date)
       if (!closer) continue
-      const closerMinutes = totalMinutes(closer)
 
-      for (const other of current.assignments) {
-        if (other.date !== day.date) continue
-        if (String(other.employeeId) === String(closer.employeeId)) continue
+      for (const partner of problem.employees) {
+        if (String(partner.id) === String(closer.employeeId)) continue
 
-        // Les heures hebdomadaires sont une contrainte DURE, exacte à la minute.
-        // Un échange doit donc rendre à chacun exactement son total.
-        //
-        // Durées égales ce jour-là : la journée seule suffit. Sinon il faut une
-        // SECONDE journée qui compense l'écart en sens inverse — l'échange 2×2.
-        // Sans lui, deux contrats différents ne s'échangent jamais, et c'est
-        // précisément la situation où l'équité manquait le plus de liberté.
-        const gap = closerMinutes - totalMinutes(other)
-        const dates: IsoDate[] = [day.date]
-        if (gap !== 0) {
-          const compensating = problem.days.find((second) => {
-            if (second.date === day.date || second.closed) return false
-            const mine = minutesOn(current.assignments, closer.employeeId, second.date)
-            const theirs = minutesOn(current.assignments, other.employeeId, second.date)
-            // Une journée où l'un ou l'autre ne travaille pas déplacerait un
-            // jour de repos, pas des heures : on ne la retient pas.
-            if (mine === 0 || theirs === 0) return false
-            return mine - theirs === -gap
-          })
-          if (!compensating) continue
-          dates.push(compensating.date)
-        }
+        // L'écart de durée, jour par jour. Un jour non travaillé compte zéro :
+        // l'échanger déplace un repos, ce que le validateur jugera.
+        const deltas = openDays.map(
+          (entry) =>
+            minutesOn(current.assignments, closer.employeeId, entry.date) -
+            minutesOn(current.assignments, partner.id, entry.date)
+        )
+        const anchor = openDays.findIndex((entry) => entry.date === day.date)
 
-        const candidate = exchanged(current, dates, closer.employeeId, other.employeeId)
-        const candidateSpread = spreadOf(problem, candidate.assignments, opportunities, closerIds)
-        if (candidateSpread >= spread) continue
+        for (const subset of balancedSubsets(deltas, anchor, exhaustive)) {
+          const dates = subset.map((index) => openDays[index].date)
+          const candidate = exchanged(current, dates, closer.employeeId, partner.id)
+          const candidateSpread = spreadOf(problem, candidate.assignments, opportunities, closerIds)
+          if (candidateSpread >= spread) continue
 
-        // Le validateur tranche. Un échange qui introduirait la moindre
-        // violation, ou qui coûterait une seule minute de couverture, est
-        // abandonné : l'équité ne s'achète pas au prix de la légalité.
-        const report = validatePlanningSolutionV3(problem, candidate)
-        if (!report.validHardConstraints) continue
-        if (report.underCoveredSlots > baseline.underCoveredSlots) continue
-        if (report.metrics.totalDeficitMinutes > baseline.metrics.totalDeficitMinutes) continue
-        if (report.degradations.length > baseline.degradations.length) continue
+          // Le validateur tranche. Un échange qui introduirait la moindre
+          // violation, ou qui coûterait une seule minute de couverture, est
+          // abandonné : l'équité ne s'achète pas au prix de la légalité.
+          const report = validatePlanningSolutionV3(problem, candidate)
+          if (!report.validHardConstraints) continue
+          if (report.underCoveredSlots > baseline.underCoveredSlots) continue
+          if (report.metrics.totalDeficitMinutes > baseline.metrics.totalDeficitMinutes) continue
+          if (report.degradations.length > baseline.degradations.length) continue
 
-        if (improvement === null || candidateSpread < improvement.spread) {
-          improvement = {
-            solution: candidate,
-            swap: { date: day.date, from: closer.employeeId, to: other.employeeId },
-            spread: candidateSpread,
+          if (improvement === null || candidateSpread < improvement.spread) {
+            improvement = {
+              solution: candidate,
+              swap: { date: day.date, from: closer.employeeId, to: partner.id },
+              spread: candidateSpread,
+            }
           }
+          break
         }
       }
     }

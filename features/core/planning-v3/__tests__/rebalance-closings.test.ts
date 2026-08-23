@@ -124,13 +124,18 @@ describe("rééquilibrage — sur un planning où il agit vraiment", () => {
       const heavy = ["a", "b"]
       const team: EmployeeRecord[] = ids.map((id) =>
         employee(id, {
-          weeklyHours: 20,
-          weeklyMinutes: 1_200,
+          // Le contrat réel d'un magasin, et le cas qui était cassé : à
+          // contrats ÉGAUX, les durées quotidiennes diffèrent quand même d'une
+          // personne à l'autre (435 minutes contre 450 le même jour). Aucun
+          // échange d'une seule journée ne compense cela — il faut un groupe de
+          // jours dont les écarts s'annulent.
+          weeklyHours: 36.75,
+          weeklyMinutes: 2_205,
           sectors: ["Test"],
           workingDays: ["monday", "tuesday", "wednesday", "thursday", "friday"],
           canClose: true,
           canOpen: true,
-          maxClosings: null,
+          maxClosings: 2,
         } as Partial<EmployeeRecord>)
       )
 
