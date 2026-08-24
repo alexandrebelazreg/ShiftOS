@@ -131,7 +131,15 @@ export function createHighsFastAdapter(
   // scipy imports and final JSON serialisation. A five-second margin killed a
   // healthy 58.7-second solve at 65 seconds before its answer crossed stdout.
   // This does NOT enlarge the solver's search budget: it remains 60 seconds.
-  const processTimeoutMs = config.processTimeoutMs ?? Math.round(timeoutSeconds * 1000) + 15_000
+  // La marge au-delà du budget du solveur : démarrage de Python, lecture du
+  // problème, sérialisation de la réponse. Elle était fixe à quinze secondes,
+  // ce qui suffisait à soixante et plus du tout à quatre-vingt-dix : la
+  // tentative avec plafonds d'équité, plus contrainte donc plus lente, se
+  // faisait tuer avant d'avoir rendu quoi que ce soit — et le rapport disait
+  // « le moteur n'a rien rendu de lisible », ce qui était exact et incompris.
+  // Proportionnelle, elle suit le budget au lieu de fondre quand il grandit.
+  const processTimeoutMs =
+    config.processTimeoutMs ?? Math.round(timeoutSeconds * 1000 * 1.4) + 10_000
   const runner =
     config.runner ??
     createPythonRunner({
@@ -233,8 +241,18 @@ export function createHighsFastAdapter(
 function whyNotSolved(outcome: {
   readonly kind: string
   readonly stdout?: string
+  readonly code?: string
+  readonly message?: string
 }): string | null {
   if (outcome.kind === "cancelled") return "la résolution a été annulée"
+  if (outcome.kind === "failure") {
+    // Le code du lanceur, tel quel. « Rien rendu de lisible » couvrait aussi
+    // bien un Python absent qu'un sous-processus tué au bout de son temps, et
+    // ces deux-là ne se corrigent pas du même endroit.
+    return `le sous-processus a échoué (${outcome.code ?? "cause inconnue"}${
+      outcome.message === undefined ? "" : ` — ${outcome.message}`
+    })`
+  }
   if (outcome.kind !== "success" || outcome.stdout === undefined) {
     return "le moteur n'a rien rendu de lisible"
   }
