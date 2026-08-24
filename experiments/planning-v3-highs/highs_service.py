@@ -38,7 +38,7 @@ PROTOCOL_VERSION = "planning-v3-highs/1"
 #: campaign was sixty-two seconds; ninety leaves room without leaving the
 #: budget open-ended.
 MAX_TIMEOUT_SECONDS = 90.0
-DEFAULT_TIMEOUT_SECONDS = 60.0
+DEFAULT_TIMEOUT_SECONDS = 90.0
 
 
 def _fail(request_id: str, code: str, message: str) -> dict[str, Any]:

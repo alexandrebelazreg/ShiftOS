@@ -42,9 +42,9 @@ export const PLANNING_V3_MAX_TIMEOUT_SECONDS = 300
 /**
  * The everyday search budget. It matches the HiGHS-fast adapter and the
  * manager-facing progress indicator, so the interface and the engine promise
- * the same one-minute wait.
+ * la même attente.
  */
-export const PLANNING_V3_DEFAULT_TIMEOUT_SECONDS = 60
+export const PLANNING_V3_DEFAULT_TIMEOUT_SECONDS = 90
 
 /**
  * The two profiles a caller may ask for.

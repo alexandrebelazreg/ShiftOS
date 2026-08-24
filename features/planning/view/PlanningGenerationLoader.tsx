@@ -30,17 +30,20 @@ export function PlanningGenerationLoader({ maxSeconds }: { readonly maxSeconds: 
           <p className="mt-1 text-sm text-muted-foreground">
             {finalizing
               ? "Le résultat est en cours de préparation."
-              : `La recherche peut prendre jusqu’à ${maxSeconds} secondes.`}
+              : "La recherche explore les plannings possibles."}
           </p>
+          {/* La barre reste, le décompte part.
+              Il n'annonçait pas une durée sûre : quand l'équité impose des
+              plafonds, le moteur peut chercher une seconde fois, et le compteur
+              atteignait sa fin bien avant le résultat — un chiffre qui se fige
+              inquiète plus qu'il n'informe. La barre, elle, dit « ça travaille »
+              sans rien promettre. */}
           <progress
             className="mt-5 h-2 w-full overflow-hidden rounded-full accent-primary"
             max={maxSeconds}
             value={elapsedSeconds}
-            aria-label="Temps de génération écoulé"
+            aria-label="Génération en cours"
           />
-          <p className="mt-2 text-xs tabular-nums text-muted-foreground">
-            {elapsedSeconds} s / {maxSeconds} s
-          </p>
         </div>
       </CardContent>
     </Card>

@@ -82,8 +82,16 @@ export const HIGHS_FAST_PRESERVATION_SUPPORT: EnginePreservationSupport = {
 /** Matches the ceiling `highs_service.py` clamps to on the other side. */
 export const HIGHS_FAST_MAX_TIMEOUT_SECONDS = 90
 
-/** The everyday budget. Measured worst case across the campaign: 62 seconds. */
-export const HIGHS_FAST_DEFAULT_TIMEOUT_SECONDS = 60
+/**
+ * The everyday budget.
+ *
+ * Porté de 60 à 90 secondes le 25 août 2026, sur une semaine réelle que le
+ * moteur rendait en `timeout` avec onze créneaux découverts : il s'arrêtait
+ * faute de temps, pas faute de solution. Quatre-vingt-dix est le plafond que
+ * `highs_service.py` applique de son côté — au-delà, la valeur serait ramenée
+ * là sans que personne ne le dise.
+ */
+export const HIGHS_FAST_DEFAULT_TIMEOUT_SECONDS = 90
 
 export interface HighsFastAdapterConfig {
   /** Injected for tests: every failure mode has a fake, none needs Python. */
