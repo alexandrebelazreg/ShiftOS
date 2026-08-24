@@ -106,6 +106,22 @@ describe("plafond d'équité", () => {
     expect(heavy).toBeLessThanOrEqual(2)
   })
 
+  it("n'exclut personne : au moins une fermeture pour qui peut fermer", () => {
+    // La répartition purement équitable donnait ZÉRO au plus chargé. C'est juste
+    // arithmétiquement et intenable en pratique : l'exclure laisse des journées
+    // sans fermeur, la semaine devient infaisable, et le plafond entier est
+    // rejeté au profit des plafonds ordinaires — mesuré sur le magasin réel,
+    // « aucun planning légal ne respectait ces plafonds ». Un quota rejeté ne
+    // vaut rien ; mieux vaut resserrer moins et que cela tienne.
+    const given = allowed(planClosingQuotas(problemOf(STORE)))
+    for (const [id, value] of Object.entries(given)) {
+      expect(value, `${id} exclu de toute fermeture`).toBeGreaterThanOrEqual(1)
+    }
+    // Et les plus chargés descendent quand même de deux à une.
+    expect(given.dylan).toBe(1)
+    expect(given.arthur).toBe(1)
+  })
+
   it("ne dépasse JAMAIS le plafond réglé sur la fiche", () => {
     // Il resserre, il n'autorise pas. Un quota au-dessus du plafond de fiche
     // ferait faire au moteur ce que le gérant a explicitement interdit.
@@ -142,6 +158,8 @@ describe("plafond d'équité", () => {
       ...STORE,
       { id: "fantome", cap: 2, workingDays: 6, past: 0, off: DAYS },
     ]
+    // Le plancher ne le sert pas non plus : il ne s'applique qu'à qui peut
+    // réellement fermer au moins une fois.
     expect(allowed(planClosingQuotas(problemOf(withGhost))).fantome).toBe(0)
   })
 })

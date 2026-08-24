@@ -130,7 +130,32 @@ export function planClosingQuotas(problem: PlanningProblemV3): ClosingQuotaPlan 
   }
   const given: Record<string, number> = Object.fromEntries(closers.map((e) => [String(e.id), 0]))
 
-  for (let placed = 0; placed < needed; placed += 1) {
+  // UN PLANCHER D'UNE FERMETURE pour quiconque peut fermer au moins un jour.
+  //
+  // La répartition purement équitable attribuait ZÉRO au plus chargé — ce qui
+  // est arithmétiquement juste et pratiquement intenable : l'exclure d'un coup
+  // laisse des journées sans fermeur possible, la semaine devient infaisable, et
+  // le plafond entier est abandonné au profit des plafonds ordinaires. Mesuré
+  // sur un magasin réel : « aucun planning légal ne respectait ces plafonds ».
+  //
+  // Un quota rejeté ne vaut rien. Mieux vaut resserrer un peu moins et que cela
+  // tienne : garder chacun à une fermeture au moins préserve, chaque jour, un
+  // vivier suffisant, tout en faisant descendre les plus chargés de deux à une.
+  //
+  // Sauté quand la semaine compte moins de fermetures que de fermeurs : il n'y
+  // aurait alors pas de quoi servir tout le monde, et forcer le plancher
+  // distribuerait plus de fermetures qu'il n'en existe.
+  let remaining = needed
+  if (needed >= closers.length) {
+    for (const employee of closers) {
+      const id = String(employee.id)
+      if ((ceiling.get(id) ?? 0) < 1) continue
+      given[id] = 1
+      remaining -= 1
+    }
+  }
+
+  for (let placed = 0; placed < remaining; placed += 1) {
     const eligible = closers.filter(
       (employee) => given[String(employee.id)] < (ceiling.get(String(employee.id)) ?? 0)
     )
