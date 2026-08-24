@@ -215,16 +215,6 @@ export function createHighsFastAdapter(
 }
 
 /**
- * Cette exécution a-t-elle produit un planning ?
- *
- * Sert au repli sans quota. Une sortie illisible compte comme un échec : mieux
- * vaut refaire sans quota que renoncer sur un doute.
- */
-function solvedFrom(outcome: { readonly kind: string; readonly stdout?: string }): boolean {
-  return whyNotSolved(outcome) === null
-}
-
-/**
  * Ce que la tentative avec quota a réellement rendu, ou `null` si elle a abouti.
  *
  * Le repli annonçait « aucun planning légal ne respectait ces plafonds ». C'est
