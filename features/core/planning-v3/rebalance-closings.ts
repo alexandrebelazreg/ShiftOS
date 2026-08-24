@@ -218,6 +218,13 @@ const MAX_DAYS_FOR_SUBSETS = 14
  *
  * Les groupes sont rendus du plus petit au plus grand : à équité égale, le
  * planning qui bouge le moins est celui que le gérant reconnaît.
+ *
+ * TOUTES les tailles sont rendues, pas seulement la première qui produit des
+ * candidats. S'arrêter là était un défaut mesurable : sur une semaine réelle,
+ * trois journées offraient un échange d'un seul jour, tous refusés par le
+ * validateur — repos insuffisant le lendemain — et les groupes de deux jours,
+ * qui eux passaient, n'étaient jamais essayés. L'étape entière restait muette
+ * alors qu'un échange existait.
  */
 function balancedSubsets(
   deltas: readonly number[],
@@ -243,7 +250,6 @@ function balancedSubsets(
       }
     }
     walk(0, 0)
-    if (found.length > 0) return found
   }
   return found
 }

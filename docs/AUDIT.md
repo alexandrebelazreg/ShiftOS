@@ -90,24 +90,57 @@ Deux causes identifiées, non encore levées :
   produit des candidats ; si tous échouent à la validation, les groupes plus
   grands ne sont jamais essayés.
 
-### Ce qu'il faut pour la trancher
+### Tranché sur données réelles (24 août)
 
-**Le problème réel tel que le moteur le reçoit.** Cinq diagnostics déduits du
-code se sont révélés faux — zone marché, tourniquet par secteur, ordre du score,
-contrats inégaux, critère de décision — et chacun a coûté un déploiement. La
-variable `PLANNING_V3_DUMP_DIR` écrit ce problème sur disque ; elle porte des
-données personnelles, s'active le temps d'une génération et se retire ensuite.
+Le problème réel a été exporté (`PLANNING_V3_DUMP_DIR`), rejoué localement, et
+chaque échange d'une journée soumis au validateur. **Tous sont refusés, et pour
+des raisons légitimes :**
 
-**Levier disponible entre-temps** : le plafond est la seule contrainte que le
-moteur ne peut pas contourner. Passer Dylan et Arthur à une fermeture par
-semaine force la répartition vers les trois autres.
+    09-11  Dylan <-> Valentin   Dylan commencerait à 06:00, borne de début 08:00
+    09-11  Dylan <-> Luca       Luca : 600 min de repos avant le 12, minimum 720
+    09-12  Dylan <-> Valentin   même borne, et repos insuffisant
+    09-09  Arthur <-> Valentin  repos de 600 min entre le 9 et le 10
+    09-07  Valentin <-> Dylan   Dylan atteindrait 3 fermetures pour un plafond de 2
+
+Le rééquilibrage fonctionne ; ce sont les contraintes qui ne laissent aucune
+place. Les créneaux n'ont pas les mêmes horaires, donc échanger deux personnes
+leur fait hériter des heures de l'autre — ce qui viole leur **borne de début
+personnelle** et le **repos de douze heures**. S'y ajoute que deux salariés
+travaillant un nombre de jours différent (cinq contre six) ne peuvent jamais
+s'échanger sans toucher un repos fixe.
+
+**L'option A est donc épuisée.** Corriger APRÈS le placement ne peut pas
+fonctionner sur cette équipe : la décision « qui ferme » se prend en même temps
+que « à quelle heure chacun travaille », et elle ne se rattrape pas ensuite.
+
+### Ce qu'il reste
+
+**Option B — l'équité dans le placement.** Le moteur choisirait qui ferme
+pendant qu'il décide les horaires, au lieu d'être corrigé après. C'est le seul
+chemin qui reste, et le projet a déjà payé pour savoir qu'alourdir ce MILP se
+paie cher.
+
+**Le levier qui marche aujourd'hui, et qui n'est plus un pis-aller.** Le plafond
+de fermetures est une contrainte DURE, respectée pendant le placement — donc au
+seul moment où la décision se prend. Passer les deux plus chargés à une
+fermeture par semaine force la répartition vers les autres, dès la génération
+suivante. Au vu de ce qui précède, c'est l'outil correct, pas un contournement.
+
+### Ce qu'il a fallu pour en arriver là
+
+Cinq diagnostics déduits du code se sont révélés faux — zone marché, tourniquet
+par secteur, ordre du score, contrats inégaux, critère de décision — et chacun a
+coûté un déploiement. Le sixième, tiré du problème réel en dix minutes, a été le
+bon. **Exporter les données réelles aurait dû être le premier geste, pas le
+dernier.**
 
 ---
 
 ## Missions, par ordre d'importance
 
-1. **Refermer l'équité des fermetures** — sur données réelles, pas sur
-   déduction. C'est la seule promesse du produit qui ne soit pas tenue.
+1. **L'équité dans le placement (option B)** — la seule voie restante, l'option A
+   étant démontrée impuissante sur cette équipe. En attendant, le plafond de
+   fermetures produit le résultat voulu.
 2. **Le renommage d'un secteur par identifiant plutôt que par nom.** Le
    rattachement reste une chaîne ; la cascade répare le symptôme, pas la cause,
    et rien dans le typage ne peut signaler la prochaine casse.
