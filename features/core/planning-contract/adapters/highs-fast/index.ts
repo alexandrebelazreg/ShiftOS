@@ -171,7 +171,7 @@ export function createHighsFastAdapter(
     }
 
     let outcome
-    let fellBack = false
+    let fallbackReason: string | null = null
     try {
       outcome = await runFor(quota.problem)
 
@@ -180,8 +180,9 @@ export function createHighsFastAdapter(
       // solution. Le calcul ne peut pas l'écarter d'avance — il raisonne sur la
       // semaine, pas sur chaque journée. On refait alors sans quota, et c'est
       // cette réponse-là qui compte.
-      if (quota.applied && !solvedFrom(outcome)) {
-        fellBack = true
+      const refusal = quota.applied ? whyNotSolved(outcome) : null
+      if (refusal !== null) {
+        fallbackReason = refusal
         outcome = await runFor(effective.problem)
       }
     } catch (error) {
@@ -209,7 +210,7 @@ export function createHighsFastAdapter(
       return failure(request, "engine-transport-failure", `${parsed.code} — ${parsed.message}`)
     }
 
-    return fromEnvelope(effective, parsed.envelope, locks, quota, fellBack)
+    return fromEnvelope(effective, parsed.envelope, locks, quota, fallbackReason)
   }
 }
 
@@ -220,9 +221,39 @@ export function createHighsFastAdapter(
  * vaut refaire sans quota que renoncer sur un doute.
  */
 function solvedFrom(outcome: { readonly kind: string; readonly stdout?: string }): boolean {
-  if (outcome.kind !== "success" || outcome.stdout === undefined) return false
+  return whyNotSolved(outcome) === null
+}
+
+/**
+ * Ce que la tentative avec quota a réellement rendu, ou `null` si elle a abouti.
+ *
+ * Le repli annonçait « aucun planning légal ne respectait ces plafonds ». C'est
+ * une CONCLUSION, et elle était fausse une fois sur deux : le moteur peut aussi
+ * n'avoir pas eu le temps, ce qui appelle un budget plus long et non un plafond
+ * plus lâche. Dire le statut brut plutôt que l'interpréter.
+ */
+function whyNotSolved(outcome: {
+  readonly kind: string
+  readonly stdout?: string
+}): string | null {
+  if (outcome.kind === "cancelled") return "la résolution a été annulée"
+  if (outcome.kind !== "success" || outcome.stdout === undefined) {
+    return "le moteur n'a rien rendu de lisible"
+  }
   const parsed = parseHighsFastResponse(outcome.stdout)
-  return parsed.ok && parsed.envelope.status === "solved"
+  if (!parsed.ok) return "la réponse du moteur était illisible"
+  if (parsed.envelope.status === "solved") return null
+  if (parsed.envelope.status === "infeasible") {
+    return "aucun planning légal ne les respectait — un jour au moins n'avait plus de fermeur disponible"
+  }
+  if (parsed.envelope.status === "no-solution") {
+    // Le protocole est net là-dessus : `no-solution` veut dire que le moteur a
+    // épuisé un VOISINAGE HEURISTIQUE, et ne prouve rien sur la semaine. Seul
+    // `infeasible` affirme l'impossibilité. Confondre les deux enverrait
+    // desserrer un plafond alors qu'il faudrait allonger le temps de calcul.
+    return "le moteur n'en a pas trouvé dans le temps imparti — ce qui ne prouve pas qu'il n'en existe pas ; la semaine est déjà à la limite de ce qu'il sait résoudre"
+  }
+  return `le moteur a répondu « ${parsed.envelope.status} »`
 }
 
 function fromEnvelope(
@@ -230,7 +261,7 @@ function fromEnvelope(
   envelope: HighsFastResponseEnvelope,
   locks: LockApplication,
   quota: ClosingQuotaPlan,
-  fellBack: boolean
+  fallbackReason: string | null
 ): SolvePlanningResponse {
   if (envelope.status === "error") {
     return failure(
@@ -290,14 +321,11 @@ function fromEnvelope(
         ".",
       requiresExplicitAcceptance: false,
     })
-    if (fellBack) {
+    if (fallbackReason !== null) {
       quotaFacts.push({
         code: "closing-quota",
         severity: "information",
-        message:
-          "Ces plafonds n'ont PAS été appliqués : aucun planning légal ne les respectait — " +
-          "un jour au moins n'avait plus de fermeur disponible. La semaine a été générée " +
-          "avec les plafonds ordinaires.",
+        message: `Ces plafonds n'ont PAS été appliqués : ${fallbackReason}. La semaine a été générée avec les plafonds ordinaires.`,
         requiresExplicitAcceptance: false,
       })
     }
