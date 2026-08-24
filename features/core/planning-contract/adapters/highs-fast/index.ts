@@ -23,6 +23,8 @@ import type {
 } from "@/features/core/planning-v3/types/solver"
 import { fingerprintProblem, validatePlanningSolutionV3 } from "@/features/core/planning-v3/validator"
 import { rebalanceClosings } from "@/features/core/planning-v3/rebalance-closings"
+import { planClosingQuotas } from "@/features/core/planning-v3/fairness/closing-quota"
+import type { PlanningProblemV3 } from "@/features/core/planning-v3/types/problem"
 
 import {
   HIGHS_FAST_PROTOCOL_VERSION,
@@ -143,19 +145,43 @@ export function createHighsFastAdapter(
     const locks = applyLocks(request.problem, request.regeneration, request.baseline)
     const effective: SolvePlanningRequest = { ...request, problem: locks.problem }
 
-    const envelope: HighsFastRequestEnvelope = {
-      protocolVersion: HIGHS_FAST_PROTOCOL_VERSION,
-      requestId: fingerprintProblem(effective.problem),
-      problem: effective.problem,
-      options: { timeoutSeconds },
+    // L'ÉQUITÉ, POSÉE COMME CONTRAINTE plutôt que confiée à une préférence.
+    //
+    // Une préférence classée sous la couverture ne décide de rien une fois les
+    // heures contractuelles placées, et corriger après coup s'est révélé
+    // impossible : sur une semaine réelle, chaque échange butait sur une borne
+    // horaire personnelle ou le repos de douze heures. Le plafond de fermetures,
+    // lui, est DUR et respecté pendant le placement — au seul moment où « qui
+    // ferme » se décide. On le resserre donc pour ceux qui ont le plus fermé.
+    const quota = planClosingQuotas(effective.problem)
+
+    const runFor = async (problem: PlanningProblemV3) => {
+      const envelope: HighsFastRequestEnvelope = {
+        protocolVersion: HIGHS_FAST_PROTOCOL_VERSION,
+        // L'empreinte reste celle du problème RÉELLEMENT demandé : les quotas
+        // sont un resserrement interne, pas une autre question posée.
+        requestId: fingerprintProblem(effective.problem),
+        problem,
+        options: { timeoutSeconds },
+      }
+      return runner(JSON.stringify(envelope), {
+        timeoutMs: processTimeoutMs,
+        signal: config.signal,
+      })
     }
 
     let outcome
     try {
-      outcome = await runner(JSON.stringify(envelope), {
-        timeoutMs: processTimeoutMs,
-        signal: config.signal,
-      })
+      outcome = await runFor(quota.problem)
+
+      // Le repli, sans lequel l'équité pourrait coûter une semaine entière : un
+      // JOUR dont tous les fermeurs possibles sont à leur quota n'a plus de
+      // solution. Le calcul ne peut pas l'écarter d'avance — il raisonne sur la
+      // semaine, pas sur chaque journée. On refait alors sans quota, et c'est
+      // cette réponse-là qui compte.
+      if (quota.applied && !solvedFrom(outcome)) {
+        outcome = await runFor(effective.problem)
+      }
     } catch (error) {
       // A runner that throws is still a transport failure, never a verdict.
       return failure(
@@ -183,6 +209,18 @@ export function createHighsFastAdapter(
 
     return fromEnvelope(effective, parsed.envelope, locks)
   }
+}
+
+/**
+ * Cette exécution a-t-elle produit un planning ?
+ *
+ * Sert au repli sans quota. Une sortie illisible compte comme un échec : mieux
+ * vaut refaire sans quota que renoncer sur un doute.
+ */
+function solvedFrom(outcome: { readonly kind: string; readonly stdout?: string }): boolean {
+  if (outcome.kind !== "success" || outcome.stdout === undefined) return false
+  const parsed = parseHighsFastResponse(outcome.stdout)
+  return parsed.ok && parsed.envelope.status === "solved"
 }
 
 function fromEnvelope(
