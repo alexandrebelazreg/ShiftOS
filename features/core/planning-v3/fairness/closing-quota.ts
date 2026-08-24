@@ -171,11 +171,65 @@ export function planClosingQuotas(problem: PlanningProblemV3): ClosingQuotaPlan 
     given[String(lightest.employeeId)] += 1
   }
 
-  const quotas: ClosingQuota[] = closers.map((employee) => ({
-    employeeId: employee.id,
-    allowed: given[String(employee.id)],
-    contractual: employee.maximumClosings,
-  }))
+  // ON NE RESSERRE QUE CEUX QUI ONT TROP FERMÉ, et on laisse les autres libres.
+  //
+  // Prescrire à chacun un nombre exact revenait à choisir UNE répartition parmi
+  // toutes celles qui sont équitables — et si celle-là se trouve infaisable, tout
+  // est rejeté. Mesuré sur un magasin réel : le quota exact faisait une capacité
+  // de six pour six fermetures à couvrir, soit AUCUNE marge, et le moindre
+  // conflit un jour donné condamnait la semaine entière. Le gérant, lui, obtenait
+  // un bon planning en posant « personne au-dessus d'une, sauf un » — c'est-à-dire
+  // des bornes, pas une répartition.
+  //
+  // Le repère est la charge la plus légère de l'équipe : quiconque est au-dessus
+  // a déjà plus fermé que le moins servi, et peut donc être retenu. Les autres
+  // gardent leur plafond de fiche, ce qui laisse au moteur la marge de chercher.
+  const historic = loadsAfterWeek(
+    problem.closingHistory ?? [],
+    Object.fromEntries(closers.map((employee) => [String(employee.id), 0])),
+    shares,
+    closers.map((employee) => employee.id)
+  )
+  // Comparaison des CHARGES seules, par produit en croix. `compareClosingLoad`
+  // ne conviendrait pas ici : c'est un ordre TOTAL, qui départage les charges
+  // égales par identifiant — deux salariés aussi peu servis l'un que l'autre s'y
+  // retrouveraient l'un « au-dessus » de l'autre, et se verraient resserrés sans
+  // raison.
+  // Le repère est la charge MOYENNE de l'équipe, pas la plus légère. Prendre la
+  // plus légère ferait qu'un nouveau venu, qui n'a jamais fermé, classerait
+  // d'un coup toute l'équipe parmi les « trop servis » et la resserrerait
+  // entière — alors que son arrivée ne dit rien sur ce que les autres ont fait.
+  const totalClosings = historic.reduce((sum, load) => sum + load.closings, 0)
+  const totalOpportunities = historic.reduce((sum, load) => sum + load.opportunities, 0)
+  const overServed = new Set(
+    historic
+      // Produit en croix, sans division : la comparaison reste exacte en
+      // entiers, comme partout ailleurs dans l'équité.
+      .filter((load) => load.closings * totalOpportunities > totalClosings * load.opportunities)
+      .map((load) => String(load.employeeId))
+  )
+
+  const quotas: ClosingQuota[] = closers.map((employee) => {
+    const id = String(employee.id)
+    return {
+      employeeId: employee.id,
+      allowed: overServed.has(id) ? given[id] : (employee.maximumClosings ?? ceiling.get(id) ?? 0),
+      contractual: employee.maximumClosings,
+    }
+  })
+
+  // La capacité qui restera au moteur après resserrement. Sans marge au-dessus
+  // du strict nécessaire, un seul conflit journalier condamne la semaine — et un
+  // quota rejeté ne vaut rien.
+  const tightened = quotas.reduce(
+    (sum, quota) => sum + Math.min(quota.allowed, ceiling.get(String(quota.employeeId)) ?? 0),
+    0
+  )
+  if (tightened <= needed) {
+    return declined(
+      `resserrer laisserait ${tightened} fermetures possibles pour ${needed} à couvrir, sans aucune marge`
+    )
+  }
 
   // Rien à resserrer si personne ne descend sous son plafond de fiche : autant
   // envoyer le problème d'origine, et garder l'empreinte inchangée.

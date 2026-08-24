@@ -87,12 +87,15 @@ describe("plafond d'équité", () => {
     expect(plan.reason).toBeNull()
   })
 
-  it("distribue toutes les fermetures de la semaine, ni plus ni moins", () => {
-    // En dessous, la semaine devient infaisable ; au-dessus, on autorise ce que
-    // personne n'a demandé. Le total est la seule valeur juste.
+  it("laisse au moteur PLUS de fermetures possibles qu'il n'en faut", () => {
+    // Le quota pose des BORNES, il ne prescrit pas une répartition. Prescrire un
+    // nombre exact à chacun revenait à choisir une seule des répartitions
+    // équitables, et faisait une capacité égale au strict besoin : le moindre
+    // conflit un jour donné condamnait alors la semaine entière, et tout le
+    // plafond était rejeté. Il faut de la marge pour que le moteur cherche.
     const plan = planClosingQuotas(problemOf(STORE))
     const total = plan.quotas.reduce((sum, quota) => sum + quota.allowed, 0)
-    expect(total).toBe(DAYS.length)
+    expect(total).toBeGreaterThan(DAYS.length)
   })
 
   it("donne moins à ceux qui ont déjà le plus fermé", () => {
@@ -151,15 +154,21 @@ describe("plafond d'équité", () => {
     expect(planClosingQuotas(problem).problem).toBe(problem)
   })
 
-  it("n'attribue rien à qui ne peut fermer aucun jour", () => {
-    // Indisponible toute la semaine : lui donner un quota gèlerait des
-    // fermetures que personne ne pourrait prendre.
-    const withGhost: readonly Person[] = [
+  it("ne resserre pas toute l'équipe parce qu'un nouveau n'a jamais fermé", () => {
+    // Le repère est la charge MOYENNE. S'il était la plus légère, l'arrivée
+    // d'un salarié sans historique classerait d'un coup tous les autres parmi
+    // les « trop servis » — y compris ceux qui ferment déjà le moins.
+    const withNewcomer: readonly Person[] = [
       ...STORE,
-      { id: "fantome", cap: 2, workingDays: 6, past: 0, off: DAYS },
+      { id: "nouveau", cap: 2, workingDays: 6, past: 0 },
     ]
-    // Le plancher ne le sert pas non plus : il ne s'applique qu'à qui peut
-    // réellement fermer au moins une fois.
-    expect(allowed(planClosingQuotas(problemOf(withGhost))).fantome).toBe(0)
+    const given = allowed(planClosingQuotas(problemOf(withNewcomer)))
+    // Les chargés sont retenus…
+    expect(given.dylan).toBe(1)
+    expect(given.arthur).toBe(1)
+    // …et les autres gardent leur plafond de fiche.
+    expect(given.valentin).toBe(2)
+    expect(given.erwan).toBe(2)
+    expect(given.nouveau).toBe(2)
   })
 })
