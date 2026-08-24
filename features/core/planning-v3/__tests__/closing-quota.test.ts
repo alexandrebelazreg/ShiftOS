@@ -77,6 +77,16 @@ const allowed = (plan: ReturnType<typeof planClosingQuotas>) =>
   Object.fromEntries(plan.quotas.map((quota) => [String(quota.employeeId), quota.allowed]))
 
 describe("plafond d'équité", () => {
+  it("s'applique sur la configuration du magasin", () => {
+    // Sans cette assertion, tout ce qui suit se vérifierait sur un plan vide :
+    // `quotas` serait `[]`, les sommes vaudraient zéro, et les tests
+    // passeraient en ne prouvant rien. C'est le piège dans lequel deux tests
+    // sont déjà tombés au cours de cette enquête.
+    const plan = planClosingQuotas(problemOf(STORE))
+    expect(plan.applied, plan.reason ?? "").toBe(true)
+    expect(plan.reason).toBeNull()
+  })
+
   it("distribue toutes les fermetures de la semaine, ni plus ni moins", () => {
     // En dessous, la semaine devient infaisable ; au-dessus, on autorise ce que
     // personne n'a demandé. Le total est la seule valeur juste.

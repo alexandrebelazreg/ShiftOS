@@ -56,6 +56,15 @@ export interface ClosingQuotaPlan {
   readonly problem: PlanningProblemV3
   /** Faux quand rien n'a changé — équité éteinte, ou aucun resserrement utile. */
   readonly applied: boolean
+  /**
+   * POURQUOI rien n'a été posé, quand rien ne l'a été.
+   *
+   * Un mécanisme d'observation qui se tait dans le cas intéressant ne sert à
+   * rien : c'est exactement quand le plafond ne s'applique pas qu'il faut
+   * savoir ce qui l'en a empêché. La raison est donc toujours rendue, et
+   * toujours rapportée.
+   */
+  readonly reason: string | null
 }
 
 /** Combien de fois cette personne pourrait fermer, au plus, dans cette semaine. */
@@ -74,16 +83,27 @@ function feasibleClosingDays(problem: PlanningProblemV3, employeeId: string): nu
 }
 
 export function planClosingQuotas(problem: PlanningProblemV3): ClosingQuotaPlan {
-  const nothing: ClosingQuotaPlan = { quotas: [], problem, applied: false }
+  const declined = (reason: string): ClosingQuotaPlan => ({
+    quotas: [],
+    problem,
+    applied: false,
+    reason,
+  })
   const fairness = problem.rules.closingFairness
-  if (!fairness || (!fairness.balanceClosings && !fairness.balanceSaturdayClosings)) return nothing
+  if (!fairness || (!fairness.balanceClosings && !fairness.balanceSaturdayClosings)) {
+    return declined("l'équité des fermetures n'est pas activée sur ce secteur")
+  }
 
   const closers = problem.employees.filter((employee) => employee.canClose)
-  if (closers.length < 2) return nothing
+  if (closers.length < 2) {
+    return declined("moins de deux salariés peuvent fermer")
+  }
 
   const openDays = problem.days.filter((day) => !day.closed && day.closesAtMinutes !== null)
   const needed = openDays.length * Math.max(0, problem.rules.exactClosingsPerDay)
-  if (needed <= 0) return nothing
+  if (needed <= 0) {
+    return declined(`aucune fermeture à répartir (${openDays.length} jours ouverts, ${problem.rules.exactClosingsPerDay} par jour)`)
+  }
 
   // Ce que chacun peut porter au plus : son plafond de fiche, borné par le
   // nombre de jours où il pourrait réellement fermer.
@@ -97,7 +117,9 @@ export function planClosingQuotas(problem: PlanningProblemV3): ClosingQuotaPlan 
   const capacity = [...ceiling.values()].reduce((sum, value) => sum + value, 0)
   // Pas assez de capacité pour couvrir la semaine : resserrer encore ne ferait
   // qu'ajouter une infaisabilité à une autre. On laisse le moteur faire au mieux.
-  if (capacity < needed) return nothing
+  if (capacity < needed) {
+    return declined(`capacité insuffisante : ${capacity} fermetures possibles pour ${needed} à couvrir`)
+  }
 
   // Distribution au plus léger d'abord, une fermeture à la fois. Les charges
   // sont recalculées à chaque tour : celui qui vient de recevoir descend dans
@@ -135,12 +157,19 @@ export function planClosingQuotas(problem: PlanningProblemV3): ClosingQuotaPlan 
   const tightens = quotas.some(
     (quota) => quota.contractual === null || quota.allowed < quota.contractual
   )
-  if (!tightens) return nothing
+  if (!tightens) {
+    return declined(
+      "aucun resserrement utile — la répartition équitable (" +
+        quotas.map((quota) => `${String(quota.employeeId)} ${quota.allowed}`).join(", ") +
+        ") ne descend sous aucun plafond de fiche"
+    )
+  }
 
   const allowedById = new Map(quotas.map((quota) => [String(quota.employeeId), quota.allowed]))
   return {
     quotas,
     applied: true,
+    reason: null,
     problem: {
       ...problem,
       employees: problem.employees.map((employee) => {

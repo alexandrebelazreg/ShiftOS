@@ -267,6 +267,17 @@ function fromEnvelope(
   // mal calculé d'un quota que la semaine n'a pas pu honorer — deux pannes qui
   // appellent des corrections opposées.
   const quotaFacts: SolveDiagnostic[] = []
+  if (!quota.applied && quota.reason !== null) {
+    // Le cas le plus important à dire. Un plafond qui ne s'applique pas laissait
+    // le rapport entièrement muet, donc indiscernable d'un plafond appliqué sans
+    // effet — deux pannes qui appellent des corrections contraires.
+    quotaFacts.push({
+      code: "closing-quota",
+      severity: "information",
+      message: `Aucun plafond d'équité posé cette semaine : ${quota.reason}.`,
+      requiresExplicitAcceptance: false,
+    })
+  }
   if (quota.applied) {
     quotaFacts.push({
       code: "closing-quota",
