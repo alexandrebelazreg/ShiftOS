@@ -204,6 +204,7 @@ const FAIRNESS_LABELS: Record<string, string> = {
   "closing-fairness": "Équité des fermetures",
   "saturday-closing-fairness": "Équité des fermetures",
   "closing-fairness-day": "Équité — qui pouvait fermer ce jour-là",
+  "closing-quota": "Équité — plafond imposé cette semaine",
 }
 
 /**

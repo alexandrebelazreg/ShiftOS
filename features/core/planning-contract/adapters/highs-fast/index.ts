@@ -23,7 +23,7 @@ import type {
 } from "@/features/core/planning-v3/types/solver"
 import { fingerprintProblem, validatePlanningSolutionV3 } from "@/features/core/planning-v3/validator"
 import { rebalanceClosings } from "@/features/core/planning-v3/rebalance-closings"
-import { planClosingQuotas } from "@/features/core/planning-v3/fairness/closing-quota"
+import { planClosingQuotas, type ClosingQuotaPlan } from "@/features/core/planning-v3/fairness/closing-quota"
 import type { PlanningProblemV3 } from "@/features/core/planning-v3/types/problem"
 
 import {
@@ -171,6 +171,7 @@ export function createHighsFastAdapter(
     }
 
     let outcome
+    let fellBack = false
     try {
       outcome = await runFor(quota.problem)
 
@@ -180,6 +181,7 @@ export function createHighsFastAdapter(
       // semaine, pas sur chaque journée. On refait alors sans quota, et c'est
       // cette réponse-là qui compte.
       if (quota.applied && !solvedFrom(outcome)) {
+        fellBack = true
         outcome = await runFor(effective.problem)
       }
     } catch (error) {
@@ -207,7 +209,7 @@ export function createHighsFastAdapter(
       return failure(request, "engine-transport-failure", `${parsed.code} — ${parsed.message}`)
     }
 
-    return fromEnvelope(effective, parsed.envelope, locks)
+    return fromEnvelope(effective, parsed.envelope, locks, quota, fellBack)
   }
 }
 
@@ -226,7 +228,9 @@ function solvedFrom(outcome: { readonly kind: string; readonly stdout?: string }
 function fromEnvelope(
   request: SolvePlanningRequest,
   envelope: HighsFastResponseEnvelope,
-  locks: LockApplication
+  locks: LockApplication,
+  quota: ClosingQuotaPlan,
+  fellBack: boolean
 ): SolvePlanningResponse {
   if (envelope.status === "error") {
     return failure(
@@ -258,11 +262,41 @@ function fromEnvelope(
     requiresExplicitAcceptance: false,
   }))
 
+  // Le plafond d'équité, dit à voix haute. Sans cela il agit en silence, et un
+  // gérant qui ne voit pas le résultat espéré ne peut pas distinguer un quota
+  // mal calculé d'un quota que la semaine n'a pas pu honorer — deux pannes qui
+  // appellent des corrections opposées.
+  const quotaFacts: SolveDiagnostic[] = []
+  if (quota.applied) {
+    quotaFacts.push({
+      code: "closing-quota",
+      severity: "information",
+      message:
+        "Plafond d'équité de la semaine : " +
+        quota.quotas
+          .map((entry) => `${String(entry.employeeId)} ${entry.allowed}`)
+          .join(", ") +
+        ".",
+      requiresExplicitAcceptance: false,
+    })
+    if (fellBack) {
+      quotaFacts.push({
+        code: "closing-quota",
+        severity: "information",
+        message:
+          "Ces plafonds n'ont PAS été appliqués : aucun planning légal ne les respectait — " +
+          "un jour au moins n'avait plus de fermeur disponible. La semaine a été générée " +
+          "avec les plafonds ordinaires.",
+        requiresExplicitAcceptance: false,
+      })
+    }
+  }
+
   return {
     ...response,
     diagnostics: {
       ...response.diagnostics,
-      entries: [...response.diagnostics.entries, ...refusals],
+      entries: [...response.diagnostics.entries, ...refusals, ...quotaFacts],
       technical: [
         ...response.diagnostics.technical,
         ...technicalFacts(envelope),
