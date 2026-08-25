@@ -130,7 +130,7 @@ export function AbsenceRulesSettings() {
                   </p>
                   {motive.countedInHours ? (
                     <p className="text-xs text-muted-foreground">
-                      Se compte en heures — cela ne se règle pas.
+                      Se compte en heures. Cela ne se règle pas.
                     </p>
                   ) : null}
                 </div>

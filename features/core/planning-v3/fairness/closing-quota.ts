@@ -285,7 +285,7 @@ export function planClosingQuotas(problem: PlanningProblemV3): ClosingQuotaPlan 
   )
   if (!tightens) {
     return declined(
-      "aucun resserrement utile — la répartition équitable (" +
+      "aucun resserrement utile : la répartition équitable (" +
         quotas.map((quota) => `${String(quota.employeeId)} ${quota.allowed}`).join(", ") +
         ") ne descend sous aucun plafond de fiche"
     )

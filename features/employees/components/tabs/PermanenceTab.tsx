@@ -188,7 +188,7 @@ export function PermanenceTab() {
                 découvrir l'autre sur la feuille du mois. */}
             <FormRow
               label="Fermeture uniquement le"
-              description="Ces jours-là, c’est lui qui ferme — et il ne fermera jamais un autre jour. Aucun jour coché : aucune restriction."
+              description="Ces jours-là, c’est lui qui ferme, et il ne fermera jamais un autre jour. Aucun jour coché : aucune restriction."
               error={errors.permanenceClosingOnlyDays?.message}
             >
               <Controller

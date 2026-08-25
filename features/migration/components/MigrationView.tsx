@@ -168,7 +168,7 @@ export function MigrationView() {
                   qui la porte est le navigateur où vous l’avez saisie.
                 </p>
                 <p className="text-muted-foreground">
-                  Ouvrez cette page depuis ce poste-là — souvent{" "}
+                  Ouvrez cette page depuis ce poste-là, souvent{" "}
                   <span className="font-mono text-xs">http://localhost:3000/reprise</span>. Si
                   vous ne le retrouvez pas, la configuration se ressaisit une fois et ira
                   directement en base.
@@ -191,7 +191,7 @@ export function MigrationView() {
           role="alert"
           className="rounded-md border border-destructive/40 bg-destructive/10 px-3 py-2 text-sm text-destructive"
         >
-          La copie s’est interrompue : {failure}. Relancez-la — ce qui est déjà passé sera
+          La copie s’est interrompue : {failure}. Relancez-la, ce qui est déjà passé sera
           simplement réécrit, jamais dupliqué.
         </div>
       ) : null}

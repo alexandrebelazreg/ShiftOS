@@ -97,7 +97,7 @@ export function GeneralRulesSection() {
         <FormField
           label="Maximum hebdomadaire"
           htmlFor="maxWeeklyHoursOverride"
-          description="Facultatif — laissez vide pour conserver la limite par défaut."
+          description="Facultatif. Laissez vide pour conserver la limite par défaut."
           error={errors.maxWeeklyHoursOverride?.message}
           className="md:col-span-2"
         >

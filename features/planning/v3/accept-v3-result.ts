@@ -272,7 +272,7 @@ function incompleteSpaceReason(
     return "Ce moteur classe un nombre borné de squelettes et résout une allocation par squelette : il énumère bien les coupures, mais n'explore qu'une partie de l'espace, donc aucun optimum ne peut être annoncé."
   }
   if (response.metadata.engine === "decomposed-v3") {
-    return "Ce moteur explore un espace délibérément réduit — les premières allocations de minutes, les meilleurs motifs de chaque journée : une bonne réponse à une question plus petite n'est pas un optimum."
+    return "Ce moteur explore un espace délibérément réduit : les premières allocations de minutes, les meilleurs motifs de chaque journée. Une bonne réponse à une question plus petite n'est pas un optimum."
   }
   return problem.rules.splitShiftAllowed
     ? "Le secteur autorise les coupures, que ce moteur n'énumère pas : les shifts continus rendus restent légaux, mais aucun optimum global ne peut être annoncé."

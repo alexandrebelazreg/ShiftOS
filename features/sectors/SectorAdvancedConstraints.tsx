@@ -315,7 +315,7 @@ function ClosingFairness({ sector, update }: { sector: SectorDemandConfiguration
       </p>
       <p className="text-xs text-muted-foreground">
         L’historique est lu par secteur, uniquement sur les plannings publiés ou archivés
-        antérieurs à la semaine générée, et compte les occasions réelles de fermer — une absence
+        antérieurs à la semaine générée, et compte les occasions réelles de fermer. Une absence
         n’avantage donc personne.
       </p>
     </>
