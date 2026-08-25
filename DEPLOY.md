@@ -94,19 +94,30 @@ Sans domaine, `http://<IP>:3000` fonctionne mais **sans TLS** : à réserver au
 premier essai, jamais à un usage réel — le cookie du magasin transiterait en
 clair.
 
-## 7. Fermer l'accès — à faire AVANT d'ouvrir au public
+## 7. Ce qui ferme l'accès
 
-Planiteo n'a **aucune authentification** aujourd'hui, et `/api/planning/v3/solve`
-comme `/api/conges/solve` acceptent 2 Mo de JSON de n'importe qui pour lancer un
-processus de calcul. Exposer cette version telle quelle, c'est offrir un moyen
-de saturer la machine.
+**Cette section décrivait l'inverse jusqu'au 26 août 2026**, quand
+l'authentification n'existait pas encore et qu'elle recommandait un Basic Auth
+Traefik en attendant. Ce n'est plus le cas, et une doc de déploiement qui décrit
+le mauvais modèle de menace est plus dangereuse qu'une doc absente.
 
-Tant que la mission « base de données + authentification » n'est pas faite,
-choisir l'une de ces protections dans Coolify :
+L'application se garde désormais elle-même, sur quatre niveaux :
 
-- **Basic Auth** sur la route Traefik (le plus simple) ;
-- ou une **restriction par IP** à la connexion du magasin ;
-- ou garder le service sur le réseau privé et y accéder par Tailscale.
+| Niveau | Où |
+|---|---|
+| Session vérifiée côté serveur, traversée par chaque page, action et route | `features/auth/dal.ts` |
+| Cloisonnement par magasin dans la base, qui double la barrière applicative | politiques RLS de `0001_socle.sql` |
+| Les deux routes de solveur exigent une session et refusent en JSON avec un 401, sans jamais rediriger | `app/api/*/solve/route.ts` |
+| Cinq échecs de connexion par adresse et vingt par IP sur quinze minutes | `features/auth/login-throttle.ts` |
+
+Le point que l'ancienne version visait juste reste vrai et reste traité : les
+routes de solveur acceptent une charge utile de 2 Mo pour lancer un calcul de
+plusieurs minutes. Ce n'est plus « de n'importe qui » — la session est vérifiée
+avant même que le corps de la requête soit lu.
+
+Un Basic Auth Traefik par-dessus tout cela n'est plus nécessaire. Il reste une
+option légitime pendant une phase de test, quand on ne veut pas qu'une adresse
+soit atteignable du tout, mais ce n'est plus lui qui protège les données.
 
 ## 8. Vérifier
 
@@ -126,13 +137,26 @@ arrive en moins d'une minute.
 
 ## 9. Sauvegardes
 
-Les données vivent aujourd'hui dans le **navigateur du manager**, pas sur le
-serveur : une sauvegarde du serveur ne sauvegarde rien d'utile. Activer tout de
-même les snapshots Hetzner (~20 % du prix de l'instance) pour ne pas
-reconstruire la machine à la main.
+**Cette section aussi disait le contraire jusqu'au 26 août 2026** : les données
+vivaient alors dans le navigateur du manager. Elles sont maintenant dans
+Postgres, et c'est là que la sauvegarde compte.
 
-Ce point disparaît avec la mise en base : à ce moment-là, ce sont les
-sauvegardes Postgres qui comptent.
+Deux choses distinctes, qui ne se remplacent pas.
+
+**Les sauvegardes Postgres, chez Supabase.** Ce sont les seules qui protègent le
+travail. Leur fréquence et leur profondeur dépendent du plan souscrit, à
+vérifier dans le tableau de bord plutôt qu'à supposer. Une restauration se
+répète une fois à blanc avant d'en avoir besoin : une sauvegarde jamais restaurée
+n'est pas une sauvegarde, c'est une intention.
+
+**Les snapshots Hetzner** (~20 % du prix de l'instance) ne protègent que la
+machine, c'est-à-dire ce qui se reconstruit déjà depuis le dépôt et le
+`Dockerfile`. Ils font gagner une heure de réinstallation, pas une ligne de
+planning.
+
+Une purge existe par ailleurs, et elle supprime pour de bon. Voir
+[docs/rgpd/README.md](docs/rgpd/README.md) : `retention_preview()` avant
+`retention_purge()`, toujours.
 
 ---
 
@@ -140,12 +164,15 @@ sauvegardes Postgres qui comptent.
 
 Le conteneur règle l'hébergement, pas l'architecture. Restent, dans l'ordre :
 
-1. **Base de données et authentification** (Supabase en région UE convient, et
-   les dépôts existants sont déjà taillés pour l'accueillir) — sans quoi le
-   travail du manager reste prisonnier d'un seul navigateur.
+1. ~~**Base de données et authentification**~~ — fait. Supabase porte les
+   données et les comptes, les dépôts reçoivent leur `store_id` d'une session
+   vérifiée, et les politiques RLS doublent la barrière. Reste à **confirmer que
+   le projet Supabase est bien dans l'Union**, ce qui se lit dans son tableau de
+   bord et conditionne tout le dossier `docs/rgpd/`.
 2. **Les verrous**, que le moteur actuel déclare ne pas tenir.
-3. **Le filet d'erreur** : `error.tsx`, `try/catch` sur les écritures de
-   stockage, plafond de l'historique des plannings.
+3. **Le filet d'erreur** : `error.tsx` et `global-error.tsx` existent
+   désormais. Restent le `try/catch` sur les écritures de stockage et le plafond
+   de l'historique des plannings.
 
 ## Si le serveur devient une corvée
 
