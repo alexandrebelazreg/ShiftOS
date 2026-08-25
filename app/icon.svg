@@ -1,0 +1,26 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" role="img" aria-label="Planiteo">
+  <!--
+    La marque, en CHEMINS et non en texte.
+
+    Un <text> dans une icône se rend avec la police que le navigateur veut bien
+    lui donner, et dans plusieurs contextes (aperçu de signet, onglet restauré,
+    écran d'accueil mobile) il ne se rend pas du tout. Un P dessiné est le même
+    P partout.
+
+    Le contrepoinçon est carré, pas rond : c'est la seule liberté prise, et elle
+    rappelle une case de planning. À 16 px elle ne se lit plus vraiment, mais
+    elle empêche la lettre de ressembler à un P de traitement de texte aux
+    tailles où on la regarde.
+
+    Le fond reprend la couleur `primary` de l'application, un gris très sombre
+    et sans teinte. Le jour où une couleur d'accent sera choisie, c'est ici
+    qu'elle se pose, et dans `app/favicon.ico` engendré depuis ce fichier.
+
+    (Pas de double tiret dans ce commentaire : XML l'interdit, et le rendu
+    échoue sur une erreur d'analyse qui ne parle pas d'icône.)
+  -->
+  <rect width="32" height="32" rx="7" fill="#1a1a1a"/>
+  <rect x="8" y="6" width="5" height="20" fill="#ffffff"/>
+  <path d="M13 6h5a6 6 0 0 1 0 12h-5z" fill="#ffffff"/>
+  <rect x="13" y="9.75" width="6" height="4.5" fill="#1a1a1a"/>
+</svg>
