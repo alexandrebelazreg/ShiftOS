@@ -14,14 +14,17 @@ export default async function DashboardPage() {
   const today = isoDateInTimeZone(new Date(), store?.timezone ?? "Europe/Paris")
   return (
     <div className="space-y-8">
-      <PlanningWeekStatusStrip today={today} />
-
-      <TeamAbsenceSummary today={today} />
-
+      {/* Le titre en tête, comme sur tous les autres écrans : il était sous les
+          deux premiers blocs, si bien qu'on lisait le suivi des plannings avant
+          de savoir où l'on se trouvait. */}
       <PageHeader
         title="Tableau de bord"
         description="Retrouvez ici les informations principales de votre espace."
       />
+
+      <PlanningWeekStatusStrip today={today} />
+
+      <TeamAbsenceSummary today={today} />
 
       <ActionCenter store={store} />
     </div>

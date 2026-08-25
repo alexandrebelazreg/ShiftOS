@@ -68,3 +68,91 @@ describe("dashboard planning horizon", () => {
     expect(weeks[0]).toMatchObject({ state: "saved", planningId: "new-draft" })
   })
 })
+
+/**
+ * La couleur d'une semaine, quand le magasin a plusieurs rayons.
+ *
+ * Une semaine se planifie RAYON PAR RAYON. Le tableau lisait le seul planning
+ * le plus récent : publier le Drive peignait la semaine en vert alors que cinq
+ * rayons restaient à faire — le contraire de ce qu'un coup d'œil doit
+ * apprendre, et d'autant plus trompeur que le vert invite à passer à la suite.
+ */
+describe("complétude par rayon", () => {
+  const SECTORS = [
+    { id: "drive", name: "Drive" },
+    { id: "caisse", name: "Caisse" },
+    { id: "fruits", name: "Fruits" },
+  ]
+  const first = (weeks: ReturnType<typeof buildPlanningWeekStatuses>) => weeks[0]
+
+  it("ne passe au vert que lorsque TOUS les rayons sont publiés", () => {
+    const complete = SECTORS.map((sector) =>
+      planning({ id: sector.id, status: "published", sectorIds: [sector.id] })
+    )
+    expect(first(buildPlanningWeekStatuses("2026-08-03", complete, SECTORS)).state).toBe("published")
+  })
+
+  it("passe au jaune dès le premier rayon publié, et nomme les manquants", () => {
+    const week = first(
+      buildPlanningWeekStatuses(
+        "2026-08-03",
+        [planning({ id: "drive", status: "published", sectorIds: ["drive"] })],
+        SECTORS
+      )
+    )
+    expect(week.state).toBe("partial")
+    expect(week.publishedSectors).toEqual(["Drive"])
+    // Nommés, parce que « partiel » seul obligerait à ouvrir la semaine pour
+    // découvrir lequel manque.
+    expect(week.missingSectors).toEqual(["Caisse", "Fruits"])
+  })
+
+  it("reste « enregistré » tant qu'aucun rayon n'est publié", () => {
+    const week = first(
+      buildPlanningWeekStatuses(
+        "2026-08-03",
+        [planning({ id: "drive", sectorIds: ["drive"] })],
+        SECTORS
+      )
+    )
+    expect(week.state).toBe("saved")
+    expect(week.publishedSectors).toEqual([])
+  })
+
+  it("retire un rayon rouvert en brouillon, même si sa publication existe encore", () => {
+    // Rouvrir une semaine publiée crée un brouillon plus récent sans toucher à
+    // l'original. Compter la publication qui subsiste ferait passer pour
+    // terminé un rayon que quelqu'un est en train de refaire.
+    const week = first(
+      buildPlanningWeekStatuses(
+        "2026-08-03",
+        [
+          ...SECTORS.map((sector) =>
+            planning({ id: sector.id, status: "published", sectorIds: [sector.id] })
+          ),
+          planning({
+            id: "drive-repris",
+            sectorIds: ["drive"],
+            updatedAt: "2026-08-04T08:00:00.000Z",
+          }),
+        ],
+        SECTORS
+      )
+    )
+    expect(week.state).toBe("partial")
+    expect(week.missingSectors).toEqual(["Drive"])
+  })
+
+  it("ignore les rayons archivés, qui ne sont pas « à publier »", () => {
+    // L'appelant ne transmet que les rayons actifs ; sans cette règle, un rayon
+    // fermé garderait indéfiniment les semaines en jaune.
+    const week = first(
+      buildPlanningWeekStatuses(
+        "2026-08-03",
+        [planning({ id: "drive", status: "published", sectorIds: ["drive"] })],
+        [{ id: "drive", name: "Drive" }]
+      )
+    )
+    expect(week.state).toBe("published")
+  })
+})

@@ -164,7 +164,7 @@ describe("le mois des absences", () => {
     expect(month.title).toBe("Mars 2026")
     expect(month.days).toHaveLength(31)
     expect(month.days[0].label).toBe("1")
-    expect(month.rows.map((row) => row.name)).toEqual(["Adeline Roche", "Bruno Sala"])
+    expect(month.rows.map((row) => row.name)).toEqual(["ROCHE Adeline", "SALA Bruno"])
   })
 
   it("remplit les cases couvertes, et elles seules", () => {

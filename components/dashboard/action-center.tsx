@@ -1,7 +1,7 @@
 "use client"
 
 import Link from "next/link"
-import { CalendarDays, CheckCircle2, CircleAlert, Store, UsersRound } from "lucide-react"
+import { CheckCircle2, CircleAlert, Store, UsersRound } from "lucide-react"
 
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
@@ -11,8 +11,11 @@ import type { StoreConfig } from "@/features/store/schemas/store.schema"
 /** Daily action centre: no empty KPI widgets, only the next useful action. */
 export function ActionCenter({ store }: { store: StoreConfig | null }) {
   const setup = useSetupReadiness(store)
-  const actions = setup.isLoading ? [] : setup.ready
-    ? [{ title: "Planning prêt à générer", description: "Votre configuration permet de créer un nouveau planning.", href: "/planning", action: "Ouvrir le planning", icon: CalendarDays }]
+  // Rien à dire quand tout va bien. La carte « Planning prêt à générer » ne
+  // faisait que confirmer l'absence de problème, et occupait la place où l'œil
+  // cherche justement ce qui en pose un.
+  const actions = setup.isLoading || setup.ready
+    ? []
     // La destination est portée par le manque lui-même. Elle se déduisait
     // autrefois en cherchant « employé » dans la phrase, si bien qu'un secteur
     // mal réglé envoyait sur l'écran des salariés dès que son nom contenait le

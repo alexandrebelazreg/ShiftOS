@@ -54,8 +54,8 @@ const form = () =>
 describe("la grille du mois", () => {
   it("pose une ligne par salarié et une colonne par jour", () => {
     const markup = grid([])
-    expect(markup).toContain("Adeline Roche")
-    expect(markup).toContain("Bruno Sala")
+    expect(markup).toContain("ROCHE Adeline")
+    expect(markup).toContain("SALA Bruno")
     // 31 jours + la colonne des noms + la colonne des totaux. Le motif exige un
     // séparateur : `<th` seul compte aussi le `<thead>`.
     expect(markup.match(/<th[ >]/g)).toHaveLength(33)

@@ -33,7 +33,6 @@ import {
   v3TechnicalCaveats,
   type V3AttemptOutcome,
 } from "@/features/planning/v3"
-import { PlanningEditor } from "@/features/planning/editor/ui"
 import {
   PlanningBoard,
   PlanningPublishDialog,
@@ -136,7 +135,6 @@ export function PlanningView({
   const [selectedSectorIds, setSelectedSectorIds] = useState<readonly string[] | null>(null)
   const [record, setRecord] = useState<PlanningRecord | null>(null)
   const [editorState, setEditorState] = useState<EditorState | null>(null)
-  const [editorInstance, setEditorInstance] = useState(0)
   const [isDirty, setIsDirty] = useState(false)
   const [isPersisting, setIsPersisting] = useState(false)
   const [persistenceError, setPersistenceError] = useState<string | null>(null)
@@ -357,7 +355,6 @@ export function PlanningView({
         setEditorState(reopened.state)
         setSelectedSectorIds(reopened.sectorIds ?? null)
         setTargetWeek(mondayOf(reopened.periodStart))
-        setEditorInstance((value) => value + 1)
         setIsDirty(false)
         setV3({ status: "idle" })
       })
@@ -499,7 +496,6 @@ export function PlanningView({
     setPublishDialogOpen(false)
     setRecord(null)
     setEditorState(outcome.editorState)
-    setEditorInstance((value) => value + 1)
     setIsDirty(true)
     setV3({ status: "accepted", outcome })
   }
@@ -630,7 +626,6 @@ export function PlanningView({
           ? draft.sectorIds.filter((id) => pickableSectors.some((sector) => sector.id === id))
           : null
       )
-      setEditorInstance((value) => value + 1)
       setIsDirty(false)
     })
   }
@@ -649,7 +644,6 @@ export function PlanningView({
       ? describeV3Engine(v3.outcome.response)
       : PLANNING_ENGINE_LABELS[engine]
   const currentStatus: PlanningStatus = record?.status ?? "draft"
-  const readOnly = currentStatus !== "draft"
   // The loaded planning belongs to one week; when the manager is looking at any
   // other week, nothing tied to it — grid, detailed editor, publish dialog —
   // may render, so the S30 planning never appears under an S31 header.
@@ -873,24 +867,6 @@ export function PlanningView({
               </>
             }
           />
-
-          {selectedWeekHasPlanning ? (
-            <details className="rounded-lg border p-3 text-sm">
-              <summary className="cursor-pointer font-medium">Éditeur détaillé (existant)</summary>
-              <div className="mt-3">
-                <PlanningEditor
-                  key={`${record?.id ?? "new"}_${editorInstance}`}
-                  initialState={editorState}
-                  readOnly={readOnly}
-                  diagnostic={v3.status === "rejected"}
-                  onStateChange={(next) => {
-                    setEditorState(next)
-                    setIsDirty(true)
-                  }}
-                />
-              </div>
-            </details>
-          ) : null}
 
           {selectedWeekHasPlanning && boardSummary ? (
             <PlanningPublishDialog

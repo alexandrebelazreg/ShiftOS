@@ -83,7 +83,13 @@ export function permanenceRoster(employees: readonly EmployeeRecord[]): readonly
       saturdayTurnOver: employee.permanenceSaturdayTurnOver === true,
       daysOff: employee.fixedDaysOff ?? [],
     }))
-    .sort((left, right) => left.name.localeCompare(right.name, "fr"))
+    // Rangé sur le nom COURT, celui que la feuille affiche.
+    //
+    // Les listes de personnel se trient par NOM de famille, mais cette feuille-ci
+    // montre des prénoms — elle est punaisée au mur, et « Marie A. » y est plus
+    // lisible que « ALBA Marie ». Trier sur une clé invisible produirait une
+    // colonne qui paraît en désordre à qui la lit.
+    .sort((left, right) => left.shortName.localeCompare(right.shortName, "fr"))
 }
 
 /**

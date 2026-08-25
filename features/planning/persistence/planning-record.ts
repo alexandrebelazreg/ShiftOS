@@ -46,6 +46,15 @@ export interface PlanningSummary {
   readonly periodStart: string
   readonly periodEnd: string
   readonly updatedAt: string
+  /**
+   * Les rayons couverts par ce planning.
+   *
+   * Un planning ne couvre PAS forcément tout le magasin : une semaine se
+   * génère rayon par rayon. Sans cette liste, le tableau de bord ne pouvait
+   * annoncer qu'une semaine « publiée » dès le premier rayon publié, alors
+   * qu'il en restait cinq à faire.
+   */
+  readonly sectorIds?: readonly string[]
 }
 
 export function toSummary(record: PlanningRecord): PlanningSummary {
@@ -56,6 +65,7 @@ export function toSummary(record: PlanningRecord): PlanningSummary {
     periodStart: record.periodStart,
     periodEnd: record.periodEnd,
     updatedAt: record.updatedAt,
+    ...(record.sectorIds === undefined ? {} : { sectorIds: record.sectorIds }),
   }
 }
 

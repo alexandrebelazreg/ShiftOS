@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState } from "react"
 
 import type { EmployeeDraft } from "@/features/employees/schemas/employee.schema"
 import { employeeService } from "@/features/employees/services/employee.service"
+import { sortEmployeesByName } from "@/features/employees/utils/employee.format"
 import { employeeDeletionVerdict } from "@/features/employees/deletion"
 import type { EmployeeRecord } from "@/features/employees/types/employee.types"
 import type { EmployeeScheduleType } from "@/features/employees/types/employee.types"
@@ -16,16 +17,21 @@ export function useEmployees() {
   const [employees, setEmployees] = useState<EmployeeRecord[]>([])
   const [isLoading, setIsLoading] = useState(true)
 
+  // Rangée une fois ici, et tous les écrans en héritent.
+  //
+  // Le tri ne descend pas dans le service : l'ordre des salariés qu'on soumet
+  // au solveur entre dans l'empreinte du problème, et le déplacer déplacerait
+  // des plannings existants. Le constructeur de problème range de son côté par
+  // identifiant, ce qui l'isole de tout choix d'affichage.
   const refresh = useCallback(async () => {
-    const list = await employeeService.list()
-    setEmployees(list)
+    setEmployees(sortEmployeesByName(await employeeService.list()))
   }, [])
 
   useEffect(() => {
     let active = true
     employeeService.list().then((list) => {
       if (active) {
-        setEmployees(list)
+        setEmployees(sortEmployeesByName(list))
         setIsLoading(false)
       }
     })

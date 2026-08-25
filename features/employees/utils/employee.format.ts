@@ -5,11 +5,60 @@ import {
   WEEK_DAY_SHORT_LABELS,
 } from "@/features/employees/utils/employee.labels"
 
-/** "John Doe" (falls back gracefully when a part is missing). */
+/**
+ * « MARTIN Marie » — nom en capitales, prénom capitalisé, dans cet ordre.
+ *
+ * C'est la forme des listes de personnel : le nom d'abord parce que c'est sur
+ * lui qu'on cherche et qu'on trie, en capitales parce qu'il se distingue ainsi
+ * du prénom sans ponctuation ni gras. Une saisie faite au fil de la plume —
+ * « marie MARTIN » — ressort dans la même forme que les autres.
+ *
+ * Les composés gardent leurs capitales internes : « jean-pierre » devient
+ * « Jean-Pierre », pas « Jean-pierre ».
+ */
 export function getFullName(
   employee: Pick<EmployeeRecord, "firstName" | "lastName">
 ): string {
-  return [employee.firstName, employee.lastName].filter(Boolean).join(" ").trim()
+  const last = (employee.lastName ?? "").trim().toUpperCase()
+  const first = capitalise((employee.firstName ?? "").trim())
+  return [last, first].filter(Boolean).join(" ")
+}
+
+/** Première lettre de chaque partie en capitale, le reste en minuscules. */
+function capitalise(value: string): string {
+  return value
+    .toLocaleLowerCase("fr")
+    .replace(/(^|[\s'’-])(\p{L})/gu, (_match, before: string, letter: string) =>
+      `${before}${letter.toLocaleUpperCase("fr")}`
+    )
+}
+
+/**
+ * L'ordre alphabétique du personnel : par NOM, puis par prénom.
+ *
+ * Comparaison française et insensible à la casse comme aux accents : sans cela
+ * « Éric » se retrouverait après « Zoé », et une saisie en capitales avant
+ * toutes les autres. Le prénom départage les homonymes, et l'identifiant
+ * départage en dernier ressort pour que deux listes identiques s'affichent
+ * toujours dans le même ordre.
+ */
+export function compareEmployeesByName(
+  left: Pick<EmployeeRecord, "id" | "firstName" | "lastName">,
+  right: Pick<EmployeeRecord, "id" | "firstName" | "lastName">
+): number {
+  const collator = new Intl.Collator("fr", { sensitivity: "base", numeric: true })
+  return (
+    collator.compare(left.lastName ?? "", right.lastName ?? "") ||
+    collator.compare(left.firstName ?? "", right.firstName ?? "") ||
+    String(left.id).localeCompare(String(right.id))
+  )
+}
+
+/** La même liste, rangée par NOM Prénom. */
+export function sortEmployeesByName<T extends Pick<EmployeeRecord, "id" | "firstName" | "lastName">>(
+  employees: readonly T[]
+): T[] {
+  return [...employees].sort(compareEmployeesByName)
 }
 
 /** Two-letter initials for avatars, e.g. "JD". */

@@ -1,4 +1,5 @@
 import type { EmployeeRecord } from "@/features/employees/types/employee.types"
+import { sortEmployeesByName } from "@/features/employees/utils/employee.format"
 
 /**
  * Les trois façons de lire une équipe.
@@ -61,13 +62,20 @@ export function groupEmployeesBySector(
 
   const ordered = [...known, ...[...extras].sort((left, right) => left.localeCompare(right, "fr"))]
 
+  // Le secteur d'abord, puis l'ordre alphabétique DANS chaque secteur. Le tri
+  // est refait ici plutôt que supposé : un appelant qui rendrait la liste brute
+  // produirait sinon des groupes rangés au hasard de la création des fiches.
   const groups: EmployeeGroup[] = ordered.map((sector) => ({
     key: sector,
     label: sector,
-    employees: employees.filter((employee) => (employee.sectors ?? []).includes(sector)),
+    employees: sortEmployeesByName(
+      employees.filter((employee) => (employee.sectors ?? []).includes(sector))
+    ),
   }))
 
-  const unassigned = employees.filter((employee) => (employee.sectors ?? []).length === 0)
+  const unassigned = sortEmployeesByName(
+    employees.filter((employee) => (employee.sectors ?? []).length === 0)
+  )
   if (unassigned.length > 0) {
     groups.push({ key: UNASSIGNED_GROUP_KEY, label: "Sans secteur", employees: unassigned })
   }
