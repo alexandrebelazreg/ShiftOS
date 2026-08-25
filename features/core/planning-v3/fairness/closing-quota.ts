@@ -67,6 +67,26 @@ export interface ClosingQuotaPlan {
   readonly reason: string | null
 }
 
+/**
+ * Combien de fermetures cette personne DOIT assurer cette semaine.
+ *
+ * Ce sont les jours de fermeture inscrits sur sa fiche. Les ignorer rendait le
+ * plafond absurde : quelqu'un qui ferme obligatoirement le vendredi et le
+ * samedi ne peut pas être plafonné à une — le quota ne changeait rien, sinon
+ * rendre la semaine infaisable.
+ */
+function mandatoryClosings(problem: PlanningProblemV3, employeeId: string): number {
+  let count = 0
+  for (const day of problem.days) {
+    if (day.closed || day.closesAtMinutes === null) continue
+    const entry = problem.employeeDays.find(
+      (candidate) => candidate.date === day.date && String(candidate.employeeId) === employeeId
+    )
+    if (entry?.mustClose === true && entry.available) count += 1
+  }
+  return count
+}
+
 /** Combien de fois cette personne pourrait fermer, au plus, dans cette semaine. */
 function feasibleClosingDays(problem: PlanningProblemV3, employeeId: string): number {
   let count = 0
@@ -108,10 +128,24 @@ export function planClosingQuotas(problem: PlanningProblemV3): ClosingQuotaPlan 
   // Ce que chacun peut porter au plus : son plafond de fiche, borné par le
   // nombre de jours où il pourrait réellement fermer.
   const ceiling = new Map<string, number>()
+  const floor = new Map<string, number>()
   for (const employee of closers) {
     const id = String(employee.id)
     const possible = feasibleClosingDays(problem, id)
-    ceiling.set(id, Math.min(employee.maximumClosings ?? possible, possible))
+    const imposed = mandatoryClosings(problem, id)
+    floor.set(id, imposed)
+    // Le plafond ne peut pas descendre sous ce que la fiche impose. Si le
+    // gérant a réglé les deux en contradiction, c'est son plafond qui cède
+    // ici : le quota n'a pas à fabriquer une semaine impossible pour signaler
+    // un réglage incohérent, que le validateur dira mieux que lui.
+    ceiling.set(id, Math.max(imposed, Math.min(employee.maximumClosings ?? possible, possible)))
+  }
+
+  const imposedTotal = [...floor.values()].reduce((sum, value) => sum + value, 0)
+  if (imposedTotal > needed) {
+    return declined(
+      `les fermetures imposées par les fiches (${imposedTotal}) dépassent déjà les ${needed} de la semaine`
+    )
   }
 
   const capacity = [...ceiling.values()].reduce((sum, value) => sum + value, 0)
@@ -145,11 +179,22 @@ export function planClosingQuotas(problem: PlanningProblemV3): ClosingQuotaPlan 
   // Sauté quand la semaine compte moins de fermetures que de fermeurs : il n'y
   // aurait alors pas de quoi servir tout le monde, et forcer le plancher
   // distribuerait plus de fermetures qu'il n'en existe.
+  // Chacun part de ses fermetures imposées : elles sont acquises, il n'y a pas
+  // à les lui attribuer, et le reste seul se répartit.
   let remaining = needed
-  if (needed >= closers.length) {
+  for (const employee of closers) {
+    const id = String(employee.id)
+    const imposed = floor.get(id) ?? 0
+    given[id] = imposed
+    remaining -= imposed
+  }
+
+  // Puis le plancher d'une fermeture, pour n'exclure personne du vivier — sans
+  // rien ajouter à qui en a déjà une d'imposée.
+  if (remaining >= closers.filter((employee) => (given[String(employee.id)] ?? 0) === 0).length) {
     for (const employee of closers) {
       const id = String(employee.id)
-      if ((ceiling.get(id) ?? 0) < 1) continue
+      if (given[id] > 0 || (ceiling.get(id) ?? 0) < 1) continue
       given[id] = 1
       remaining -= 1
     }
@@ -213,7 +258,9 @@ export function planClosingQuotas(problem: PlanningProblemV3): ClosingQuotaPlan 
     const id = String(employee.id)
     return {
       employeeId: employee.id,
-      allowed: overServed.has(id) ? given[id] : (employee.maximumClosings ?? ceiling.get(id) ?? 0),
+      allowed: overServed.has(id)
+        ? Math.max(given[id], floor.get(id) ?? 0)
+        : Math.max(employee.maximumClosings ?? ceiling.get(id) ?? 0, floor.get(id) ?? 0),
       contractual: employee.maximumClosings,
     }
   })

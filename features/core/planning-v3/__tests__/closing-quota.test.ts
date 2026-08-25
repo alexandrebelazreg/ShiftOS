@@ -24,6 +24,8 @@ interface Person {
   readonly workingDays: number
   readonly past: number
   readonly off?: readonly string[]
+  /** Jours de fermeture inscrits sur la fiche. */
+  readonly mustClose?: readonly string[]
 }
 
 function problemOf(team: readonly Person[], fairness = true): PlanningProblemV3 {
@@ -51,6 +53,7 @@ function problemOf(team: readonly Person[], fairness = true): PlanningProblemV3 
         employeeId: person.id as unknown as EmployeeId,
         date: date as IsoDate,
         available: !(person.off ?? []).includes(date),
+        mustClose: (person.mustClose ?? []).includes(date),
         latestEndMinutes: CLOSES,
       }))
     ),
@@ -123,6 +126,35 @@ describe("plafond d'équité", () => {
     // Et les plus chargés descendent quand même de deux à une.
     expect(given.dylan).toBe(1)
     expect(given.arthur).toBe(1)
+  })
+
+  it("ne plafonne pas sous les fermetures IMPOSÉES par la fiche", () => {
+    // Dylan ferme obligatoirement le vendredi et le samedi. Le plafonner à une
+    // ne changerait rien à ce qu'il fera — il en assurera deux de toute façon —
+    // et rendrait seulement la semaine infaisable. Le quota doit reconnaître
+    // ce qui est déjà décidé avant de répartir ce qui reste.
+    const withDuty: readonly Person[] = STORE.map((person) =>
+      person.id === "dylan"
+        ? { ...person, mustClose: ["2026-09-11", "2026-09-12"] }
+        : person
+    )
+    const plan = planClosingQuotas(problemOf(withDuty))
+    expect(plan.applied, plan.reason ?? "").toBe(true)
+    expect(allowed(plan).dylan).toBeGreaterThanOrEqual(2)
+  })
+
+  it("refuse quand les fermetures imposées dépassent déjà la semaine", () => {
+    // Sept fermetures inscrites sur les fiches pour six jours ouverts : le
+    // réglage est contradictoire, et fabriquer un quota par-dessus ne ferait
+    // qu'ajouter une infaisabilité. C'est au validateur de le dire, pas ici.
+    const tooMany: readonly Person[] = STORE.map((person, index) => ({
+      ...person,
+      cap: null,
+      mustClose: index < 4 ? DAYS.slice(0, 2) : DAYS.slice(0, 1),
+    }))
+    const plan = planClosingQuotas(problemOf(tooMany))
+    expect(plan.applied).toBe(false)
+    expect(plan.reason).toContain("imposées")
   })
 
   it("ne dépasse JAMAIS le plafond réglé sur la fiche", () => {
