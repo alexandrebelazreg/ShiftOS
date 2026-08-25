@@ -69,7 +69,7 @@ export function acceptV3Result(
     return {
       accepted: false,
       reason: "no-solution",
-      message: "Le moteur V3 annonce une solution sans en joindre aucune.",
+      message: "Le calcul annonce un planning sans en joindre aucun.",
     }
   }
 
@@ -81,7 +81,7 @@ export function acceptV3Result(
     return {
       accepted: false,
       reason: "contract-violated",
-      message: `Réponse V3 non conforme au contrat : ${violations.map((entry) => entry.code).join(", ")}.`,
+      message: `Le planning produit ne respecte pas le format attendu : ${violations.map((entry) => entry.code).join(", ")}.`,
     }
   }
 
@@ -136,7 +136,10 @@ function nonPublishableMessage(response: SolvePlanningResponse): string {
     case "infeasible":
       return "Les contrats, disponibilités et budgets de la semaine ne peuvent pas tous être respectés en même temps."
     case "timeout-without-solution":
-      return "La recherche s’est arrêtée avant de trouver un planning. Cela ne prouve pas que la semaine est impossible."
+      // Ne redit pas le titre. Il annonce déjà qu'aucun planning n'a été
+      // trouvé ; répéter « la recherche s'est arrêtée avant d'en trouver un »
+      // fait lire trois fois la même chose — titre, sous-titre, puis cause.
+      return "La semaine n’est pas forcément impossible : la recherche explore un temps limité."
     case "backend-error":
       return "Le moteur de calcul n’a pas pu terminer la demande. Vos règles ne sont pas nécessairement en cause."
     case "invalid-problem":

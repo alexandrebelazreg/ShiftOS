@@ -58,9 +58,9 @@ export async function runV3Generation(input: V3AttemptInput): Promise<V3AttemptO
     // never something a retry fixes.
     return {
       status: "rejected",
-      title: "Le problème V3 n'a pas pu être construit",
+      title: "La configuration ne permet pas de générer",
       message:
-        "La configuration actuelle ne se traduit pas en problème V3. Le planning V2 est inchangé.",
+        "Certains réglages du magasin ou des rayons empêchent la génération. Votre planning est inchangé.",
       details: built.errors.map((error) => error.message),
     }
   }
@@ -122,17 +122,20 @@ export async function runV3Generation(input: V3AttemptInput): Promise<V3AttemptO
  */
 function rejectionTitle(response: SolvePlanningResponse): string {
   switch (response.outcome) {
+    // Le titre nomme le RÉSULTAT, jamais le moteur. « Le moteur V3 n'a rien
+    // trouvé » désigne un composant dont le gérant ignore l'existence, et
+    // « V3 » est un numéro de version interne qui n'a rien à faire à l'écran.
     case "backend-error":
-      return "Le moteur V3 n'a pas pu répondre"
+      return "Le calcul n'a pas pu aboutir"
     case "invalid-problem":
-      return "Le moteur V3 a refusé la demande"
+      return "La demande n'a pas pu être traitée"
     case "infeasible":
       return "Cette semaine ne peut pas être planifiée avec les règles actuelles"
     case "timeout-without-solution":
-      return "Le moteur V3 n'a rien trouvé dans le temps imparti"
+      return "Aucun planning trouvé"
     case "cancelled":
-      return "Recherche V3 annulée"
+      return "Génération annulée"
     default:
-      return "Le résultat V3 a été refusé"
+      return "Aucun planning exploitable"
   }
 }
