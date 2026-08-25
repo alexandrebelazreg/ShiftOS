@@ -1,5 +1,9 @@
+import type { Metadata } from "next"
 import Link from "next/link"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
 import { PageHeader } from "@/components/layout/page-header"
+
+export const metadata: Metadata = { title: "Reporting" }
+
 export default function ReportingPage() { return <div className="space-y-6"><PageHeader title="Reporting" description="Consultez les statistiques et l’audit de vos plannings." /><div className="grid gap-4 md:grid-cols-2"><Card><CardContent className="space-y-3 py-6"><p className="font-medium">Statistiques</p><p className="text-sm text-muted-foreground">Elles apparaîtront après la création d’un planning.</p><Button variant="outline" render={<Link href="/statistics" />}>Ouvrir les statistiques</Button></CardContent></Card><Card><CardContent className="space-y-3 py-6"><p className="font-medium">Audit</p><p className="text-sm text-muted-foreground">L’historique d’audit sera disponible ici.</p><Button variant="outline" render={<Link href="/audit" />}>Ouvrir l’audit</Button></CardContent></Card></div></div> }
