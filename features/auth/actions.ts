@@ -1,8 +1,15 @@
 "use server"
 
+import { headers } from "next/headers"
 import { redirect } from "next/navigation"
 import { revalidatePath } from "next/cache"
 
+import {
+  clientIp,
+  loginLimits,
+  loginThrottle,
+  tooManyAttemptsMessage,
+} from "@/features/auth/login-throttle"
 import { createSupabaseServerClient } from "@/features/auth/supabase/server"
 
 /**
@@ -26,14 +33,32 @@ export async function signIn(_previous: SignInResult | null, formData: FormData)
     return { error: "Renseignez votre adresse et votre mot de passe." }
   }
 
+  const limits = loginLimits(email, clientIp(await headers()))
+  const now = Date.now()
+
+  // AVANT l'appel à Supabase, jamais après : tout l'intérêt est que la tentative
+  // de trop ne coûte pas un aller-retour, et n'entame pas le quota que Supabase
+  // décompte sur l'adresse unique du conteneur.
+  const wait = loginThrottle.retryAfterMs(limits, now)
+  if (wait > 0) return { error: tooManyAttemptsMessage(wait) }
+
   const supabase = await createSupabaseServerClient()
   const { error } = await supabase.auth.signInWithPassword({ email, password })
 
   if (error) {
+    loginThrottle.recordFailure(limits, now)
     // Un message unique pour « adresse inconnue » et « mot de passe faux » :
     // distinguer les deux dirait à un inconnu quelles adresses existent.
+    //
+    // Le message d'attente ne trahit rien de plus : le comptage porte sur
+    // l'adresse SAISIE, qu'elle existe ou non. Une adresse inventée se fait
+    // freiner exactement comme une vraie.
     return { error: "Adresse ou mot de passe incorrect." }
   }
+
+  // Le mot de passe est prouvé : les erreurs de frappe qui précèdent n'ont plus
+  // à peser sur la prochaine connexion.
+  loginThrottle.forget(limits)
 
   // La destination vient du proxy, qui a mémorisé d'où l'on venait. Bornée à un
   // chemin interne : une valeur venue de l'URL ne doit jamais pouvoir renvoyer
