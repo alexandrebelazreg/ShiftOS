@@ -260,14 +260,14 @@ function whyNotSolved(outcome: {
   if (!parsed.ok) return "la réponse du moteur était illisible"
   if (parsed.envelope.status === "solved") return null
   if (parsed.envelope.status === "infeasible") {
-    return "aucun planning légal ne les respectait — un jour au moins n'avait plus de fermeur disponible"
+    return "aucun planning légal ne les respectait : un jour au moins n'avait plus de fermeur disponible"
   }
   if (parsed.envelope.status === "no-solution") {
     // Le protocole est net là-dessus : `no-solution` veut dire que le moteur a
     // épuisé un VOISINAGE HEURISTIQUE, et ne prouve rien sur la semaine. Seul
     // `infeasible` affirme l'impossibilité. Confondre les deux enverrait
     // desserrer un plafond alors qu'il faudrait allonger le temps de calcul.
-    return "le moteur n'en a pas trouvé dans le temps imparti — ce qui ne prouve pas qu'il n'en existe pas ; la semaine est déjà à la limite de ce qu'il sait résoudre"
+    return "le moteur n'en a pas trouvé dans le temps imparti, ce qui ne prouve pas qu'il n'en existe pas ; la semaine est déjà à la limite de ce qu'il sait résoudre"
   }
   return `le moteur a répondu « ${parsed.envelope.status} »`
 }

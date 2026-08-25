@@ -62,7 +62,7 @@ export function SecteursTab() {
 
             {orphans.length > 0 ? <div className="space-y-2 rounded-lg border border-destructive/40 bg-destructive/5 p-3">
               <p className="text-sm font-medium">Secteurs qui n’existent plus</p>
-              <p className="text-xs text-muted-foreground">Ces noms ne correspondent à aucun secteur configuré — le secteur a été renommé ou supprimé. Tant qu’ils restent, cette fiche paraît rattachée à un secteur de plus qu’en réalité. Cliquez pour les retirer.</p>
+              <p className="text-xs text-muted-foreground">Ces noms ne correspondent à aucun secteur configuré : il a été renommé ou supprimé. Tant qu’ils restent, cette fiche paraît rattachée à un secteur de plus qu’en réalité. Cliquez pour les retirer.</p>
               <div className="flex flex-wrap gap-2">
                 {orphans.map((name) => (
                   <Button key={name} type="button" size="sm" variant="destructive" aria-label={`Retirer ${name}`} onClick={() => field.onChange(field.value.filter((value) => value !== name))}>

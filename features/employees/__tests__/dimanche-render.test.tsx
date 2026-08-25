@@ -103,7 +103,7 @@ describe("l'onglet Dimanche, une fois ouvert", () => {
       sundayCommitment: "volunteer",
       fixedDaysOff: ["sunday"],
     })
-    expect(markup).toContain("c’est l’usage, et il n’y a rien à corriger")
+    expect(markup).toContain("C’est l’usage, et il n’y a rien à corriger")
     expect(markup).toContain("Son accord suffit à l’appeler")
   })
 

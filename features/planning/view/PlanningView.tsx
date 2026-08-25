@@ -873,7 +873,7 @@ export function PlanningView({
 
           {publishBlocked ? (
             <p role="alert" className="rounded-md border border-destructive/40 bg-destructive/10 p-3 text-sm text-destructive">
-              Publication impossible : des règles obligatoires — couverture dure ou contrats — ne
+              Publication impossible : des règles obligatoires (couverture dure ou contrats) ne
               sont pas respectées. Corrigez le planning avant de le publier ; aucune acceptation ne
               permet de passer outre.
             </p>

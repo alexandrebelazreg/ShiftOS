@@ -52,7 +52,7 @@ export function StoreInformationSection() {
         <FormField
           label="Enseigne"
           htmlFor="brand"
-          description="Facultatif — utile si le nom du magasin est différent de celui de l’enseigne."
+          description="Facultatif. Utile si le nom du magasin diffère de celui de l’enseigne."
           className="md:col-span-2"
         >
           <ControlledStoreInput

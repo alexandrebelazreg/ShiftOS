@@ -182,7 +182,7 @@ export function EmployeesView() {
                   </div>
                   {group.employees.length === 0 ? (
                     <p className="rounded-xl border border-dashed px-3 py-4 text-sm text-muted-foreground">
-                      Personne n’est affecté à ce secteur — la génération le refusera.
+                      Personne n’est affecté à ce secteur. La génération le refusera.
                     </p>
                   ) : (
                     <div className="rounded-xl border">

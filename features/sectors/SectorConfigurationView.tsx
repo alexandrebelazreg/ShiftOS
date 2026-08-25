@@ -253,7 +253,7 @@ export function SectorConfigurationView({ store }: { store: StoreConfig | null }
       title={pendingDeletion ? `Supprimer le secteur « ${pendingDeletion.name || "sans nom"} » ?` : "Supprimer le secteur ?"}
       description={
         refusal.length > 0
-          ? "Ce secteur sert encore. Le supprimer viderait le rattachement des salariés qui y travaillent — le rattachement se fait par NOM — et rendrait inattribuables les semaines déjà publiées. Décochez plutôt « Secteur actif » : il sortira des générations sans rien effacer."
+          ? "Ce secteur sert encore. Le supprimer viderait le rattachement des salariés qui y travaillent (le rattachement se fait par nom) et rendrait inattribuables les semaines déjà publiées. Décochez plutôt « Secteur actif » : il sortira des générations sans rien effacer."
           : "Cette action est définitive et ne peut pas être annulée. Elle n’est proposée que parce que rien ne cite encore ce secteur."
       }
       blockedBy={refusal.map((citation) => `${sectorCitationFamilyLabel(citation.family)} — ${citation.label}`)}

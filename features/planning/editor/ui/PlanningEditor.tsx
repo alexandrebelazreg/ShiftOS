@@ -130,7 +130,7 @@ export function PlanningEditor({
         </Button>
         {selectedAssignmentId ? (
           <span className="ml-2 text-xs text-muted-foreground">
-            Service sélectionné — cliquez sur un autre pour échanger, ou sur une case vide de la même ligne pour le déplacer.
+            Service sélectionné. Cliquez sur un autre pour échanger, ou sur une case vide de la même ligne pour le déplacer.
           </span>
         ) : null}
       </div>

@@ -315,7 +315,7 @@ export function PaidLeavePlanningView({ initialStore }: { readonly initialStore:
             ? "Cette campagne est validée : les semaines de congés ont été arbitrées, et la feuille de permanence lit sa colonne « CP » ici. La supprimer viderait ces feuilles sans le dire. Déverrouillez-la d’abord — la décision redeviendra modifiable."
             : "Cette action est définitive. Les demandes, les arbitrages et les réglages de cette campagne seront perdus ; les fiches des salariés, elles, ne changent pas."
         }
-        blockedBy={campaign?.status === "validated" ? ["Campagne validée — déverrouillez-la avant de la supprimer."] : []}
+        blockedBy={campaign?.status === "validated" ? ["Campagne validée : déverrouillez-la avant de la supprimer."] : []}
         blockedTitle="Ce n’est pas possible en l’état :"
         confirmLabel="Supprimer la campagne"
         onConfirm={() => void deleteCampaign()}

@@ -57,8 +57,8 @@ export function DimancheTab() {
               sur deux onglets et se lisent l'un sans l'autre. */}
           {restsOnSunday ? (
             <p className="rounded-md border border-dashed p-3 text-sm text-muted-foreground">
-              Le dimanche reste l’un de ses jours de repos, dans l’onglet Contraintes —
-              c’est l’usage, et il n’y a rien à corriger.{" "}
+              Le dimanche reste l’un de ses jours de repos, dans l’onglet Contraintes.
+              C’est l’usage, et il n’y a rien à corriger.{" "}
               {sundayCommitment === "fixed" ? (
                 <>
                   Mais il est ici de <strong>tous les dimanches</strong> : ces deux réglages ne
