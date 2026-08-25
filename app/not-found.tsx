@@ -1,4 +1,5 @@
 import Link from "next/link"
+import { connection } from "next/server"
 
 import { Button } from "@/components/ui/button"
 
@@ -10,7 +11,12 @@ import { Button } from "@/components/ui/button"
  * plupart des 404 de Planiteo viennent d'un signet vers un planning supprimé,
  * et le gérant cherche alors la liste, pas une explication.
  */
-export default function NotFound() {
+export default async function NotFound() {
+  // Comme `/confidentialite` : rendue à la requête pour recevoir le nonce de la
+  // CSP. Une 404 générée à la compilation arriverait avec des scripts que le
+  // navigateur refuserait.
+  await connection()
+
   return (
     <main className="flex min-h-svh items-center justify-center px-6">
       <div className="max-w-md space-y-4 text-center">
