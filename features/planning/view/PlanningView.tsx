@@ -785,7 +785,13 @@ export function PlanningView({
         </Card>
       ) : null}
 
-      {initialStore && !setup.isLoading && !selectionReadiness.ready ? (
+      {/* Rien à dire de la configuration quand aucun rayon n'est choisi.
+          Le verdict n'était pas faux, la question l'était : on lui soumettait
+          la liste des rayons SÉLECTIONNÉS, donc une liste vide, et il
+          répondait « créez au moins un secteur » alors que le magasin en
+          compte huit. Une sélection vide est un choix d'affichage, pas un
+          défaut de configuration. */}
+      {initialStore && !setup.isLoading && selection.length > 0 && !selectionReadiness.ready ? (
         <Card>
           <CardHeader><CardTitle className="text-base">Configuration requise avant la génération</CardTitle></CardHeader>
           <CardContent>
