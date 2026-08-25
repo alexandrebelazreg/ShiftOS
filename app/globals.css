@@ -7,9 +7,30 @@
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
-  --font-sans: var(--font-sans);
+  /* Les trois lignes qui suivent lisent les variables posées sur <html> par
+   * `next/font` dans `app/layout.tsx`. Elles ne peuvent PAS se nommer
+   * elles-mêmes : `--font-sans: var(--font-sans)` est un cycle, que CSS
+   * invalide au calcul. La propriété devient alors « invalide à la valeur
+   * calculée », et pour une propriété héritée sur l'élément racine cela veut
+   * dire la valeur initiale — Times New Roman.
+   *
+   * C'est exactement ce qui s'est produit ici, du premier commit au 26 août
+   * 2026 : toute l'interface s'affichait en serif par défaut pendant que Geist
+   * était téléchargée et consommée par personne. La panne est silencieuse par
+   * construction, puisque le texte s'affiche, simplement dans la mauvaise
+   * police. `--font-mono` était juste, ce qui rendait l'écart d'autant moins
+   * visible.
+   *
+   * D'où la règle : ces valeurs pointent vers `--font-geist-*` DIRECTEMENT,
+   * jamais l'une vers l'autre. Une chaîne d'indirection est ce qui a permis à
+   * l'erreur de passer inaperçue.
+   */
+  --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
-  --font-heading: var(--font-sans);
+  /* Jeton distinct de `--font-sans` bien qu'il porte la même valeur : le jour
+   * où les titres prendront une police d'affichage, c'est cette ligne seule
+   * qui change, sans toucher au texte courant. */
+  --font-heading: var(--font-geist-sans);
   --color-sidebar-ring: var(--sidebar-ring);
   --color-sidebar-border: var(--sidebar-border);
   --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
@@ -48,73 +69,126 @@
   --radius-4xl: calc(var(--radius) * 2.6);
 }
 
+/* ── La palette ─────────────────────────────────────────────────────────────
+ *
+ * Choisie, et non héritée. Ce qui suit remplace celle de shadcn sortie du
+ * carton, entièrement en niveaux de gris (chroma 0 partout, sauf le rouge).
+ * Elle était lisible et sobre. Elle n'avait simplement été décidée par
+ * personne, et cela se voyait de la même façon que se voit un site engendré.
+ *
+ * Trois décisions, et leurs raisons.
+ *
+ * 1. Le fond n'est plus le blanc absolu. `oklch(1 0 0)` fatigue sur l'écran
+ *    d'une réserve sous néon, et surtout il ne laisse aucun moyen de détacher
+ *    une carte autrement qu'en lui posant une ombre. Le fond devient un papier
+ *    à peine froid, les cartes restent blanches : elles se lèvent d'elles-
+ *    mêmes, sans ombre portée sur chaque élément.
+ *
+ * 2. L'accent est un pétrole. Il se justifie surtout par ce qu'il ÉVITE. Ni
+ *    violet ni indigo, devenus la signature des interfaces engendrées. Ni
+ *    vert, ni ambre, ni rouge, qui portent déjà un sens ici : la validation,
+ *    l'avertissement de la bande de statut, et `destructive`. Restait une
+ *    famille froide qu'aucune sémantique n'occupait.
+ *
+ * 3. Les gris tirent d'un cheveu vers la teinte de l'accent au lieu d'être
+ *    neutres. C'est ce qui fait qu'une palette tient ensemble, plutôt que de
+ *    ressembler à une couleur posée sur du gris.
+ *
+ * Les couleurs des rayons du planning ne viennent PAS d'ici : elles sont
+ * saisies rayon par rayon et calculées dans `sector-paint.ts`. L'accent ne
+ * peut donc jamais entrer en concurrence avec les données.
+ *
+ * Contrastes vérifiés par calcul, pas à l'œil. Texte sur papier 18,9:1 ; blanc
+ * sur accent 6,8:1 ; accent employé comme texte 6,8:1 ; survol 11,0:1 ; anneau
+ * de focus 4,5:1 pour un minimum exigé de 3:1 sur un élément non textuel.
+ */
 :root {
-  --background: oklch(1 0 0);
-  --foreground: oklch(0.145 0 0);
+  --background: oklch(0.984 0.004 210);
+  --foreground: oklch(0.145 0.004 240);
+  /* Blanches, et c'est le contraste avec le papier qui les détache. */
   --card: oklch(1 0 0);
-  --card-foreground: oklch(0.145 0 0);
+  --card-foreground: oklch(0.145 0.004 240);
   --popover: oklch(1 0 0);
-  --popover-foreground: oklch(0.145 0 0);
-  --primary: oklch(0.205 0 0);
+  --popover-foreground: oklch(0.145 0.004 240);
+  --primary: oklch(0.45 0.08 205);
   --primary-foreground: oklch(0.985 0 0);
-  --secondary: oklch(0.97 0 0);
-  --secondary-foreground: oklch(0.205 0 0);
-  --muted: oklch(0.97 0 0);
-  --muted-foreground: oklch(0.556 0 0);
-  --accent: oklch(0.97 0 0);
-  --accent-foreground: oklch(0.205 0 0);
+  --secondary: oklch(0.968 0.004 210);
+  --secondary-foreground: oklch(0.25 0.02 210);
+  --muted: oklch(0.968 0.004 210);
+  /* Assombri : sur le papier, l'ancien gris tombait à 4,52:1, à un cheveu du
+   * seuil. Il passe à 5,02:1. */
+  --muted-foreground: oklch(0.53 0.015 225);
+  --accent: oklch(0.955 0.014 205);
+  --accent-foreground: oklch(0.32 0.05 205);
   --destructive: oklch(0.577 0.245 27.325);
-  --border: oklch(0.922 0 0);
-  --input: oklch(0.922 0 0);
-  --ring: oklch(0.708 0 0);
+  --border: oklch(0.9 0.006 210);
+  --input: oklch(0.9 0.006 210);
+  --ring: oklch(0.55 0.09 205);
+  /* Inutilisées à ce jour : aucun graphique n'existe encore, et ces cinq gris
+   * en produiraient un illisible. À décider en même temps que le premier
+   * graphique, pas avant — une palette de données se choisit sur des données. */
   --chart-1: oklch(0.87 0 0);
   --chart-2: oklch(0.556 0 0);
   --chart-3: oklch(0.439 0 0);
   --chart-4: oklch(0.371 0 0);
   --chart-5: oklch(0.269 0 0);
   --radius: 0.625rem;
-  --sidebar: oklch(0.985 0 0);
-  --sidebar-foreground: oklch(0.145 0 0);
-  --sidebar-primary: oklch(0.205 0 0);
+  --sidebar: oklch(0.972 0.005 210);
+  --sidebar-foreground: oklch(0.145 0.004 240);
+  --sidebar-primary: oklch(0.45 0.08 205);
   --sidebar-primary-foreground: oklch(0.985 0 0);
-  --sidebar-accent: oklch(0.97 0 0);
-  --sidebar-accent-foreground: oklch(0.205 0 0);
-  --sidebar-border: oklch(0.922 0 0);
-  --sidebar-ring: oklch(0.708 0 0);
+  --sidebar-accent: oklch(0.955 0.014 205);
+  --sidebar-accent-foreground: oklch(0.32 0.05 205);
+  --sidebar-border: oklch(0.9 0.006 210);
+  --sidebar-ring: oklch(0.55 0.09 205);
 }
 
+/*
+ * Le thème sombre, qui n'est atteignable par RIEN aujourd'hui.
+ *
+ * Aucune bascule, aucun script de préférence système ne pose la classe `.dark`
+ * sur `<html>`. Tout ce bloc, et les `dark:` semés dans quelques composants,
+ * sont donc du code mort en attente.
+ *
+ * Il est tenu à jour quand même, pour une raison précise : c'est ici que
+ * dormait `--sidebar-primary: oklch(0.488 0.243 264.376)`, un violet saturé
+ * hérité de shadcn que personne n'avait choisi et que personne n'avait vu,
+ * puisqu'il ne s'affichait jamais. Une palette morte laissée sans surveillance
+ * ressurgit telle quelle le jour où l'on branche la bascule.
+ */
 .dark {
-  --background: oklch(0.145 0 0);
+  --background: oklch(0.16 0.008 240);
   --foreground: oklch(0.985 0 0);
-  --card: oklch(0.205 0 0);
+  --card: oklch(0.21 0.01 240);
   --card-foreground: oklch(0.985 0 0);
-  --popover: oklch(0.205 0 0);
+  --popover: oklch(0.21 0.01 240);
   --popover-foreground: oklch(0.985 0 0);
-  --primary: oklch(0.922 0 0);
-  --primary-foreground: oklch(0.205 0 0);
-  --secondary: oklch(0.269 0 0);
+  /* Le pétrole remonte en clarté : à 0.45 sur un fond sombre il disparaîtrait. */
+  --primary: oklch(0.72 0.09 200);
+  --primary-foreground: oklch(0.2 0.03 205);
+  --secondary: oklch(0.27 0.012 240);
   --secondary-foreground: oklch(0.985 0 0);
-  --muted: oklch(0.269 0 0);
-  --muted-foreground: oklch(0.708 0 0);
-  --accent: oklch(0.269 0 0);
-  --accent-foreground: oklch(0.985 0 0);
+  --muted: oklch(0.27 0.012 240);
+  --muted-foreground: oklch(0.71 0.015 225);
+  --accent: oklch(0.3 0.025 205);
+  --accent-foreground: oklch(0.95 0.01 205);
   --destructive: oklch(0.704 0.191 22.216);
-  --border: oklch(1 0 0 / 10%);
+  --border: oklch(1 0 0 / 12%);
   --input: oklch(1 0 0 / 15%);
-  --ring: oklch(0.556 0 0);
+  --ring: oklch(0.6 0.08 205);
   --chart-1: oklch(0.87 0 0);
   --chart-2: oklch(0.556 0 0);
   --chart-3: oklch(0.439 0 0);
   --chart-4: oklch(0.371 0 0);
   --chart-5: oklch(0.269 0 0);
-  --sidebar: oklch(0.205 0 0);
+  --sidebar: oklch(0.21 0.01 240);
   --sidebar-foreground: oklch(0.985 0 0);
-  --sidebar-primary: oklch(0.488 0.243 264.376);
-  --sidebar-primary-foreground: oklch(0.985 0 0);
-  --sidebar-accent: oklch(0.269 0 0);
-  --sidebar-accent-foreground: oklch(0.985 0 0);
-  --sidebar-border: oklch(1 0 0 / 10%);
-  --sidebar-ring: oklch(0.556 0 0);
+  --sidebar-primary: oklch(0.72 0.09 200);
+  --sidebar-primary-foreground: oklch(0.2 0.03 205);
+  --sidebar-accent: oklch(0.3 0.025 205);
+  --sidebar-accent-foreground: oklch(0.95 0.01 205);
+  --sidebar-border: oklch(1 0 0 / 12%);
+  --sidebar-ring: oklch(0.6 0.08 205);
 }
 
 @layer base {
