@@ -199,3 +199,65 @@ describe("la feuille de permanence, rendue", () => {
     expect(markup.match(/break-inside-avoid/g)).toHaveLength(5)
   })
 })
+
+/**
+ * La couleur de la feuille, figée.
+ *
+ * Elle obéit à une règle en une phrase — la TEINTE dit le rôle, la VALEUR dit
+ * le calendrier — et cette règle ne se voit nulle part à la lecture d'un
+ * fichier de composant. Sans ces tests, la première personne qui trouvera
+ * l'en-tête des colonnes un peu terne y posera un ambre, et les intersections
+ * redeviendront la bouillie qu'elles étaient.
+ */
+describe("la couleur de la feuille", () => {
+  it("donne deux teintes opposées aux deux rôles", () => {
+    const markup = render(fullMonth())
+
+    expect(markup).toContain("border-l-amber-600")
+    expect(markup).toContain("border-l-teal-700")
+    expect(markup).toContain("bg-amber-50")
+    expect(markup).toContain("bg-teal-50")
+  })
+
+  it("garde les en-têtes de JOURNÉE en gris, jamais en teinte", () => {
+    // L'invariant qui protège les intersections : une case ne porte qu'UN fond.
+    // Un samedi férié en ligne de fermeture cumulerait sinon trois couleurs.
+    //
+    // Les en-têtes de journée seulement : la cellule du numéro de semaine porte
+    // un pétrole plein, et c'est voulu — elle dit la STRUCTURE de la feuille,
+    // pas une exception du calendrier. Le noir, lui, reste au férié.
+    const markup = render(fullMonth())
+    const thead = markup.slice(markup.indexOf("<thead>"), markup.indexOf("</thead>"))
+    const jours = thead.split("<th").filter((cell) => cell.includes('class="block"'))
+
+    expect(jours.length).toBeGreaterThan(0)
+    for (const jour of jours) expect(jour).not.toMatch(/bg-amber-|bg-teal-/)
+    expect(thead).toContain("bg-neutral-800")
+  })
+
+  it("hachure une case à pourvoir, sans rien y écrire", () => {
+    // Le modèle laisse la case vide pour qu'aucun signe ne la fasse passer pour
+    // un choix. La hachure doit donc rester une AFFAIRE DE FOND.
+    const markup = render(blank)
+
+    expect(markup).toContain("repeating-linear-gradient")
+    expect(markup).not.toContain("À POURVOIR</td>")
+  })
+
+  it("laisse le calendrier l'emporter sur le rôle", () => {
+    // Une journée fermée n'attend personne : la teindre aux couleurs du rôle
+    // laisserait croire qu'il y manque un nom.
+    const markup = render(blank)
+    const ferme = markup.slice(markup.indexOf("FERMÉ") - 400, markup.indexOf("FERMÉ"))
+
+    expect(ferme).toContain("bg-neutral-300")
+  })
+
+  it("porte une légende, sans quoi la couleur n'est lisible que par qui l'a choisie", () => {
+    const markup = render(fullMonth())
+
+    for (const mot of ["Ouverture", "Fermeture", "À pourvoir", "Fermé"]) {
+      expect(markup).toContain(mot)
+    }
+  })
+})
