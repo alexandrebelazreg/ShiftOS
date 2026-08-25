@@ -1,4 +1,5 @@
 import type { Metadata } from "next"
+import Link from "next/link"
 
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { LoginForm } from "@/features/auth/components/LoginForm"
@@ -35,6 +36,15 @@ export default async function LoginPage({
             <LoginForm next={next} />
           </CardContent>
         </Card>
+
+        {/* Le seul endroit du produit qu'un salarié puisse atteindre : il n'a
+            pas de compte, et l'écran de connexion est le bout du chemin pour
+            lui. Le lien vit donc ici, pas dans la navigation interne. */}
+        <p className="text-center text-xs text-muted-foreground">
+          <Link href="/confidentialite" className="underline underline-offset-4">
+            Confidentialité
+          </Link>
+        </p>
       </div>
     </main>
   )
