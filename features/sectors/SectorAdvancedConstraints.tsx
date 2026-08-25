@@ -1,5 +1,6 @@
 "use client"
 
+import type { StoreConfig } from "@/features/store/schemas/store.schema"
 import { Plus, Trash2 } from "lucide-react"
 
 import { WEEK_DAYS, type WeekDay } from "@/features/core/models"
@@ -34,9 +35,21 @@ function humanMinutes(minutes: number): string {
  * The head-count PROFILE stays where it is, in « Couverture horaire ». What
  * lives here is the other thing: the floor a schedule may be refused over.
  */
-export function SectorAdvancedConstraints({ sector, update }: { sector: SectorDemandConfiguration; update: Update }) {
+export function SectorAdvancedConstraints({
+  sector,
+  update,
+  store,
+}: {
+  sector: SectorDemandConfiguration
+  update: Update
+  /** Pour dire la durée héritée, et non un chiffre écrit en dur. */
+  store: StoreConfig | null
+}) {
   const rules = sector.shiftRules
   const setRules = (patch: Partial<SectorShiftRules>) => update({ ...sector, shiftRules: { ...rules, ...patch } })
+  const inheritedLabel = store?.minShiftDuration
+    ? humanMinutes(store.minShiftDuration)
+    : "non configurée"
 
   return (
     <Section
@@ -48,12 +61,32 @@ export function SectorAdvancedConstraints({ sector, update }: { sector: SectorDe
       </CollapsibleSection>
 
       <CollapsibleSection title="2 · Durées et coupures" summary={durationSummary(rules)}>
+        {/* La case et le champ qu'elle verrouille, côte à côte.
+            Ils vivaient dans deux sections différentes de la même page : le
+            champ était grisé ici, et la case qui le débloque se trouvait plus
+            haut, sous un autre libellé. On pouvait lire « durée minimale » sans
+            aucun moyen visible de la changer. */}
+        <label className="flex items-center gap-2 text-sm">
+          <input
+            type="checkbox"
+            checked={rules.inheritMinimumShiftDuration}
+            onChange={(event) => setRules({ inheritMinimumShiftDuration: event.target.checked })}
+          />
+          Hériter la durée minimale du magasin ({inheritedLabel})
+        </label>
+
         <div className="grid gap-4 md:grid-cols-2">
           <MinuteField
             label="Durée minimale d’un shift ou segment"
             value={rules.inheritMinimumShiftDuration ? null : rules.minimumShiftDuration}
             disabled={rules.inheritMinimumShiftDuration}
-            hint={rules.inheritMinimumShiftDuration ? "Héritée du magasin." : `Valeur en vigueur : ${humanMinutes(240)}.`}
+            // L'indication annonçait « 4 h » en dur, quelle que soit la valeur
+            // réellement appliquée — un chiffre faux dès qu'on s'en écartait.
+            hint={
+              rules.inheritMinimumShiftDuration
+                ? `Héritée du magasin : ${inheritedLabel}. Décochez ci-dessus pour en poser une propre à ce rayon.`
+                : "Valeur propre à ce rayon."
+            }
             onChange={(minimumShiftDuration) => setRules({ minimumShiftDuration })}
           />
           <MinuteField

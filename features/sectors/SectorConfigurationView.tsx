@@ -230,19 +230,18 @@ export function SectorConfigurationView({ store }: { store: StoreConfig | null }
         </> : <p className="rounded-lg border border-dashed p-3 text-sm text-muted-foreground">Répartition automatique active : aucun pourcentage n’est à saisir.</p>}
       </Section>
 
+      {/* Les durées ne vivent plus ici : elles avaient un second foyer dans
+          « Contraintes avancées », avec d'autres libellés pour les mêmes
+          valeurs, et l'héritage réglable d'un côté seulement. Deux champs pour
+          un réglage, c'est un réglage qu'on croit avoir changé. */}
       <Section title="Règles des shifts">
         <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={selected.workEveryNonFixedRestDay} onChange={(e) => update({ ...selected, workEveryNonFixedRestDay: e.target.checked })} />Planifier un shift chaque jour ouvert hors repos fixe</label>
-        <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={selected.shiftRules.inheritMinimumShiftDuration} onChange={(e) => update({ ...selected, shiftRules: { ...selected.shiftRules, inheritMinimumShiftDuration: e.target.checked } })} />Hériter de la durée minimale du magasin ({store?.minShiftDuration ? `${store.minShiftDuration / 60} h` : "non configurée"})</label>
-        <div className="grid gap-4 sm:grid-cols-3">
-          <Field label="Durée minimale (minutes)"><Input type="number" min={15} step={15} className={NUMERIC_FIELD} disabled={selected.shiftRules.inheritMinimumShiftDuration} value={selected.shiftRules.minimumShiftDuration ?? ""} onChange={(e) => update({ ...selected, shiftRules: { ...selected.shiftRules, minimumShiftDuration: Number(e.target.value) } })} /></Field>
-          <Field label="Durée maximale par jour (minutes)"><Input type="number" min={15} step={15} className={NUMERIC_FIELD} value={selected.shiftRules.maximumDailyDuration} onChange={(e) => update({ ...selected, shiftRules: { ...selected.shiftRules, maximumDailyDuration: Number(e.target.value) } })} /></Field>
-          <Field label="Pas de temps"><Input disabled value="15 minutes" /></Field>
-        </div>
+        <p className="text-sm text-muted-foreground">Les durées minimales et maximales se règlent dans « Contraintes avancées » ci-dessous.</p>
       </Section>
 
       {/* Coupures, plafonds, planchers, repos et équité vivent dans une seule
           section repliable, pour que cette page reste lisible. */}
-      <SectorAdvancedConstraints sector={selected} update={update} />
+      <SectorAdvancedConstraints sector={selected} update={update} store={store} />
       <Competencies sector={selected} update={update} />
       {issues.length ? <div role="alert" className="rounded-lg border border-destructive/40 bg-destructive/5 p-4"><p className="font-medium text-destructive">Corrigez ces éléments avant d’enregistrer :</p><ul className="mt-2 list-disc space-y-1 pl-5 text-sm">{issues.map((issue, index) => <li key={`${issue.path}-${index}`}>{issue.message}</li>)}</ul></div> : null}
       <div className="flex items-center justify-end gap-3">{saved ? <span className="text-sm text-emerald-600 dark:text-emerald-400">Configuration enregistrée.{renameNotice ? ` ${renameNotice}` : ""}</span> : null}<Button size="lg" disabled={issues.length > 0} onClick={() => void save()}>Enregistrer le secteur</Button></div>
