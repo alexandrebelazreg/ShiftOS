@@ -755,7 +755,6 @@ function diagnosticsOf(envelope: HighsFastResponseEnvelope) {
       : []
     const skeletonsPlaced = numberOf(envelope.diagnostics.skeletonsPlaced) ?? 0
     const placementsInfeasible = numberOf(envelope.diagnostics.placementsInfeasible) ?? 0
-    const allocationsTested = numberOf(envelope.diagnostics.allocationsTested) ?? 0
 
     // Ce qui a échoué, du plus concret au plus vague.
     //
@@ -791,14 +790,19 @@ function diagnosticsOf(envelope: HighsFastResponseEnvelope) {
         "sans qu'une contrainte unique puisse être désignée."
     }
 
+    // La CAUSE, et rien d'autre.
+    //
+    // Ce message répétait mot pour mot le sous-titre affiché juste au-dessus
+    // (« cela ne prouve pas que la semaine est impossible »), puis y ajoutait
+    // des compteurs de répartitions et les notes brutes du moteur — « recherche
+    // squelette-d'abord épuisée à 0.0s avec 1000000000/1000000000 restant ».
+    // Un gérant devant un planning manquant n'a que faire de tout cela ; il
+    // veut savoir ce qui a échoué et quoi tenter. Les compteurs et les notes
+    // restent, mais dans le panneau technique, où l'on va justement chercher
+    // ce genre de chose.
     return [{
       code: reason,
-      message:
-        `${cause} Ce n'est PAS une preuve d'impossibilité : la recherche est heuristique et n'a exploré ` +
-        `qu'une partie des plannings possibles (${allocationsTested} répartition${allocationsTested > 1 ? "s" : ""} ` +
-        `essayée${allocationsTested > 1 ? "s" : ""}, ${skeletonsPlaced} placement${skeletonsPlaced > 1 ? "s" : ""}). ` +
-        `Relancer avec un budget de temps plus large peut aboutir.` +
-        (notes.length > 0 ? ` Détail du moteur : ${notes.slice(0, 3).join(" | ")}` : ""),
+      message: `${capitaliseFirst(cause)} Relancez la génération : elle peut aboutir.`,
     }]
   }
 
@@ -959,6 +963,11 @@ function emptyStatistics(envelope: HighsFastResponseEnvelope) {
  * decision, and a diagnostic that requires no decision must never appear where
  * the ones that do are read.
  */
+/** Une cause écrite en minuscule devient une phrase quand elle commence seule. */
+function capitaliseFirst(value: string): string {
+  return value.charAt(0).toLocaleUpperCase("fr") + value.slice(1)
+}
+
 function technicalFacts(envelope: HighsFastResponseEnvelope): SolveTechnicalFact[] {
   const facts: SolveTechnicalFact[] = [
     { label: "Moteur", value: "HiGHS décomposé (Python, sous-processus)" },
@@ -978,6 +987,21 @@ function technicalFacts(envelope: HighsFastResponseEnvelope): SolveTechnicalFact
   }
   const python = envelope.environment.python
   if (typeof python === "string") facts.push({ label: "Python", value: python })
+
+  // L'étendue de la recherche, et les notes brutes du moteur.
+  //
+  // Elles figuraient dans le message d'échec lui-même, où elles doublaient sa
+  // longueur pour dire à un gérant des choses qu'il ne peut pas exploiter :
+  // « 3 répartitions essayées, 0 placement », « recherche squelette-d'abord
+  // épuisée à 0.0s ». Ici, elles servent à qui vient chercher pourquoi.
+  push("Répartitions essayées", envelope.diagnostics.allocationsTested)
+  push("Placements tentés", envelope.diagnostics.skeletonsPlaced)
+  const notes = Array.isArray(envelope.diagnostics.notes)
+    ? envelope.diagnostics.notes.filter((note): note is string => typeof note === "string")
+    : []
+  for (const note of notes.slice(0, 3)) {
+    facts.push({ label: "Note du moteur", value: note })
+  }
   return facts
 }
 

@@ -422,13 +422,34 @@ describe("adaptateur v3-highs-fast — verdicts du moteur", () => {
     )
   })
 
-  it("ne renvoie plus le message générique quand la recherche s'épuise", async () => {
+  it("dit la cause, et rien de ce que le gérant ne peut pas exploiter", async () => {
+    // Le message répétait le sous-titre affiché juste au-dessus, y ajoutait des
+    // compteurs de répartitions et les notes brutes du moteur. Devant un
+    // planning manquant, le gérant veut savoir ce qui a échoué et quoi tenter.
     const response = await exhaustedSearch({ allocationsTested: 19, skeletonsPlaced: 19 })
     const message = response.diagnostics.entries[0]?.message ?? ""
 
     expect(message).not.toContain("sans détail exploitable")
-    expect(message).toContain("PAS une preuve d'impossibilité")
-    expect(message).toContain("19 répartitions essayées")
+    expect(message).toContain("Relancez la génération")
+    // Ce qui doit AVOIR DISPARU du message.
+    expect(message).not.toContain("PAS une preuve d'impossibilité")
+    expect(message).not.toContain("19 répartition")
+    expect(message).not.toContain("Détail du moteur")
+  })
+
+  it("range les compteurs et les notes du moteur dans le panneau technique", async () => {
+    // Ils n'ont pas été supprimés : ils ont changé de place, pour rester
+    // disponibles à qui vient justement chercher pourquoi.
+    const response = await exhaustedSearch({
+      allocationsTested: 19,
+      skeletonsPlaced: 4,
+      notes: ["sk#0(sector-placement): 3 journée(s) sans forme légale"],
+    })
+    const technical = response.diagnostics.technical.map((fact) => `${fact.label} ${fact.value}`)
+
+    expect(technical.some((fact) => fact.includes("Répartitions essayées 19"))).toBe(true)
+    expect(technical.some((fact) => fact.includes("Placements tentés 4"))).toBe(true)
+    expect(technical.some((fact) => fact.includes("3 journée(s) sans forme légale"))).toBe(true)
   })
 
   it("remonte la journée sans forme légale que le moteur a notée", async () => {
@@ -439,8 +460,8 @@ describe("adaptateur v3-highs-fast — verdicts du moteur", () => {
     })
     const message = response.diagnostics.entries[0]?.message ?? ""
 
+    // La cause reste dite en clair — c'est elle qui oriente la correction.
     expect(message).toContain("n'admettent aucune forme d'horaire légale")
-    expect(message).toContain("3 journée(s) sans forme légale")
   })
 
   it("distingue un placement refusé d'une recherche simplement trop courte", async () => {
@@ -448,7 +469,8 @@ describe("adaptateur v3-highs-fast — verdicts du moteur", () => {
     const short = await exhaustedSearch({ allocationsTested: 1, skeletonsPlaced: 0 })
 
     expect(refused.diagnostics.entries[0]?.message).toContain("4 placements ont été refusés")
-    expect(short.diagnostics.entries[0]?.message).toContain("aucun placement n'a pu être tenté")
+    // La cause ouvre désormais la phrase, donc sa première lettre est capitale.
+    expect(short.diagnostics.entries[0]?.message).toContain("Aucun placement n'a pu être tenté")
   })
 
   it("nomme TOUS les comptoirs qui retiennent un candidat, pas seulement le premier", async () => {

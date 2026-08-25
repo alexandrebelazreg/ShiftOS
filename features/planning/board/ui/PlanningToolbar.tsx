@@ -97,7 +97,12 @@ export function PlanningToolbar({
           </button>
         </div>
 
-        {hasPlanning && toolbar.sectors.length > 0 ? (
+        {/* Choisir le rayon est ce qu'on fait AVANT de générer.
+            La condition exigeait un planning existant, si bien que le menu
+            disparaissait sur une semaine vide — au moment précis où il faut
+            désigner ce qu'on veut générer. Sans planning, `toolbar.sectors` est
+            vide lui aussi : c'est donc la liste transmise qui décide. */}
+        {(sectorChoices ?? toolbar.sectors).length > 0 ? (
           <PlanningSectorMenu
             sectors={sectorChoices ?? toolbar.sectors}
             onToggleSector={onToggleSector}
