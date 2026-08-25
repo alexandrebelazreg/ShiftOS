@@ -375,6 +375,76 @@ export function PlanningView({
   }, [initialPlanningId])
 
   /**
+   * Le planning déjà enregistré pour la semaine et les rayons affichés.
+   *
+   * L'écran n'ouvrait un planning que si l'adresse en portait l'identifiant —
+   * c'est-à-dire en venant du tableau de bord. Cliquer sur « Planning » dans le
+   * menu tombait sur une grille vide alors qu'un planning existait pour cette
+   * semaine et ce rayon, et rien ne le disait : il fallait deviner qu'il
+   * fallait repasser par le tableau de bord.
+   *
+   * Le chargement suit donc ce qui est AFFICHÉ — semaine et rayons — et non ce
+   * que l'adresse contient. Changer de semaine ou de rayon rouvre ce qui y est
+   * enregistré, ou vide la grille quand il n'y a rien.
+   *
+   * TROIS SITUATIONS OÙ IL NE FAUT SURTOUT PAS CHARGER, parce que l'écran
+   * porte alors un travail que personne n'a encore enregistré :
+   * une génération en cours, un résultat fraîchement produit, ou des retouches
+   * non sauvegardées. Les écraser ferait perdre la minute de calcul qu'on vient
+   * d'attendre.
+   */
+  useEffect(() => {
+    if (initialPlanningId) return
+    if (isDirty || v3.status !== "idle") return
+    // Les rayons n'ont pas fini de charger : une sélection vide à cet instant
+    // n'est pas un choix, et chercher un planning « sans rayon » n'aurait aucun
+    // sens.
+    if (selectedSectorIds === null && pickableSectors.length === 0) return
+
+    let active = true
+    const wanted = [...selection].sort().join("|")
+
+    void planningStore
+      .records()
+      .then((records) => {
+        if (!active) return
+        const found = records
+          .filter((entry) => entry.periodStart === targetWeek)
+          .filter((entry) => [...(entry.sectorIds ?? [])].sort().join("|") === wanted)
+          .sort((left, right) => right.updatedAt.localeCompare(left.updatedAt))[0]
+
+        if (found) {
+          if (found.id === record?.id) return
+          setRecord(found)
+          setEditorState(found.state)
+          setIsDirty(false)
+          return
+        }
+        // Rien pour cette semaine et ces rayons : la grille se vide, sinon on
+        // lirait le planning de la semaine précédente sous le nouveau titre.
+        if (record !== null || editorState !== null) {
+          setRecord(null)
+          setEditorState(null)
+        }
+      })
+      .catch(() => undefined)
+
+    return () => {
+      active = false
+    }
+  }, [
+    initialPlanningId,
+    targetWeek,
+    selection,
+    selectedSectorIds,
+    pickableSectors.length,
+    isDirty,
+    v3.status,
+    record,
+    editorState,
+  ])
+
+  /**
    * Generate or regenerate with the SELECTED engine. Never with the other one.
    *
    * The two branches share nothing but their trigger: V2 replaces the schedule
