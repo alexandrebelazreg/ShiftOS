@@ -46,14 +46,30 @@ RUN python3 -m venv /opt/shiftos-venv \
  && /opt/shiftos-venv/bin/pip install --no-cache-dir --upgrade pip \
  && /opt/shiftos-venv/bin/pip install --no-cache-dir -r /tmp/requirements.txt
 
-# Même raisonnement côté npm. `npm ci` installe AUSSI les devDependencies :
-# TypeScript, Tailwind et eslint-config-next sont requis par `next build`.
-# C'est pourquoi NODE_ENV n'est pas encore à "production" ici — le poser avant
-# cette ligne ferait sauter les devDependencies et le build échouerait.
-COPY package.json package-lock.json ./
+# Tout ce qui précède demandait root : installer des paquets système, écrire
+# dans /opt. Plus rien de ce qui suit n'en a besoin, et le processus qui servira
+# les requêtes encore moins.
+#
+# Le propriétaire change ICI plutôt qu'à la fin, sur un /app encore vide. Un
+# `chown -R` posé après la compilation recopierait node_modules et .next dans
+# une couche de plus, plusieurs centaines de mégaoctets pour changer un numéro
+# de propriétaire. Ce qui est créé par le bon utilisateur n'a pas à lui être
+# donné ensuite.
+#
+# L'image `node` fournit déjà l'utilisateur `node` (uid 1000). Aucun compte à
+# créer, et l'uid est stable d'une version à l'autre.
+RUN chown node:node /app
+USER node
+
+# Même raisonnement que pour Python. `npm ci` installe AUSSI les
+# devDependencies : TypeScript, Tailwind et eslint-config-next sont requis par
+# `next build`. C'est pourquoi NODE_ENV n'est pas encore à "production" ici —
+# le poser avant cette ligne ferait sauter les devDependencies et le build
+# échouerait.
+COPY --chown=node:node package.json package-lock.json ./
 RUN npm ci
 
-COPY . .
+COPY --chown=node:node . .
 RUN npm run build
 
 # `output: "standalone"` n'est délibérément PAS utilisé. Il déplace le serveur
@@ -61,6 +77,23 @@ RUN npm run build
 # et `resolveWorkingDirectory()` cherche `experiments/planning-v3-highs` à
 # partir de là. L'image est plus grosse, le solveur trouve ses fichiers.
 ENV NODE_ENV=production
+
+# La compilation est finie : ce qui n'a servi qu'à elle n'a plus rien à faire
+# dans l'image qui tourne. Tailwind, eslint, vitest et le CLI shadcn ne sont
+# jamais chargés par `next start`, et chaque paquet resté là est une ligne de
+# plus dans `npm audit` et une surface de plus si quelqu'un obtient l'exécution
+# de code.
+#
+# Le doute portait sur TypeScript, et il était légitime : `next.config.ts` est
+# un fichier TypeScript, que `next start` LIT à chaque démarrage. On attendrait
+# donc qu'il lui faille le compilateur. Non — Next 16 transpile sa configuration
+# lui-même. Vérifié en retirant le paquet : « Running next.config.ts took 494ms »
+# puis « Ready », et toutes les pages servies, en-têtes compris.
+#
+# Placé APRÈS `npm run build`, évidemment — et après `NODE_ENV`, qui ne change
+# rien à cette commande mais raconte l'ordre : on compile, puis on allège.
+RUN npm prune --omit=dev
+
 # Explicite plutôt que déduit : `resolveHighsFastPython()` lit cette variable en
 # premier et ne retombe sur une recherche de venv qu'à défaut. Nommer
 # l'interpréteur ici, c'est garantir qu'une image qui démarre est une image dont
