@@ -28,19 +28,23 @@ import type { StoreConfig } from "@/features/store/schemas/store.schema"
 /**
  * L'écran d'affichage : ce qui part au mur.
  *
- * Il ne montre QUE les plannings publiés, et c'est le point de tout l'écran. Un
- * brouillon est une intention — il change encore, il peut être régénéré, il
- * n'engage personne. L'imprimer et le punaiser ferait venir quelqu'un un jour
- * où il n'est plus attendu. La publication est l'acte qui fige la semaine ;
- * cette page ne connaît que des semaines figées.
+ * Il montrait les seuls plannings PUBLIÉS, la publication étant l'acte qui
+ * figeait une semaine. Cet acte n'existe plus : enregistrer un rayon suffit
+ * désormais à le rendre affichable, et il n'y a plus de second geste à faire
+ * avant d'imprimer. Un rayon n'attend pas les autres — le Drive peut partir au
+ * mur pendant que la zone marché se termine.
+ *
+ * Ce que cela coûte, et qui est assumé : rien ne distingue plus une semaine
+ * arrêtée d'une semaine encore en cours de retouche. C'est au gérant de savoir
+ * ce qu'il punaise ; l'écran ne le décide plus à sa place.
  *
  * Elle ne modifie rien : ni enregistrement, ni régénération, ni retouche. On y
- * choisit une semaine publiée, une mise en page, et on imprime.
+ * choisit un planning, une mise en page, et on imprime.
  */
 export function PublicationView({ initialStore }: { readonly initialStore: StoreConfig | null }) {
   const setup = useSetupReadiness(initialStore)
   const { employees } = useEmployees()
-  const [published, setPublished] = useState<readonly PlanningSummary[] | null>(null)
+  const [affichables, setAffichables] = useState<readonly PlanningSummary[] | null>(null)
   const [record, setRecord] = useState<PlanningRecord | null>(null)
   const [error, setError] = useState<string | null>(null)
   /**
@@ -55,7 +59,7 @@ export function PublicationView({ initialStore }: { readonly initialStore: Store
    */
   const [storedHolidays, setStoredHolidays] = useState<StoredHolidays>({})
 
-  // La liste des semaines publiées, la plus récente en premier.
+  // La liste des plannings affichables, le plus récent en premier.
   useEffect(() => {
     let active = true
     void holidayStore.read().then((stored) => {
@@ -72,7 +76,20 @@ export function PublicationView({ initialStore }: { readonly initialStore: Store
       .list()
       .then((all) => {
         if (!active) return
-        setPublished(all.filter((entry) => entry.status === "published"))
+        /**
+         * TOUT CE QUI EST ENREGISTRÉ EST AFFICHABLE.
+         *
+         * Le filtre ne gardait que `published`. La publication ayant disparu
+         * de l'écran de planning, ce filtre ne laissait plus rien passer et
+         * cette page serait restée vide pour toujours — sans une erreur, sans
+         * un mot : la liste vide est exactement ce que voit un magasin qui
+         * n'a encore rien planifié.
+         *
+         * Un enregistrement EXISTE parce que quelqu'un a cliqué « Enregistrer ».
+         * C'est le geste qui rend un rayon affichable, et il n'y en a plus
+         * d'autre à attendre.
+         */
+        setAffichables(all)
       })
       .catch(() => {
         if (active) setError("Impossible de lire les plannings enregistrés.")
@@ -82,16 +99,16 @@ export function PublicationView({ initialStore }: { readonly initialStore: Store
     }
   }, [])
 
-  // La première semaine publiée s'ouvre d'elle-même : arriver sur cet écran,
+  // Le premier planning s'ouvre de lui-même : arriver sur cet écran,
   // c'est vouloir imprimer, pas choisir dans une liste d'un seul élément.
   const selectedId = record?.id ?? null
   useEffect(() => {
-    const first = published?.[0]
+    const first = affichables?.[0]
     if (!first || selectedId !== null) return
     void open(first.id)
     // `open` est stable pour ce composant ; la dépendance utile est la liste.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [published])
+  }, [affichables])
 
   async function open(id: string) {
     setError(null)
@@ -105,10 +122,10 @@ export function PublicationView({ initialStore }: { readonly initialStore: Store
   }
 
   /**
-   * Le planning publié, relu comme la grille le lit.
+   * Le planning choisi, relu comme la grille le lit.
    *
    * Les rayons viennent du RECORD, pas d'une sélection d'écran : une semaine
-   * publiée a été planifiée pour un périmètre précis, et c'est celui-là qu'on
+   * enregistrée a été planifiée pour un périmètre précis, et c'est celui-là qu'on
    * affiche — même si la configuration a gagné un rayon depuis.
    */
   const boardInput = useMemo(() => {
@@ -168,7 +185,7 @@ export function PublicationView({ initialStore }: { readonly initialStore: Store
       <div className="print:hidden">
         <PageHeader
           title="Affichage"
-          description="Imprimez un planning publié pour l’affichage officiel du magasin."
+          description="Imprimez un planning enregistré pour l’affichage officiel du magasin."
         />
       </div>
 
@@ -178,17 +195,17 @@ export function PublicationView({ initialStore }: { readonly initialStore: Store
         </p>
       ) : null}
 
-      {published === null || setup.isLoading ? (
+      {affichables === null || setup.isLoading ? (
         <p className="text-sm text-muted-foreground print:hidden">Chargement…</p>
-      ) : published.length === 0 ? (
+      ) : affichables.length === 0 ? (
         <Card className="print:hidden">
           <CardHeader>
-            <CardTitle className="text-base">Aucun planning publié</CardTitle>
+            <CardTitle className="text-base">Aucun planning enregistré</CardTitle>
           </CardHeader>
           <CardContent className="space-y-4 text-sm text-muted-foreground">
             <p>
-              Seules les semaines publiées peuvent être affichées. Un brouillon change
-              encore : le punaiser ferait venir quelqu’un un jour où il n’est plus attendu.
+              Un rayon devient affichable dès qu’il est enregistré. Générez une semaine
+              et enregistrez-la pour pouvoir l’imprimer.
             </p>
             <Button variant="outline" size="sm" render={<Link href="/planning" />}>
               Aller au planning
@@ -199,9 +216,9 @@ export function PublicationView({ initialStore }: { readonly initialStore: Store
         <>
           {/* Le sélecteur ne s'affiche qu'à partir de deux semaines : sur une
               seule il n'offrirait aucun choix et repousserait la feuille. */}
-          {published.length > 1 ? (
+          {affichables.length > 1 ? (
             <div className="flex flex-wrap gap-2 print:hidden">
-              {published.map((entry) => (
+              {affichables.map((entry) => (
                 <button
                   key={entry.id}
                   type="button"

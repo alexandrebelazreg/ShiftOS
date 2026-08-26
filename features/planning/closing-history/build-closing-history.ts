@@ -57,17 +57,6 @@ export interface ClosingHistoryRequest {
 
 const DAY_MS = 24 * 60 * 60 * 1000
 
-/**
- * Only these statuses describe a week that actually happened.
- *
- * `draft` is excluded because a draft is a proposal — counting it would let an
- * abandoned generation shape the next one. `archived` is included because the
- * lifecycle is `draft → published → archived`: an archived planning was
- * published, so it happened, and dropping it would silently shorten the window
- * for exactly the oldest weeks the lookback is meant to reach.
- */
-const COUNTED_STATUSES = new Set(["published", "archived"])
-
 export function buildClosingHistory(request: ClosingHistoryRequest): readonly ClosingHistoryEntry[] {
   const roster = new Set(request.employeeIds)
   const tally = new Map<string, { closings: number; opportunities: number; saturdayClosings: number; saturdayOpportunities: number }>()
@@ -139,7 +128,26 @@ function shareOf(record: PlanningRecord, employeeId: string): number {
   return weeklyClosingShare(contract?.workingDays.length ?? 0)
 }
 
-/** Published or archived, this sector's, strictly before the generated week, inside the window. */
+/**
+ * TOUTE SEMAINE ENREGISTRÉE COMPTE. Le statut ne filtre plus rien.
+ *
+ * Le filtre gardait `published` et `archived`, `draft` étant alors une simple
+ * proposition. La publication a disparu de l'écran de planning : plus aucun
+ * enregistrement ne prend jamais ce statut, et ce filtre aurait rendu
+ * l'historique VIDE — la panne exacte du 23 août 2026, où l'équité des
+ * fermetures ne faisait rien pendant des mois.
+ *
+ * Elle ne se voit dans aucun test : un historique vide est aussi ce que produit
+ * un magasin qui vient d'ouvrir, donc le symptôme légitime et le symptôme de
+ * panne sont identiques. C'est pour cela qu'on n'écrit pas ici un filtre plus
+ * malin — enregistrer est devenu le seul acte qui dise « cette semaine
+ * compte », et un enregistrement n'existe que si quelqu'un l'a demandé.
+ *
+ * Ce que cela coûte : une semaine future enregistrée pèse dans l'historique
+ * alors qu'aucun rideau n'y a encore été fermé. Le compromis est accepté — la
+ * fenêtre de recul est courte, et une semaine à venir sera vraie sous peu.
+ */
+/** This sector's, strictly before the generated week, inside the window. */
 function eligibleRecords(request: ClosingHistoryRequest): PlanningRecord[] {
   if (request.lookbackWeeks < 1) return []
   const end = Date.parse(`${request.weekStart}T00:00:00Z`)
@@ -147,7 +155,6 @@ function eligibleRecords(request: ClosingHistoryRequest): PlanningRecord[] {
   if (!Number.isFinite(end)) return []
 
   return request.records
-    .filter((record) => COUNTED_STATUSES.has(record.status))
     // A record that never recorded its sector cannot be attributed to one.
     // Excluding it is the only honest reading: guessing would let another
     // sector's closings shape this one's fairness.

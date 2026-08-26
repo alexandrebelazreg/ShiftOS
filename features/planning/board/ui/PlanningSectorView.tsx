@@ -144,7 +144,7 @@ export function PlanningSectorView({ sectorView, onSelectEmployee }: PlanningSec
                             onClick={() => onSelectEmployee(row.employeeId)}
                             style={bar.paint ?? undefined}
                             className={cn(
-                              "mb-1 block w-full rounded-md border px-1 py-1 text-[11px] font-medium leading-tight transition hover:brightness-95",
+                              "mb-1 block w-full rounded-md border px-1 py-1 text-[10px] font-medium leading-tight transition hover:brightness-95",
                               bar.paint ? "border" : KIND_SURFACE[shift.kind]
                             )}
                             title={bar.title}

@@ -205,12 +205,16 @@ describe("écran Planning — garanties structurelles", () => {
     "utf8"
   )
 
-  it("nomme son moteur par la constante, jamais par un littéral", () => {
-    // Le badge, le panneau technique et tout résultat enregistré nomment le
-    // moteur. Écrire « V3 rapide » en dur ici, c'est garantir qu'un deuxième
+  it("ne nomme jamais un moteur par un littéral", () => {
+    // Le panneau technique et tout résultat enregistré nomment le moteur.
+    // Écrire « v3-highs-fast » en dur ici, c'est garantir qu'un deuxième
     // moteur affichera le nom du premier.
-    expect(VIEW).toContain("const engine = CURRENT_PLANNING_ENGINE_VERSION")
+    //
+    // L'écran ne tient plus de constante à lui : le bandeau qui l'affichait a
+    // été retiré, et le routage passe par `endpointEngineFor()`, vérifié plus
+    // bas. Ce qui reste à interdire, c'est le littéral.
     expect(VIEW).not.toContain('"v3-highs-fast"')
+    expect(VIEW).not.toContain("CURRENT_PLANNING_ENGINE_VERSION")
   })
 
   it("ne connaît plus aucun moteur supprimé", () => {
@@ -240,13 +244,18 @@ describe("écran Planning — garanties structurelles", () => {
     expect(VIEW).toContain("Votre planning actuel est conservé")
   })
 
-  it("affiche le moteur qui a RÉPONDU, et non celui qui allait tourner", () => {
-    // La réponse nomme le build exact ; l'étiquette du registre ne nomme que
-    // l'intention. Les confondre ferait dire à l'écran qu'un planning vient
+  it("ne nomme le moteur que depuis SA réponse, jamais depuis le registre", () => {
+    // Le bandeau « V3 rapide » au-dessus de la grille a été retiré : il
+    // occupait une ligne pleine pour un nom que personne ne lit avant d'avoir
+    // un problème. Le moteur se nomme désormais dans le seul endroit où on le
+    // cherche — le panneau technique, derrière « Voir le détail ».
+    //
+    // Ce que ce test protège n'a pas changé : la SOURCE. `describeV3Engine`
+    // lit la réponse, qui nomme le build exact ; l'étiquette du registre ne
+    // nommerait que l'intention, et ferait dire à l'écran qu'un planning vient
     // d'un moteur qui n'a pas encore tourné.
-    expect(VIEW).toContain("activeEngineLabel")
-    expect(VIEW).toContain("describeV3Engine(v3.outcome.response)")
-    expect(VIEW).toContain("PLANNING_ENGINE_LABELS[engine]")
+    expect(VIEW).toContain("describeV3Engine(response)")
+    expect(VIEW).not.toContain("PLANNING_ENGINE_LABELS")
   })
 
   it("transmet la régénération et route par la table du registre", () => {

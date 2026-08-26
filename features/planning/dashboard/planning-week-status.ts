@@ -2,7 +2,19 @@ import type { IsoDate } from "@/features/core/models"
 import { listWeekOptions } from "@/features/planning/board"
 import type { PlanningSummary } from "@/features/planning/persistence"
 
-export const PLANNING_WEEK_STATES = ["untreated", "saved", "partial", "published"] as const
+/**
+ * Trois états, et un seul acte pour les traverser : enregistrer.
+ *
+ * Il y en avait quatre, parce qu'une semaine pouvait être enregistrée SANS être
+ * publiée — deux gestes, deux significations. La publication a disparu de
+ * l'écran de planning : enregistrer un rayon suffit désormais à le rendre
+ * affichable, donc « enregistré » et « publié » disaient la même chose et l'un
+ * des deux était de trop.
+ *
+ * Ce qui reste à distinguer n'est plus l'avancement d'UN planning mais la
+ * couverture de la SEMAINE : aucun rayon, quelques-uns, tous.
+ */
+export const PLANNING_WEEK_STATES = ["untreated", "partial", "posted"] as const
 export type PlanningWeekState = (typeof PLANNING_WEEK_STATES)[number]
 
 /** Un rayon du magasin, tel que le tableau de bord a besoin de le nommer. */
@@ -18,9 +30,9 @@ export interface PlanningWeekStatus {
   readonly rangeLabel: string
   readonly state: PlanningWeekState
   readonly planningId?: string
-  /** Les rayons publiés pour cette semaine. */
-  readonly publishedSectors: readonly string[]
-  /** Ceux qui restent à publier. Vide quand la semaine est complète. */
+  /** Les rayons enregistrés pour cette semaine, donc affichables. */
+  readonly postedSectors: readonly string[]
+  /** Ceux qui restent à faire. Vide quand la semaine est complète. */
   readonly missingSectors: readonly string[]
 }
 
@@ -42,16 +54,16 @@ export function isoDateInTimeZone(now: Date, timeZone: string): IsoDate {
  *
  * Une semaine se planifie RAYON PAR RAYON, et le tableau de bord doit dire
  * lesquels sont faits. Il lisait auparavant le seul planning le plus récent :
- * publier le Drive suffisait à peindre la semaine en vert alors que cinq rayons
- * restaient à traiter — exactement le contraire de ce qu'un coup d'œil doit
+ * traiter le Drive suffisait à peindre la semaine en vert alors que cinq rayons
+ * restaient à faire — exactement le contraire de ce qu'un coup d'œil doit
  * apprendre.
  *
- * Le vert est donc réservé aux semaines COMPLÈTES. Dès qu'un rayon est publié
- * sans que tous le soient, la semaine passe au jaune et nomme ce qui manque.
+ * Le vert est donc réservé aux semaines COMPLÈTES. Dès qu'un rayon est
+ * enregistré sans que tous le soient, la semaine passe au jaune et nomme ce
+ * qui manque.
  *
- * Sans liste de rayons — magasin pas encore configuré — on retombe sur la
- * lecture d'avant : un planning publié suffit. Mieux vaut une couleur
- * approximative qu'un tableau vide.
+ * Sans liste de rayons — magasin pas encore configuré — on ne peut rien dire
+ * de la complétude : mieux vaut une couleur approximative qu'un tableau vide.
  */
 export function buildPlanningWeekStatuses(
   today: IsoDate,
@@ -65,28 +77,25 @@ export function buildPlanningWeekStatuses(
     const ofWeek = plannings.filter((planning) => planning.periodStart === option.value)
     const latest = [...ofWeek].sort((left, right) => right.updatedAt.localeCompare(left.updatedAt))[0]
 
-    // Un rayon est publié quand SON planning le plus récent l'est.
+    // Un rayon est fait dès qu'un planning l'a couvert.
     //
-    // Regarder « existe-t-il un planning publié » suffirait presque, mais
-    // rouvrir une semaine publiée en crée un brouillon plus récent sans
-    // toucher à l'original : le rayon repasserait alors pour terminé alors que
-    // quelqu'un est en train de le refaire. C'est le dernier état qui compte.
-    const published = sectors.filter((sector) => {
-      const latestForSector = ofWeek
-        .filter((planning) => (planning.sectorIds ?? []).includes(sector.id))
-        .sort((left, right) => right.updatedAt.localeCompare(left.updatedAt))[0]
-      return latestForSector?.status === "published"
-    })
-    const publishedIds = new Set(published.map((sector) => sector.id))
-    const missing = sectors.filter((sector) => !publishedIds.has(sector.id))
+    // Le statut ne sert plus à trancher : un enregistrement EXISTE parce que
+    // quelqu'un a cliqué « Enregistrer », et c'est tout ce que la semaine a
+    // besoin de savoir. Les `published` et `archived` d'avant se lisent donc
+    // comme des enregistrements, sans qu'une ligne de base soit réécrite.
+    const posted = sectors.filter((sector) =>
+      ofWeek.some((planning) => (planning.sectorIds ?? []).includes(sector.id))
+    )
+    const postedIds = new Set(posted.map((sector) => sector.id))
+    const missing = sectors.filter((sector) => !postedIds.has(sector.id))
 
     return {
       weekStart: option.value,
       weekNumber: option.weekNumber,
       offsetLabel: index === 0 ? "Cette semaine" : `S+${index}`,
       rangeLabel: option.label.replace(/^S\d+ · /, ""),
-      state: stateOf(sectors.length, published.length, missing.length, ofWeek, latest),
-      publishedSectors: published.map((sector) => sector.name),
+      state: stateOf(sectors.length, posted.length, missing.length, latest),
+      postedSectors: posted.map((sector) => sector.name),
       missingSectors: missing.map((sector) => sector.name),
       ...(latest ? { planningId: latest.id } : {}),
     }
@@ -95,19 +104,20 @@ export function buildPlanningWeekStatuses(
 
 function stateOf(
   sectorCount: number,
-  publishedCount: number,
+  postedCount: number,
   missingCount: number,
-  ofWeek: readonly PlanningSummary[],
   latest: PlanningSummary | undefined
 ): PlanningWeekState {
   if (!latest) return "untreated"
 
-  // Aucun rayon connu : on ne peut rien dire de la complétude, donc on s'en
-  // tient à la lecture d'avant — l'état du planning le plus récent.
-  if (sectorCount === 0) {
-    return latest.status === "published" ? "published" : "saved"
-  }
+  // Aucun rayon connu — magasin pas encore configuré. On ne peut rien dire de
+  // la complétude, et un planning existe : mieux vaut le vert approximatif
+  // qu'un tableau qui prétend qu'il reste du travail sans savoir lequel.
+  if (sectorCount === 0) return "posted"
 
-  if (publishedCount === 0) return "saved"
-  return missingCount === 0 ? "published" : "partial"
+  // Un rayon enregistré sur huit n'est PAS une semaine faite. Le vert dit
+  // « il n'y a plus rien à faire ici », et c'est la seule chose qu'un coup
+  // d'œil au tableau de bord doit apprendre.
+  if (postedCount === 0) return "untreated"
+  return missingCount === 0 ? "posted" : "partial"
 }

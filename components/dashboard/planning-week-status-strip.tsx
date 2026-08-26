@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react"
 import Link from "next/link"
-import { CircleDashed, Send, Save } from "lucide-react"
+import { Check, CircleDashed, Save } from "lucide-react"
 
 import { cn } from "@/lib/utils"
 import type { IsoDate } from "@/features/core/models"
@@ -24,21 +24,15 @@ const STATE_UI = {
     className: "border-border bg-muted/40 text-muted-foreground hover:bg-muted/70",
     dotClassName: "bg-muted-foreground/60",
   },
-  saved: {
-    label: "Enregistré",
+  partial: {
+    label: "Partiel",
     icon: Save,
     className: "border-amber-300 bg-amber-50 text-amber-950 hover:bg-amber-100 dark:border-amber-700 dark:bg-amber-950/40 dark:text-amber-100 dark:hover:bg-amber-950/60",
     dotClassName: "bg-amber-500",
   },
-  partial: {
-    label: "Partiel",
-    icon: Send,
-    className: "border-amber-300 bg-amber-50 text-amber-950 hover:bg-amber-100 dark:border-amber-700 dark:bg-amber-950/40 dark:text-amber-100 dark:hover:bg-amber-950/60",
-    dotClassName: "bg-amber-500",
-  },
-  published: {
-    label: "Publié",
-    icon: Send,
+  posted: {
+    label: "Affiché",
+    icon: Check,
     className: "border-emerald-300 bg-emerald-50 text-emerald-950 hover:bg-emerald-100 dark:border-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-100 dark:hover:bg-emerald-950/60",
     dotClassName: "bg-emerald-500",
   },
@@ -59,7 +53,7 @@ export function PlanningWeekStatusStrip({ today }: { readonly today: IsoDate }) 
     [plannings, sectors, today]
   )
 
-  // Les rayons actifs seuls : un rayon archivé n'est pas « à publier », et
+  // Les rayons actifs seuls : un rayon archivé n'est plus à traiter, et
   // l'attendre peindrait en jaune des semaines pourtant terminées.
   useEffect(() => {
     let active = true
@@ -140,8 +134,8 @@ export function PlanningWeekStatusStrip({ today }: { readonly today: IsoDate }) 
                     loading && "animate-pulse pointer-events-none"
                   )}
                   aria-label={
-                    week.missingSectors.length > 0 && week.publishedSectors.length > 0
-                      ? `Semaine ${week.weekNumber}, ${ui.label}, reste à publier : ${week.missingSectors.join(", ")}`
+                    week.missingSectors.length > 0 && week.postedSectors.length > 0
+                      ? `Semaine ${week.weekNumber}, ${ui.label}, reste à faire : ${week.missingSectors.join(", ")}`
                       : `Semaine ${week.weekNumber}, ${ui.label}`
                   }
                 >
@@ -154,9 +148,9 @@ export function PlanningWeekStatusStrip({ today }: { readonly today: IsoDate }) 
                   </span>
                   <span className="mt-3 block text-xs tabular-nums opacity-75">{week.rangeLabel}</span>
                   <span className="mt-1.5 block text-xs font-medium">{ui.label}</span>
-                  {/* Ce qui reste à publier, nommé. « Partiel » seul obligerait
+                  {/* Ce qui reste à faire, nommé. « Partiel » seul obligerait
                       à ouvrir la semaine pour découvrir quel rayon manque. */}
-                  {week.missingSectors.length > 0 && week.publishedSectors.length > 0 ? (
+                  {week.missingSectors.length > 0 && week.postedSectors.length > 0 ? (
                     <span className="mt-1 block text-xs opacity-75">
                       Manque : {week.missingSectors.join(", ")}
                     </span>

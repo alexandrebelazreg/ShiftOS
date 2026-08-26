@@ -154,12 +154,24 @@ describe("historique — ce qui compte et ce qui ne compte pas", () => {
     expect(of(result, "alice").opportunities).toBe(5)
   })
 
-  it("ignore un brouillon", () => {
+  /**
+   * TOUT statut compte, et c'est le point.
+   *
+   * Le filtre gardait `published` et `archived`. Publier a disparu de l'écran :
+   * tout nouvel enregistrement naît `draft`, et ce filtre aurait vidé
+   * l'historique sans un mot — la panne exacte du 23 août 2026, où l'équité des
+   * fermetures n'a rien fait pendant des mois. Elle ne se voit dans aucun test
+   * parce qu'un historique vide est aussi ce que produit un magasin neuf.
+   *
+   * Ces trois cas figent donc l'inverse de ce qu'ils figeaient : le statut ne
+   * doit plus jamais décider si une semaine a eu lieu.
+   */
+  it("compte un brouillon, puisque enregistrer est le seul geste qui reste", () => {
     const result = history([
       week({ id: "w1", status: "draft", sectorIds: ["drive"], periodStart: MONDAY, periodEnd: SATURDAY, closers: { [MONDAY]: "alice" } }),
     ])
-    expect(of(result, "alice").closings).toBe(0)
-    expect(of(result, "alice").opportunities).toBe(0)
+    expect(of(result, "alice").closings).toBe(1)
+    expect(of(result, "alice").opportunities).toBe(5)
   })
 
   it("compte une semaine archivée, qui a bien eu lieu", () => {
@@ -167,6 +179,18 @@ describe("historique — ce qui compte et ce qui ne compte pas", () => {
       week({ id: "w1", status: "archived", sectorIds: ["drive"], periodStart: MONDAY, periodEnd: SATURDAY, closers: { [MONDAY]: "alice" } }),
     ])
     expect(of(result, "alice").closings).toBe(1)
+  })
+
+  it("compte pareil, quel que soit le statut", () => {
+    const counts = (["draft", "published", "archived"] as const).map((status) =>
+      of(
+        history([
+          week({ id: "w1", status, sectorIds: ["drive"], periodStart: MONDAY, periodEnd: SATURDAY, closers: { [MONDAY]: "alice" } }),
+        ]),
+        "alice"
+      ).closings
+    )
+    expect(counts).toEqual([1, 1, 1])
   })
 
   it("exclut la semaine en cours et toute semaine qui la chevauche", () => {

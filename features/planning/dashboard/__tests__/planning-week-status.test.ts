@@ -43,7 +43,15 @@ describe("dashboard planning horizon", () => {
     })
   })
 
-  it("distinguishes saved and published weeks", () => {
+  /**
+   * Le statut d'un enregistrement ne colore plus rien.
+   *
+   * `draft`, `published` et `archived` cohabitent en base — les deux derniers
+   * datent d'avant la disparition du bouton Publier — et se lisent désormais
+   * tous comme « enregistré ». Aucune ligne n'a été réécrite pour cela, et le
+   * tableau de bord ne doit pas trahir la différence.
+   */
+  it("lit un ancien planning publié comme un planning enregistré", () => {
     const weeks = buildPlanningWeekStatuses("2026-08-03", [
       planning(),
       planning({
@@ -54,8 +62,8 @@ describe("dashboard planning horizon", () => {
       }),
     ])
 
-    expect(weeks[0]).toMatchObject({ state: "saved", planningId: "planning-1" })
-    expect(weeks[1]).toMatchObject({ state: "published", planningId: "planning-2" })
+    expect(weeks[0]).toMatchObject({ state: "posted", planningId: "planning-1" })
+    expect(weeks[1]).toMatchObject({ state: "posted", planningId: "planning-2" })
     expect(weeks[2].state).toBe("untreated")
   })
 
@@ -65,7 +73,7 @@ describe("dashboard planning horizon", () => {
       planning({ id: "new-draft", updatedAt: "2026-08-03T09:00:00.000Z" }),
     ])
 
-    expect(weeks[0]).toMatchObject({ state: "saved", planningId: "new-draft" })
+    expect(weeks[0]).toMatchObject({ state: "posted", planningId: "new-draft" })
   })
 })
 
@@ -85,29 +93,12 @@ describe("complétude par rayon", () => {
   ]
   const first = (weeks: ReturnType<typeof buildPlanningWeekStatuses>) => weeks[0]
 
-  it("ne passe au vert que lorsque TOUS les rayons sont publiés", () => {
-    const complete = SECTORS.map((sector) =>
-      planning({ id: sector.id, status: "published", sectorIds: [sector.id] })
-    )
-    expect(first(buildPlanningWeekStatuses("2026-08-03", complete, SECTORS)).state).toBe("published")
+  it("ne passe au vert que lorsque TOUS les rayons sont enregistrés", () => {
+    const complete = SECTORS.map((sector) => planning({ id: sector.id, sectorIds: [sector.id] }))
+    expect(first(buildPlanningWeekStatuses("2026-08-03", complete, SECTORS)).state).toBe("posted")
   })
 
-  it("passe au jaune dès le premier rayon publié, et nomme les manquants", () => {
-    const week = first(
-      buildPlanningWeekStatuses(
-        "2026-08-03",
-        [planning({ id: "drive", status: "published", sectorIds: ["drive"] })],
-        SECTORS
-      )
-    )
-    expect(week.state).toBe("partial")
-    expect(week.publishedSectors).toEqual(["Drive"])
-    // Nommés, parce que « partiel » seul obligerait à ouvrir la semaine pour
-    // découvrir lequel manque.
-    expect(week.missingSectors).toEqual(["Caisse", "Fruits"])
-  })
-
-  it("reste « enregistré » tant qu'aucun rayon n'est publié", () => {
+  it("passe au jaune dès le premier rayon enregistré, et nomme les manquants", () => {
     const week = first(
       buildPlanningWeekStatuses(
         "2026-08-03",
@@ -115,21 +106,43 @@ describe("complétude par rayon", () => {
         SECTORS
       )
     )
-    expect(week.state).toBe("saved")
-    expect(week.publishedSectors).toEqual([])
+    expect(week.state).toBe("partial")
+    expect(week.postedSectors).toEqual(["Drive"])
+    // Nommés, parce que « partiel » seul obligerait à ouvrir la semaine pour
+    // découvrir lequel manque.
+    expect(week.missingSectors).toEqual(["Caisse", "Fruits"])
   })
 
-  it("retire un rayon rouvert en brouillon, même si sa publication existe encore", () => {
-    // Rouvrir une semaine publiée crée un brouillon plus récent sans toucher à
-    // l'original. Compter la publication qui subsiste ferait passer pour
-    // terminé un rayon que quelqu'un est en train de refaire.
+  /**
+   * Un enregistrement qui ne nomme aucun rayon ne fait avancer personne.
+   *
+   * Il ne peut être attribué à rien — deviner ferait passer pour terminé un
+   * rayon auquel personne n'a touché — et la semaine reste donc « non traitée »
+   * bien qu'un planning existe. Le lien vers elle, lui, pointe dessus.
+   */
+  it("ne crédite aucun rayon à un enregistrement qui n'en nomme aucun", () => {
+    const week = first(
+      buildPlanningWeekStatuses("2026-08-03", [planning({ id: "sans-rayon" })], SECTORS)
+    )
+    expect(week.state).toBe("untreated")
+    expect(week.postedSectors).toEqual([])
+    expect(week.planningId).toBe("sans-rayon")
+  })
+
+  /**
+   * Rouvrir ne défait plus rien.
+   *
+   * Le tableau ne lisait que le planning le PLUS RÉCENT de chaque rayon : un
+   * brouillon rouvert par-dessus une publication faisait repasser le rayon pour
+   * inachevé. Ce raisonnement supposait deux gestes ; il n'y en a plus qu'un, et
+   * un rayon déjà enregistré le reste — le régénérer ne le rend pas moins fait.
+   */
+  it("garde un rayon acquis quand un enregistrement plus récent s'y ajoute", () => {
     const week = first(
       buildPlanningWeekStatuses(
         "2026-08-03",
         [
-          ...SECTORS.map((sector) =>
-            planning({ id: sector.id, status: "published", sectorIds: [sector.id] })
-          ),
+          ...SECTORS.map((sector) => planning({ id: sector.id, sectorIds: [sector.id] })),
           planning({
             id: "drive-repris",
             sectorIds: ["drive"],
@@ -139,20 +152,20 @@ describe("complétude par rayon", () => {
         SECTORS
       )
     )
-    expect(week.state).toBe("partial")
-    expect(week.missingSectors).toEqual(["Drive"])
+    expect(week.state).toBe("posted")
+    expect(week.missingSectors).toEqual([])
   })
 
-  it("ignore les rayons archivés, qui ne sont pas « à publier »", () => {
+  it("ignore les rayons archivés, qui ne sont plus à traiter", () => {
     // L'appelant ne transmet que les rayons actifs ; sans cette règle, un rayon
     // fermé garderait indéfiniment les semaines en jaune.
     const week = first(
       buildPlanningWeekStatuses(
         "2026-08-03",
-        [planning({ id: "drive", status: "published", sectorIds: ["drive"] })],
+        [planning({ id: "drive", sectorIds: ["drive"] })],
         [{ id: "drive", name: "Drive" }]
       )
     )
-    expect(week.state).toBe("published")
+    expect(week.state).toBe("posted")
   })
 })

@@ -7,20 +7,20 @@ import { fingerprintProblem } from "@/features/core/planning-v3/validator"
 import { buildSolvePlanningRequest } from "@/features/core/planning-contract/build-request"
 import type { SolvePlanningResponse } from "@/features/core/planning-contract/types/solve-response"
 
-import { decidePublication } from "@/features/planning/board"
 import { acceptV3Result } from "@/features/planning/v3"
 
 /**
- * What a V3 planning is allowed to become.
+ * Ce qu'un résultat V3 a le droit de devenir.
  *
- * The V3 publish gate is the V2 publish gate — `decidePublication`, unchanged —
- * fed from the V3 audit instead of the V2 report. That is deliberate: a second
- * gate would be a second definition of "may this be published", free to drift
- * from the first, and publication is the one irreversible action on this screen.
+ * Il y avait ici une seconde moitié : la porte de publication, `decidePublication`,
+ * nourrie par l'audit V3. Publier a disparu de l'écran — enregistrer suffit
+ * désormais à rendre un rayon affichable — et cette porte avec lui.
  *
- * The interesting property is that a V3 schedule breaking a hard rule never
- * even reaches the gate. It is refused at acceptance, so there is no planning to
- * publish — which is a stronger guarantee than a disabled button.
+ * Ce qui reste est la garantie FORTE, celle qui ne dépendait d'aucun bouton :
+ * un planning V3 en violation dure n'est jamais devenu un planning. Il est
+ * refusé à l'acceptation, donc il n'y a rien à afficher — ce qui vaut mieux
+ * qu'un planning affichable derrière un bouton grisé. Ce filet-là compte plus
+ * qu'avant, puisqu'il n'y a plus de second contrôle derrière lui.
  */
 
 const problem = tinyProblem()
@@ -60,13 +60,8 @@ describe("publication d'un planning V3", () => {
     expect(acceptance.accepted).toBe(true)
     if (!acceptance.accepted) return
 
-    expect(
-      decidePublication({
-        hasBlockingViolation: false,
-        requiresExplicitAcceptance: acceptance.requiresExplicitAcceptance,
-        underCoveredSlots: acceptance.report.underCoveredSlots,
-      })
-    ).toBe("publish-directly")
+    expect(acceptance.requiresExplicitAcceptance).toBe(false)
+    expect(acceptance.report.underCoveredSlots).toBe(0)
   })
 
   it("exige une acceptation explicite quand le planning V3 porte des réserves", () => {
@@ -82,14 +77,12 @@ describe("publication d'un planning V3", () => {
     expect(acceptance.accepted).toBe(true)
     if (!acceptance.accepted) return
 
+    // Une réserve de couverture reste LÉGALE : elle est acceptée, donc
+    // enregistrable et affichable, et c'est le bandeau sous la grille qui la
+    // nomme. Elle n'a jamais bloqué quoi que ce soit, et le bandeau discret
+    // est désormais le seul endroit qui la dise.
     expect(acceptance.requiresExplicitAcceptance).toBe(true)
-    expect(
-      decidePublication({
-        hasBlockingViolation: false,
-        requiresExplicitAcceptance: true,
-        underCoveredSlots: acceptance.report.underCoveredSlots,
-      })
-    ).toBe("require-explicit-acceptance")
+    expect(acceptance.report.underCoveredSlots).toBeGreaterThan(0)
   })
 
   it("ne laisse jamais un planning V3 en violation dure atteindre la publication", () => {
@@ -103,14 +96,6 @@ describe("publication d'un planning V3", () => {
     expect(acceptance.accepted).toBe(false)
     if (acceptance.accepted) return
     expect(acceptance.reason).toBe("hard-constraints-violated")
-    // And had it somehow reached the gate, the gate would refuse it too.
-    expect(
-      decidePublication({
-        hasBlockingViolation: true,
-        requiresExplicitAcceptance: false,
-        underCoveredSlots: 0,
-      })
-    ).toBe("block-publication")
   })
 
   it("bloque la publication d'une issue qui ne porte aucun planning", () => {
@@ -128,8 +113,5 @@ describe("publication d'un planning V3", () => {
       metadata: { ...response().metadata, optimality: "none", stopCause: "backend-error" },
     })
     expect(acceptV3Result(request, failed).accepted).toBe(false)
-    expect(
-      decidePublication({ hasBlockingViolation: true, requiresExplicitAcceptance: false })
-    ).toBe("block-publication")
   })
 })

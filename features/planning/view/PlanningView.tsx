@@ -3,7 +3,6 @@
 import { useEffect, useMemo, useState } from "react"
 import Link from "next/link"
 
-import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 
@@ -18,11 +17,7 @@ import {
   type GenerationScopeVerdict,
 } from "@/features/planning/flow"
 import { type EditorState } from "@/features/planning/editor"
-import {
-  CURRENT_PLANNING_ENGINE_VERSION,
-  PLANNING_ENGINE_LABELS,
-  endpointEngineFor,
-} from "@/features/core/planning-v3/types/engine-version"
+import { endpointEngineFor } from "@/features/core/planning-v3/types/engine-version"
 import type { PlanningRegenerationRequest } from "@/features/planning/board"
 import {
   baselineFromEditorState,
@@ -34,11 +29,7 @@ import {
 } from "@/features/planning/v3"
 import {
   PlanningBoard,
-  PlanningPublishDialog,
   adaptEditorStateToBoard,
-  buildPlanningBoard,
-  decidePublication,
-  hasPlanningForWeek,
   mondayOf,
   weekPeriod,
 } from "@/features/planning/board"
@@ -51,7 +42,6 @@ import { evaluateSetupReadiness, useSetupReadiness } from "@/features/onboarding
 import {
   planningStore,
   type PlanningRecord,
-  type PlanningStatus,
 } from "@/features/planning/persistence"
 import { PlanningGenerationLoader } from "@/features/planning/view/PlanningGenerationLoader"
 import {
@@ -113,10 +103,10 @@ export function PlanningView({
 }) {
   const { employees, isLoading } = useEmployees()
   const setup = useSetupReadiness(initialStore)
-  // One engine. It is still named rather than assumed, because the badge, the
-  // technical drawer and every saved result say which engine produced a week —
-  // and "the only one" stops being an answer the moment a second one exists.
-  const engine = CURRENT_PLANNING_ENGINE_VERSION
+  // Le nom du moteur ne s'affiche plus en tête de grille : il vit dans le
+  // panneau technique, sous « Voir le détail », où `describeV3Engine` le lit
+  // depuis la RÉPONSE du moteur plutôt que depuis un registre. C'est la seule
+  // lecture qui dit ce qui a tourné, et non ce qui aurait dû tourner.
   const [v3, setV3] = useState<V3State>({ status: "idle" })
   // Why the last attempt was refused before any engine ran. Held apart from
   // every engine result: it is about the selection and the configuration, not
@@ -305,43 +295,9 @@ export function PlanningView({
         : null,
     [editorState, record?.sectorIds, selection, setup.sectors, v3, holidayContext]
   )
-  // The publish dialog restates the reserves, so it reads the same summary the
-  // banner under the schedule does — one computation, no second wording.
-  const boardSummary = useMemo(
-    () =>
-      boardInput
-        ? buildPlanningBoard(boardInput, {
-            view: "sector",
-            // The publish gate weighs the whole planning, so the summary reads
-            // every sector, not whichever ones the board happens to be filtered to.
-            sectorIds: boardInput.sectors.map((sector) => sector.id),
-            date: null,
-            employeeId: null,
-          }).summary
-        : null,
-    [boardInput]
-  )
-  const [publishDialogOpen, setPublishDialogOpen] = useState(false)
-  const [publishBlocked, setPublishBlocked] = useState(false)
-  // L'affichage papier n'est PAS ici : il vit dans son propre écran, et ne
-  // connaît que les semaines publiées. Un brouillon change encore ; l'imprimer
-  // depuis cette page ferait venir quelqu'un un jour où il n'est plus attendu.
   // Raised by the board when local shift edits break a contract or produce an
-  // impossible schedule: saving and publishing stay barred until they are fixed.
+  // impossible schedule: saving stays barred until they are fixed.
   const [editsBlockPersistence, setEditsBlockPersistence] = useState(false)
-  // What the "Publier" button is allowed to do. Decided by a pure function over
-  // the run's diagnostics and the recomputed shortfalls — never over the display
-  // status, which cannot tell a hard violation from a coverage reserve.
-  const publishDecision = useMemo(
-    () =>
-      decidePublication({
-        hasBlockingViolation: boardInput?.diagnostics?.blocking,
-        requiresExplicitAcceptance: boardInput?.diagnostics?.requiresAcceptance,
-        underCoveredSlots: boardSummary?.deficits.length,
-      }),
-    [boardInput, boardSummary]
-  )
-
   /**
    * L'identifiant porté par l'adresse n'ouvre QU'UNE FOIS.
    *
@@ -492,7 +448,6 @@ export function PlanningView({
   ) {
     if (!initialStore) return
     setV3({ status: "running" })
-    setPublishBlocked(false)
 
     // Only the selected sector and only the people eligible for it. Passing the
     // whole configuration here is what made an unselected sector able to break
@@ -574,7 +529,6 @@ export function PlanningView({
       return
     }
 
-    setPublishDialogOpen(false)
     setRecord(null)
     setEditorState(outcome.editorState)
     setIsDirty(true)
@@ -634,104 +588,7 @@ export function PlanningView({
     return ok
   }
 
-  function publishNow() {
-    // Second reading of the same gate, with the acceptance granted. The dialog
-    // can only be reached through `handlePublish`, but publication is the one
-    // irreversible action here, so it checks rather than trusts its caller.
-    if (
-      decidePublication({
-        hasBlockingViolation: boardInput?.diagnostics?.blocking,
-        requiresExplicitAcceptance: boardInput?.diagnostics?.requiresAcceptance,
-        underCoveredSlots: boardSummary?.deficits.length,
-        acceptedDegradations: true,
-      }) !== "publish-directly"
-    ) {
-      setPublishDialogOpen(false)
-      setPublishBlocked(true)
-      return
-    }
-    setPublishDialogOpen(false)
-    void withPersistence(async () => {
-      const saved = await persistCurrent()
-      if (!saved) return
-      const published = await planningStore.publish(saved.id)
-      setRecord(published)
-    })
-  }
-
-  /**
-   * A clean schedule publishes on the first click. One carrying reserves opens
-   * the confirmation, which is the only place the acceptance is ever asked for.
-   * One breaking a hard rule publishes nowhere and says why.
-   */
-  function handlePublish() {
-    // Local edits that break a contract or the day itself bar publication just
-    // as a generated hard violation does — no acceptance overrides either.
-    if (editsBlockPersistence) {
-      setPublishDialogOpen(false)
-      setPublishBlocked(true)
-      return
-    }
-    switch (publishDecision) {
-      case "block-publication":
-        setPublishDialogOpen(false)
-        setPublishBlocked(true)
-        return
-      case "require-explicit-acceptance":
-        setPublishBlocked(false)
-        setPublishDialogOpen(true)
-        return
-      case "publish-directly":
-        setPublishBlocked(false)
-        publishNow()
-    }
-  }
-
-  function handleArchive() {
-    void withPersistence(async () => {
-      const target = !record || (record.status === "draft" && isDirty) ? await persistCurrent() : record
-      if (!target) return
-      const archived = await planningStore.archive(target.id)
-      setRecord(archived)
-    })
-  }
-
-  function handleEditPublished() {
-    if (!record) return
-    void withPersistence(async () => {
-      const draft = await planningStore.editPublished(record.id)
-      setRecord(draft)
-      setEditorState(draft.state)
-      setSelectedSectorIds(
-        draft.sectorIds
-          ? draft.sectorIds.filter((id) => pickableSectors.some((sector) => sector.id === id))
-          : null
-      )
-      setIsDirty(false)
-    })
-  }
-
   const busyGenerating = v3.status === "running"
-  /**
-   * What the screen says it is showing. Read from the RUN, never assumed.
-   *
-   * The engine names itself in its response — the exact build, the exact
-   * profile — and that is what the badge shows once a run has answered. Falling
-   * back to the registry label before then is deliberate: it names the engine
-   * that WILL run, not one that has.
-   */
-  const activeEngineLabel =
-    v3.status === "accepted"
-      ? describeV3Engine(v3.outcome.response)
-      : PLANNING_ENGINE_LABELS[engine]
-  const currentStatus: PlanningStatus = record?.status ?? "draft"
-  // The loaded planning belongs to one week; when the manager is looking at any
-  // other week, nothing tied to it — grid, detailed editor, publish dialog —
-  // may render, so the S30 planning never appears under an S31 header.
-  const selectedWeekHasPlanning = hasPlanningForWeek(
-    targetWeek,
-    boardInput ? boardInput.periodStart : null
-  )
 
   return (
     <div className="space-y-6">
@@ -759,75 +616,26 @@ export function PlanningView({
         canGenerate={Boolean(initialStore) && !setup.isLoading && !isLoading}
         dirty={isDirty}
         onPersistenceBlockChange={setEditsBlockPersistence}
+        // UN SEUL geste, et il est déjà fait ou il reste à faire.
+        //
+        // Publier, Nouveau brouillon et Archiver ont disparu : trois boutons
+        // pour un cycle de vie que personne ne parcourait, et une semaine
+        // pouvait rester « enregistrée mais pas publiée » sans que rien ne
+        // dise que le travail n'était pas fini. Enregistrer suffit désormais à
+        // rendre un rayon affichable ; le bouton grisé DIT que c'est déjà le
+        // cas, ce qu'un bouton absent n'aurait pas dit.
         actions={
-          <>
-            {currentStatus === "draft" ? (
-              <>
-                <Button
-                  size="sm"
-                  variant="outline"
-                  onClick={handleSave}
-                  disabled={isPersisting || !isDirty || editsBlockPersistence}
-                >
-                  Enregistrer
-                </Button>
-                {/* Left clickable even when publication is barred: a dead
-                    button explains nothing, whereas the click produces the
-                    reason below the schedule. */}
-                <Button size="sm" onClick={handlePublish} disabled={isPersisting}>
-                  Publier
-                </Button>
-              </>
-            ) : null}
-            {currentStatus === "published" ? (
-              <>
-                <Button size="sm" onClick={handleEditPublished} disabled={isPersisting}>
-                  Nouveau brouillon
-                </Button>
-                <Button size="sm" variant="outline" onClick={handleArchive} disabled={isPersisting}>
-                  Archiver
-                </Button>
-              </>
-            ) : null}
-          </>
+          <Button
+            size="sm"
+            onClick={handleSave}
+            disabled={isPersisting || !isDirty || editsBlockPersistence}
+          >
+            {isDirty || editsBlockPersistence ? "Enregistrer" : "Enregistré"}
+          </Button>
         }
       />
 
       {persistenceError ? <p role="alert" className="text-sm text-destructive">{persistenceError}</p> : null}
-
-      {selectedWeekHasPlanning && publishBlocked ? (
-        <p role="alert" className="rounded-md border border-destructive/40 bg-destructive/10 p-3 text-sm text-destructive">
-          Publication impossible : des règles obligatoires (couverture dure ou contrats) ne
-          sont pas respectées. Corrigez le planning avant de le publier ; aucune acceptation ne
-          permet de passer outre.
-        </p>
-      ) : null}
-
-      {/* Which engine made THIS schedule, next to the schedule itself.
-          A manager must never have to remember which button they pressed
-          five minutes ago to know what they are about to publish. Sous la
-          grille plutôt qu'au-dessus : rien ne doit pousser la barre vers le
-          bas selon qu'un planning est chargé ou non. */}
-      {selectedWeekHasPlanning ? (
-        <div className="flex flex-wrap items-center justify-between gap-2 rounded-md border px-3 py-2">
-          <div className="flex items-center gap-2 text-sm">
-            <Badge variant="secondary">{activeEngineLabel}</Badge>
-            <span className="text-xs text-muted-foreground">
-              Détails dans le panneau technique.
-            </span>
-          </div>
-        </div>
-      ) : null}
-
-      {selectedWeekHasPlanning && boardSummary ? (
-        <PlanningPublishDialog
-          open={publishDialogOpen}
-          summary={boardSummary}
-          busy={isPersisting}
-          onCancel={() => setPublishDialogOpen(false)}
-          onConfirm={publishNow}
-        />
-      ) : null}
 
       {!initialStore ? (
         <Card>
