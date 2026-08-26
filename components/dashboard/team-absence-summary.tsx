@@ -74,16 +74,17 @@ export function TeamAbsenceSummaryView({
   readonly loadError?: boolean
 }) {
   return (
-    <section aria-labelledby="team-absence-title" className="space-y-4">
-      <div className="flex flex-wrap items-end justify-between gap-3">
-        <div>
-          <h2 id="team-absence-title" className="font-heading text-lg font-medium">
-            Congés et absences
-          </h2>
-          <p className="mt-1 text-sm text-muted-foreground">
-            Les informations à anticiper pour l’équipe cette semaine et la suivante.
-          </p>
-        </div>
+    <section aria-labelledby="team-absence-title" className="space-y-3">
+      {/* Titre et explication sur UNE ligne, comme le suivi des plannings.
+          Les deux blocs doivent tenir ensemble à l'écran, et une phrase sur sa
+          propre ligne coûte ici autant qu'une carte d'absence. */}
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <h2 id="team-absence-title" className="font-heading text-base font-medium">
+          Congés et absences
+          <span className="ml-2 text-sm font-normal text-muted-foreground">
+            cette semaine et la suivante
+          </span>
+        </h2>
         <Link
           href="/absences"
           className={cn(buttonVariants({ variant: "outline", size: "sm" }))}
