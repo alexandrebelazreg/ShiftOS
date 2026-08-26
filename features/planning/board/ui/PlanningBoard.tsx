@@ -3,9 +3,10 @@
 import { useEffect, useMemo, useState, type ReactNode } from "react"
 
 import type { EmployeeId, IsoDate } from "@/features/core/models"
-import type {
-  PlanningBoardInput,
-  PlanningBoardSelection,
+import {
+  emptyBoardInput,
+  type PlanningBoardInput,
+  type PlanningBoardSelection,
 } from "@/features/planning/board/model/board-input"
 import { buildPlanningBoard } from "@/features/planning/board/model/board-view-model"
 import {
@@ -18,6 +19,7 @@ import {
   type SectorChoice,
   type WeekChangeRequest,
 } from "@/features/planning/board/model/header-controls"
+import { listWeekOptions, mondayOf } from "@/features/planning/board/model/week"
 import type { DragBounds, EditableShift } from "@/features/planning/board/model/shift-edit"
 import {
   applyShiftEdit,
@@ -55,9 +57,21 @@ import { PlanningToolbar } from "@/features/planning/board/ui/PlanningToolbar"
 import { PlanningWeekChangeDialog } from "@/features/planning/board/ui/PlanningWeekChangeDialog"
 
 interface PlanningBoardProps {
-  readonly input: PlanningBoardInput
-  /** The week the header shows and navigates from. Owned by whoever has the data. */
-  readonly selectedWeek?: string
+  /**
+   * Le planning à montrer, ou `null` quand la semaine affichée n'en a aucun.
+   *
+   * Nullable à dessein : la barre de commande appartient à l'ÉCRAN, pas au
+   * planning. Tant qu'elle ne vivait qu'avec une entrée, une semaine vide la
+   * faisait disparaître — flèches de semaine comprises — et le seul moyen de
+   * revenir en arrière changeait de forme au moment où l'on en avait besoin.
+   */
+  readonly input: PlanningBoardInput | null
+  /**
+   * The week the header shows and navigates from. Owned by the page, and
+   * required: with a nullable input there is no planning to borrow a period
+   * from, and a board that guessed its own week could show one the page is not.
+   */
+  readonly selectedWeek: string
   /** Land on this Monday. The board asks first if there is unsaved work. */
   readonly onChangeWeek?: (monday: string) => void
   /** Persist the current planning; resolves true on success. For "save then change". */
@@ -85,6 +99,12 @@ interface PlanningBoardProps {
   readonly onToggleMarketZone?: (selectAll: boolean) => void
   /** Whether a generation is currently running, to disable the trigger. */
   readonly generating?: boolean
+  /**
+   * Whether a generation can be started at all — a store still loading, or not
+   * yet configured, leaves nothing to generate from. Distinct from
+   * `generating`, which is about a run already under way.
+   */
+  readonly canGenerate?: boolean
   /** Unsaved editor state, ORed with the board's own local edits/locks. */
   readonly dirty?: boolean
   /** Enregistrer / Publier and the published-state actions. */
@@ -123,15 +143,27 @@ export function PlanningBoard({
   onToggleAllSectors,
   onToggleMarketZone,
   generating = false,
+  canGenerate = true,
   dirty = false,
   actions,
   onPersistenceBlockChange,
 }: PlanningBoardProps) {
+  // La semaine AFFICHÉE, qui n'est pas forcément celle d'un planning chargé.
+  // C'est elle qui gouverne la barre — titre, flèches, liste des semaines — de
+  // sorte que la navigation ne dépende jamais de ce qui est chargé.
+  const currentWeek = mondayOf(selectedWeek)
+  // L'entrée que les vues lisent. Sans planning, celle d'une semaine vide :
+  // les calculs restent inconditionnels, et il n'y a rien à afficher de toute
+  // façon puisque la grille cède la place à l'état vide.
+  const shownInput = useMemo(
+    () => input ?? emptyBoardInput(currentWeek),
+    [input, currentWeek]
+  )
   // The sector part of the selection lives one level up; the rest — which view,
   // which day, which employee — is genuinely local to the grid.
   const [localSelection, setLocalSelection] = useState<Omit<PlanningBoardSelection, "sectorIds">>(() => ({
     view: "sector",
-    date: input.days.find((day) => !day.closed)?.date ?? null,
+    date: shownInput.days.find((day) => !day.closed)?.date ?? null,
     employeeId: null,
   }))
   const selection = useMemo<PlanningBoardSelection>(
@@ -176,9 +208,9 @@ export function PlanningBoard({
     // The sector selection deliberately SURVIVES a new generation: it is what
     // the manager asked to plan, and resetting it here would silently widen the
     // next generation back to every sector.
-  }, [input])
+  }, [shownInput])
 
-  const editedInput = useMemo(() => applyShiftEdits(input, editState), [input, editState])
+  const editedInput = useMemo(() => applyShiftEdits(shownInput, editState), [shownInput, editState])
   const board = useMemo(() => buildPlanningBoard(editedInput, selection), [editedInput, selection])
 
   // Raw minutes per shift, so a bar can be dragged without going back through
@@ -211,12 +243,12 @@ export function PlanningBoard({
   // The badge is a WEEKLY fact, so it does not depend on the day on screen.
   const deltasByEmployee = useMemo(() => weeklyContractDeltas(editedInput), [editedInput])
   const verdict = useMemo(
-    () => (edited ? assessDayEdits(input, editedInput, board.dayView.date) : null),
-    [edited, input, editedInput, board.dayView.date]
+    () => (edited ? assessDayEdits(shownInput, editedInput, board.dayView.date) : null),
+    [edited, shownInput, editedInput, board.dayView.date]
   )
   const lastEditLabel = useMemo(
-    () => describeLastEdit(input, editedInput, lastEditedShiftId),
-    [input, editedInput, lastEditedShiftId]
+    () => describeLastEdit(shownInput, editedInput, lastEditedShiftId),
+    [shownInput, editedInput, lastEditedShiftId]
   )
 
   // Tell the owner of the persist buttons whether these edits may be saved or
@@ -251,10 +283,12 @@ export function PlanningBoard({
   // They diverge the moment the manager navigates away without generating, and
   // that divergence — not a global "any planning exists" — decides everything:
   // the primary action, whether the grid renders, whether save/publish appear.
-  const currentWeek = selectedWeek ?? input.periodStart
-  const generatedPlanningWeek = input.periodStart
+  const generatedPlanningWeek = input?.periodStart ?? null
   const hasPlanning = hasPlanningForWeek(currentWeek, generatedPlanningWeek)
   const weekLabel = describeWeek(currentWeek)
+  // Les semaines proposées par le sélecteur, centrées sur celle qu'on regarde,
+  // pour qu'un saut de cinq semaines ne coûte pas cinq clics sur la flèche.
+  const weekOptions = useMemo(() => listWeekOptions(currentWeek), [currentWeek])
   // Unsaved only means anything while the loaded planning is on screen.
   const unsaved = hasPlanning && (dirty || hasLocalChanges(editState))
 
@@ -312,6 +346,9 @@ export function PlanningBoard({
         onSelectDate={(date: IsoDate) => update({ date })}
         onPreviousWeek={() => requestWeekChange({ type: "previous" })}
         onNextWeek={() => requestWeekChange({ type: "next" })}
+        weekValue={currentWeek}
+        weekOptions={weekOptions}
+        onSelectWeek={(week) => requestWeekChange({ type: "select", week })}
         hasPlanning={hasPlanning}
         unsavedLabel={unsaved ? "● Modifications non enregistrées" : null}
         primaryAction={
@@ -319,7 +356,7 @@ export function PlanningBoard({
             <button
               type="button"
               onClick={() => setRegenerateOpen(true)}
-              disabled={generating}
+              disabled={generating || !canGenerate}
               className="rounded-md border px-3 py-1.5 text-sm font-medium transition hover:bg-muted disabled:opacity-50"
             >
               Régénérer
@@ -328,7 +365,7 @@ export function PlanningBoard({
             <button
               type="button"
               onClick={() => onGenerate?.()}
-              disabled={generating}
+              disabled={generating || !canGenerate}
               className="rounded-md bg-primary px-3 py-1.5 text-sm font-medium text-primary-foreground transition hover:brightness-110 disabled:opacity-50"
             >
               {generating ? "Génération…" : "Générer cette semaine"}
@@ -344,7 +381,7 @@ export function PlanningBoard({
         <PlanningEmptyWeek
           weekTitle={weekLabel.title}
           onGenerate={() => onGenerate?.()}
-          disabled={generating}
+          disabled={generating || !canGenerate}
         />
       ) : board.toolbar.view === "sector" ? (
         <PlanningSectorView

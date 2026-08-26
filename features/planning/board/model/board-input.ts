@@ -1,3 +1,5 @@
+import { weekPeriod } from "@/features/planning/board/model/week"
+
 import type { EmployeeId, IsoDate, WeekDay } from "@/features/core/models"
 
 /**
@@ -159,4 +161,29 @@ export interface PlanningBoardSelection {
   readonly sectorIds: readonly string[]
   readonly date: IsoDate | null
   readonly employeeId: EmployeeId | null
+}
+
+/**
+ * L'entrée d'une semaine SANS planning.
+ *
+ * Elle existe pour que la barre de commande — semaine, rayons, action — ne
+ * dépende pas de l'existence d'un planning. Sans elle, tomber sur une semaine
+ * vide faisait disparaître la barre entière, flèches comprises, au profit d'un
+ * autre en-tête : le moyen de changer de semaine changeait de forme et de place
+ * au moment précis où l'on en changeait.
+ *
+ * Rien n'est inventé ici : la période, et pas une donnée de plus. Une semaine
+ * sans planning n'a ni salarié, ni besoin, ni horaire à montrer.
+ */
+export function emptyBoardInput(monday: IsoDate): PlanningBoardInput {
+  const period = weekPeriod(monday)
+  return {
+    periodStart: period.start,
+    periodEnd: period.end,
+    sectors: [],
+    employees: [],
+    days: [],
+    shifts: [],
+    demand: [],
+  }
 }

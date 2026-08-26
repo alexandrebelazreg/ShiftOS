@@ -6,7 +6,6 @@ import Link from "next/link"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-import { PageHeader } from "@/components/layout/page-header"
 
 import { useEmployees } from "@/features/employees/hooks/useEmployees"
 import type { StoreConfig } from "@/features/store/schemas/store.schema"
@@ -36,15 +35,12 @@ import {
 import {
   PlanningBoard,
   PlanningPublishDialog,
-  PlanningSectorMenu,
   adaptEditorStateToBoard,
   buildPlanningBoard,
   decidePublication,
   hasPlanningForWeek,
-  listWeekOptions,
   mondayOf,
   weekPeriod,
-  type WeekOption,
 } from "@/features/planning/board"
 import { weekDayOf } from "@/features/core/shared"
 import { holidayStore } from "@/features/planning/holidays/holiday.store"
@@ -58,6 +54,10 @@ import {
   type PlanningStatus,
 } from "@/features/planning/persistence"
 import { PlanningGenerationLoader } from "@/features/planning/view/PlanningGenerationLoader"
+import {
+  planningIdToOpen,
+  savedPlanningFor,
+} from "@/features/planning/view/displayed-planning"
 
 /**
  * What the LAST V3 attempt did — never what is on screen.
@@ -144,7 +144,6 @@ export function PlanningView({
   const [targetWeek, setTargetWeek] = useState<string>(() =>
     initialWeek ?? mondayOf(new Date().toISOString().slice(0, 10))
   )
-  const weekOptions = useMemo(() => listWeekOptions(targetWeek), [targetWeek])
   /** Only active sectors can be planned, so only they can be picked. */
   const pickableSectors = useMemo(() => selectableSectors(setup.sectors ?? []), [setup.sectors])
   const marketZoneIds = useMemo(
@@ -343,11 +342,25 @@ export function PlanningView({
     [boardInput, boardSummary]
   )
 
+  /**
+   * L'identifiant porté par l'adresse n'ouvre QU'UNE FOIS.
+   *
+   * Il restait vrai tant que la page vivait, et le chargement par affichage
+   * plus bas s'interdisait de tourner tant qu'il était là. Arrivé du tableau de
+   * bord, changer de semaine ou de rayon ne rouvrait donc plus rien : la S36 du
+   * Drive, pourtant enregistrée, s'affichait vide, et rien ne le disait.
+   *
+   * `openedFromUrl` retient ce que cette page a déjà honoré — ouvert, ou
+   * cherché en vain. La règle elle-même est pure et vérifiée à côté.
+   */
+  const [openedFromUrl, setOpenedFromUrl] = useState<string | null>(null)
+  const openRequest = planningIdToOpen(initialPlanningId, openedFromUrl)
+
   useEffect(() => {
-    if (!initialPlanningId) return
+    if (!openRequest) return
 
     let active = true
-    void planningStore.reopen(initialPlanningId)
+    void planningStore.reopen(openRequest)
       .then((reopened) => {
         if (!active) return
         if (!reopened) throw new Error("Planning introuvable.")
@@ -366,13 +379,15 @@ export function PlanningView({
         }
       })
       .finally(() => {
-        if (active) setIsPersisting(false)
+        if (!active) return
+        setIsPersisting(false)
+        setOpenedFromUrl(openRequest)
       })
 
     return () => {
       active = false
     }
-  }, [initialPlanningId])
+  }, [openRequest])
 
   /**
    * Le planning déjà enregistré pour la semaine et les rayons affichés.
@@ -394,7 +409,7 @@ export function PlanningView({
    * d'attendre.
    */
   useEffect(() => {
-    if (initialPlanningId) return
+    if (openRequest) return
     if (isDirty || v3.status !== "idle") return
     // Les rayons n'ont pas fini de charger : une sélection vide à cet instant
     // n'est pas un choix, et chercher un planning « sans rayon » n'aurait aucun
@@ -402,16 +417,12 @@ export function PlanningView({
     if (selectedSectorIds === null && pickableSectors.length === 0) return
 
     let active = true
-    const wanted = [...selection].sort().join("|")
 
     void planningStore
       .records()
       .then((records) => {
         if (!active) return
-        const found = records
-          .filter((entry) => entry.periodStart === targetWeek)
-          .filter((entry) => [...(entry.sectorIds ?? [])].sort().join("|") === wanted)
-          .sort((left, right) => right.updatedAt.localeCompare(left.updatedAt))[0]
+        const found = savedPlanningFor(records, targetWeek, selection)
 
         if (found) {
           if (found.id === record?.id) return
@@ -433,7 +444,7 @@ export function PlanningView({
       active = false
     }
   }, [
-    initialPlanningId,
+    openRequest,
     targetWeek,
     selection,
     selectedSectorIds,
@@ -724,54 +735,98 @@ export function PlanningView({
 
   return (
     <div className="space-y-6">
-      {/* Once a planning exists the control bar carries the title and the
-          actions, so this header would only push the schedule down. */}
-      {editorState ? null : (
-        <div className="flex flex-wrap items-end justify-between gap-4">
-          <PageHeader
-            title="Planning"
-            description="Générez un planning à partir de la configuration du magasin et de votre équipe."
-          />
-          <div className="flex flex-wrap items-center gap-2">
-            {/* The same control the board shows, on the same state: before the
-                first generation there is no board, and the sector to plan still
-                has to be choosable. */}
-            <PlanningSectorMenu
-              sectors={sectorChoices}
-              onToggleSector={toggleSector}
-              onToggleAll={toggleAllSectors}
-              onToggleMarketZone={toggleMarketZone}
-            />
-            <select
-              value={targetWeek}
-              onChange={(event) => setTargetWeek(event.target.value)}
-              className="rounded-md border bg-background px-2 py-1.5 text-sm"
-              aria-label="Semaine à générer"
-            >
-              {weekOptions.map((option: WeekOption) => (
-                <option key={option.value} value={option.value}>
-                  {option.label}
-                </option>
-              ))}
-            </select>
-            <Button
-              onClick={() => handleGenerate()}
-              // Deliberately NOT disabled by sector readiness. `setup.ready` is a
-              // single boolean over every active sector, so one incomplete
-              // sector killed the button for every other one — and a dead
-              // button explains nothing. Clicking now produces a precise reason.
-              disabled={!initialStore || setup.isLoading || isLoading || busyGenerating}
-            >
-              {busyGenerating ? "Génération…" : "Générer"}
-            </Button>
+      {/* LA barre de commande, toujours là et toujours en tête.
+          Semaine, rayons, action : elle ne dépend pas de l'existence d'un
+          planning, sinon franchir la frontière d'une semaine vide ferait
+          disparaître les flèches — au moment précis où l'on veut revenir. */}
+      <PlanningBoard
+        input={boardInput}
+        selectedWeek={targetWeek}
+        onChangeWeek={setTargetWeek}
+        onSaveRequest={saveAndReport}
+        onGenerate={handleGenerate}
+        sectorIds={selection}
+        sectorChoices={sectorChoices}
+        onToggleSector={toggleSector}
+        onToggleAllSectors={toggleAllSectors}
+        onToggleMarketZone={toggleMarketZone}
+        generating={busyGenerating}
+        // Deliberately NOT gated by sector readiness. `setup.ready` is a single
+        // boolean over every active sector, so one incomplete sector killed the
+        // button for every other one — and a dead button explains nothing.
+        // Clicking now produces a precise reason. Only a missing or still
+        // loading store leaves genuinely nothing to generate from.
+        canGenerate={Boolean(initialStore) && !setup.isLoading && !isLoading}
+        dirty={isDirty}
+        onPersistenceBlockChange={setEditsBlockPersistence}
+        actions={
+          <>
+            {currentStatus === "draft" ? (
+              <>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={handleSave}
+                  disabled={isPersisting || !isDirty || editsBlockPersistence}
+                >
+                  Enregistrer
+                </Button>
+                {/* Left clickable even when publication is barred: a dead
+                    button explains nothing, whereas the click produces the
+                    reason below the schedule. */}
+                <Button size="sm" onClick={handlePublish} disabled={isPersisting}>
+                  Publier
+                </Button>
+              </>
+            ) : null}
+            {currentStatus === "published" ? (
+              <>
+                <Button size="sm" onClick={handleEditPublished} disabled={isPersisting}>
+                  Nouveau brouillon
+                </Button>
+                <Button size="sm" variant="outline" onClick={handleArchive} disabled={isPersisting}>
+                  Archiver
+                </Button>
+              </>
+            ) : null}
+          </>
+        }
+      />
+
+      {persistenceError ? <p role="alert" className="text-sm text-destructive">{persistenceError}</p> : null}
+
+      {selectedWeekHasPlanning && publishBlocked ? (
+        <p role="alert" className="rounded-md border border-destructive/40 bg-destructive/10 p-3 text-sm text-destructive">
+          Publication impossible : des règles obligatoires (couverture dure ou contrats) ne
+          sont pas respectées. Corrigez le planning avant de le publier ; aucune acceptation ne
+          permet de passer outre.
+        </p>
+      ) : null}
+
+      {/* Which engine made THIS schedule, next to the schedule itself.
+          A manager must never have to remember which button they pressed
+          five minutes ago to know what they are about to publish. Sous la
+          grille plutôt qu'au-dessus : rien ne doit pousser la barre vers le
+          bas selon qu'un planning est chargé ou non. */}
+      {selectedWeekHasPlanning ? (
+        <div className="flex flex-wrap items-center justify-between gap-2 rounded-md border px-3 py-2">
+          <div className="flex items-center gap-2 text-sm">
+            <Badge variant="secondary">{activeEngineLabel}</Badge>
+            <span className="text-xs text-muted-foreground">
+              Détails dans le panneau technique.
+            </span>
           </div>
         </div>
-      )}
+      ) : null}
 
-      {persistenceError && !editorState ? (
-        <p role="alert" className="rounded-md border border-destructive/40 bg-destructive/5 p-3 text-sm text-destructive">
-          {persistenceError}
-        </p>
+      {selectedWeekHasPlanning && boardSummary ? (
+        <PlanningPublishDialog
+          open={publishDialogOpen}
+          summary={boardSummary}
+          busy={isPersisting}
+          onCancel={() => setPublishDialogOpen(false)}
+          onConfirm={publishNow}
+        />
       ) : null}
 
       {!initialStore ? (
@@ -865,95 +920,6 @@ export function PlanningView({
             </div>
           </CardContent>
         </Card>
-      ) : null}
-
-      {editorState && boardInput ? (
-        <>
-          {persistenceError ? <p role="alert" className="text-sm text-destructive">{persistenceError}</p> : null}
-
-          {publishBlocked ? (
-            <p role="alert" className="rounded-md border border-destructive/40 bg-destructive/10 p-3 text-sm text-destructive">
-              Publication impossible : des règles obligatoires (couverture dure ou contrats) ne
-              sont pas respectées. Corrigez le planning avant de le publier ; aucune acceptation ne
-              permet de passer outre.
-            </p>
-          ) : null}
-
-          {/* New planning board: engine-agnostic, read-only for now. It renders
-              a ViewModel built outside React, so the V3 swap will only replace
-              the adapter above it. */}
-          {/* Which engine made THIS schedule, next to the schedule itself.
-              A manager must never have to remember which button they pressed
-              five minutes ago to know what they are about to publish. */}
-          <div className="flex flex-wrap items-center justify-between gap-2 rounded-md border px-3 py-2">
-            <div className="flex items-center gap-2 text-sm">
-              <Badge variant="secondary">{activeEngineLabel}</Badge>
-              <span className="text-xs text-muted-foreground">
-                Détails dans le panneau technique.
-              </span>
-            </div>
-            <div className="flex items-center gap-2">
-            </div>
-          </div>
-
-          <PlanningBoard
-            input={boardInput}
-            selectedWeek={targetWeek}
-            onChangeWeek={setTargetWeek}
-            onSaveRequest={saveAndReport}
-            onGenerate={handleGenerate}
-            sectorIds={selection}
-            sectorChoices={sectorChoices}
-            onToggleSector={toggleSector}
-            onToggleAllSectors={toggleAllSectors}
-            onToggleMarketZone={toggleMarketZone}
-            generating={busyGenerating}
-            dirty={isDirty}
-            onPersistenceBlockChange={setEditsBlockPersistence}
-            actions={
-              <>
-                {currentStatus === "draft" ? (
-                  <>
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      onClick={handleSave}
-                      disabled={isPersisting || !isDirty || editsBlockPersistence}
-                    >
-                      Enregistrer
-                    </Button>
-                    {/* Left clickable even when publication is barred: a dead
-                        button explains nothing, whereas the click produces the
-                        reason below the schedule. */}
-                    <Button size="sm" onClick={handlePublish} disabled={isPersisting}>
-                      Publier
-                    </Button>
-                  </>
-                ) : null}
-                {currentStatus === "published" ? (
-                  <>
-                    <Button size="sm" onClick={handleEditPublished} disabled={isPersisting}>
-                      Nouveau brouillon
-                    </Button>
-                    <Button size="sm" variant="outline" onClick={handleArchive} disabled={isPersisting}>
-                      Archiver
-                    </Button>
-                  </>
-                ) : null}
-              </>
-            }
-          />
-
-          {selectedWeekHasPlanning && boardSummary ? (
-            <PlanningPublishDialog
-              open={publishDialogOpen}
-              summary={boardSummary}
-              busy={isPersisting}
-              onCancel={() => setPublishDialogOpen(false)}
-              onConfirm={publishNow}
-            />
-          ) : null}
-        </>
       ) : null}
     </div>
   )

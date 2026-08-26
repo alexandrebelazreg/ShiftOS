@@ -5,6 +5,7 @@ import { cn } from "@/lib/utils"
 import type { IsoDate } from "@/features/core/models"
 import type { BoardToolbarVM } from "@/features/planning/board/model/board-view-model"
 import type { SectorChoice, WeekLabel } from "@/features/planning/board/model/header-controls"
+import type { WeekOption } from "@/features/planning/board/model/week"
 import { PlanningSectorMenu } from "@/features/planning/board/ui/PlanningSectorMenu"
 
 const VIEW_LABELS = {
@@ -25,6 +26,17 @@ interface PlanningToolbarProps {
   readonly onSelectDate: (date: IsoDate) => void
   readonly onPreviousWeek: () => void
   readonly onNextWeek: () => void
+  /**
+   * Le saut direct à une semaine, à côté des flèches plutôt qu'à leur place.
+   *
+   * Les deux servent à des choses différentes — la flèche pour la semaine
+   * d'après, la liste pour celle d'un mois plus loin — et n'avoir que l'une des
+   * deux selon qu'un planning existe ou non faisait changer de commande au
+   * milieu de la navigation. Absente, la semaine reste un simple titre.
+   */
+  readonly weekValue?: string
+  readonly weekOptions?: readonly WeekOption[]
+  readonly onSelectWeek?: (monday: string) => void
   /** The one primary action: Générer before a planning, Régénérer after. */
   readonly primaryAction?: ReactNode
   /** Enregistrer / Publier and the published-state actions. */
@@ -59,6 +71,9 @@ export function PlanningToolbar({
   onSelectDate,
   onPreviousWeek,
   onNextWeek,
+  weekValue,
+  weekOptions,
+  onSelectWeek,
   primaryAction,
   actions,
   unsavedLabel,
@@ -83,7 +98,22 @@ export function PlanningToolbar({
             ◀
           </button>
           <div className="min-w-40 text-center">
-            <span className="block text-sm font-semibold leading-tight">{weekTitle}</span>
+            {weekValue && weekOptions && onSelectWeek ? (
+              <select
+                value={weekValue}
+                onChange={(event) => onSelectWeek(event.target.value)}
+                className="block w-full cursor-pointer rounded-md border-0 bg-transparent text-center text-sm font-semibold leading-tight hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                aria-label="Semaine affichée"
+              >
+                {weekOptions.map((option) => (
+                  <option key={option.value} value={option.value}>
+                    Semaine {option.weekNumber}
+                  </option>
+                ))}
+              </select>
+            ) : (
+              <span className="block text-sm font-semibold leading-tight">{weekTitle}</span>
+            )}
             <span className="block text-[11px] leading-tight text-muted-foreground">{weekRange}</span>
           </div>
           <button
