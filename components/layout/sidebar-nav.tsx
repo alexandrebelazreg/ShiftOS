@@ -77,17 +77,34 @@ export function SidebarNav({
           imprimer au bas des feuilles affichées. */}
       <div className="shrink-0 border-t border-sidebar-border p-3">
         <NavigationLink item={configurationItem} pathname={pathname} onNavigate={onNavigate} />
-        <div className="flex items-center gap-2.5 rounded-md px-2.5 py-2">
+        {/* CLIQUER SUR SOI POUR SE CORRIGER.
+            Le champ « Votre nom » vivait dans les Paramètres, et RIEN n'y
+            menait : ni entrée de menu, ni lien. Une page qu'aucun chemin
+            n'atteint n'existe pas. Le pied disait déjà « Nom non renseigné » —
+            c'est là qu'on cherche à le renseigner, donc c'est là que le chemin
+            commence. La seconde ligne le dit en toutes lettres tant que le nom
+            manque. */}
+        <Link
+          href="/settings"
+          onClick={onNavigate}
+          aria-current={pathname === "/settings" ? "page" : undefined}
+          className={cn(
+            "flex items-center gap-2.5 rounded-md px-2.5 py-2 transition-colors",
+            pathname === "/settings"
+              ? "bg-sidebar-accent text-sidebar-accent-foreground"
+              : "hover:bg-sidebar-accent/60"
+          )}
+        >
           <div className="flex size-7 shrink-0 items-center justify-center rounded-full bg-sidebar-accent text-xs font-medium">
             {initialsOf(identity)}
           </div>
           <div className="min-w-0">
             <p className="truncate text-sm font-medium">{identity.name ?? identity.email}</p>
             <p className="truncate text-xs text-sidebar-foreground/60">
-              {identity.name ? identity.email : "Nom non renseigné"}
+              {identity.name ? identity.email : "Ajouter mon nom"}
             </p>
           </div>
-        </div>
+        </Link>
         {/* Un `form` et non un `onClick` : la déconnexion est une écriture de
             session, donc une action serveur. Le cookie tombe dans la requête
             qui la demande, et rien ne transite par du JavaScript de page. */}
