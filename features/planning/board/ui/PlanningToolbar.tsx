@@ -41,7 +41,7 @@ interface PlanningToolbarProps {
   readonly primaryAction?: ReactNode
   /** Enregistrer / Publier and the published-state actions. */
   readonly actions?: ReactNode
-  /** "● Modifications non enregistrées", or null when everything is saved. */
+  /** "● Non enregistré", or null when everything is saved. */
   readonly unsavedLabel?: string | null
   /**
    * Whether the selected week has a planning to show. When it does not, the
@@ -84,8 +84,13 @@ export function PlanningToolbar({
 
   return (
     <div className="sticky top-0 z-20 space-y-2 border-b bg-background/95 pb-2 pt-1 backdrop-blur">
-      <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
-        <h1 className="text-xl font-semibold">Planning</h1>
+      <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
+        {/* Le titre reste pour qui navigue au clavier ou au lecteur d'écran,
+            et disparaît de l'œil : le menu latéral porte déjà « Planning » en
+            surbrillance. Écrit deux fois, il coûtait la centaine de pixels qui
+            manquait pour que la barre tienne sur UNE ligne — les actions
+            partaient sur une seconde, collées à la grille. */}
+        <h1 className="sr-only">Planning</h1>
 
         <div className="flex items-center gap-2">
           <button
@@ -142,8 +147,12 @@ export function PlanningToolbar({
         ) : null}
 
         {hasPlanning ? (
+          // Le mot « Vue : » disparaît, pas la commande : ses options se
+          // nomment « Par secteur », « Par jour », « Par employé » — elles
+          // disent déjà de quoi il s'agit. Les quarante pixels qu'il coûtait
+          // sont ceux qui manquaient pour que la barre tienne sur une ligne
+          // quand le bandeau « non enregistré » s'y ajoute.
           <label className="flex items-center gap-1.5 text-sm">
-            <span className="text-muted-foreground">Vue :</span>
             <select
               value={toolbar.view}
               onChange={(event) => onChangeView(event.target.value as "sector" | "day" | "employee")}

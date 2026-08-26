@@ -39,15 +39,23 @@ export function PlanningSectorView({ sectorView, onSelectEmployee }: PlanningSec
         </li>
       </ul>
 
+    {/* LES SEPT JOURS TIENNENT, ou rien ne tient.
+        Les colonnes se dimensionnaient sur leur contenu : un « FRUITS &
+        LÉGUMES » suffisait à les élargir, et le dimanche partait hors champ
+        sur une semaine de zone marché — le jour qu'on vérifie en premier
+        quand on cherche qui travaille le week-end.
+        `table-fixed` renverse la décision : la largeur est répartie, et c'est
+        au contenu de s'y tenir. La largeur minimale garde le défilement comme
+        filet sur une fenêtre étroite, plutôt que d'écraser les pastilles. */}
     <div className="overflow-x-auto rounded-lg border">
-      <table className="w-full border-collapse text-sm">
+      <table className="w-full min-w-[58rem] table-fixed border-collapse text-sm">
         <thead>
           <tr className="border-b bg-muted/30">
-            <th className="sticky left-0 z-10 w-48 bg-muted/30 px-3 py-2.5 text-left font-medium">
+            <th className="sticky left-0 z-10 w-44 bg-muted/30 px-3 py-2.5 text-left font-medium">
               Salarié
             </th>
             {sectorView.columns.map((column) => (
-              <th key={column.date} className="min-w-[7rem] px-1 py-2.5 text-center font-medium">
+              <th key={column.date} className="px-0.5 py-2.5 text-center font-medium">
                 <span className="block">{column.shortLabel}</span>
                 <span className="block text-xs font-normal text-muted-foreground">
                   {column.dateLabel}
@@ -69,38 +77,31 @@ export function PlanningSectorView({ sectorView, onSelectEmployee }: PlanningSec
               key={row.employeeId}
               className={cn("border-b last:border-0", row.selected && "bg-primary/5")}
             >
-              <td className="sticky left-0 z-10 bg-background px-3 py-1.5">
+              <td className="sticky left-0 z-10 bg-background px-2 py-1.5">
                 <button
                   type="button"
                   onClick={() => onSelectEmployee(row.employeeId)}
                   className="flex w-full items-center gap-2 text-left"
                 >
-                  <span className="flex size-7 shrink-0 items-center justify-center rounded-full bg-muted text-[11px] font-semibold text-muted-foreground">
+                  <span className="flex size-6 shrink-0 items-center justify-center rounded-full bg-muted text-[10px] font-semibold text-muted-foreground">
                     {row.initials}
                   </span>
                   <span className="min-w-0 flex-1">
-                    <span className="block truncate text-sm font-medium">{row.name}</span>
-                    {/* The label says whether the target is the whole contract
-                        or only this sector's allocation; the tick therefore
-                        cannot turn a sector quota into a fake contract. */}
-                    <span className="flex items-center gap-1.5 text-xs tabular-nums text-muted-foreground">
+                    <span className="block truncate text-[13px] font-medium">{row.name}</span>
+                    {/* SEUL L'ÉCART PARLE. Le ✓ vert se répétait sous chaque
+                        nom d'une semaine réussie — vingt confirmations pour
+                        zéro information, et l'œil finissait par ne plus voir
+                        la ligne où il manquait. Le silence dit désormais que
+                        le compte est bon ; ce qui s'affiche est ce qui cloche.
+                        `deviationLabel` est déjà nul à l'équilibre ET quand la
+                        comparaison n'a pas de sens. */}
+                    <span className="flex items-center gap-1.5 text-[11px] tabular-nums text-muted-foreground">
                       {row.hoursLabel}
-                      {!row.comparisonAvailable ? null : row.onTarget ? (
-                        <span
-                          className="text-emerald-600 dark:text-emerald-400"
-                          aria-label={
-                            row.targetKind === "contract"
-                              ? "contrat respecté"
-                              : "objectif du rayon atteint"
-                          }
-                        >
-                          {row.targetKind === "contract" ? "✓" : "objectif atteint"}
-                        </span>
-                      ) : (
+                      {row.deviationLabel ? (
                         <span className={cn("font-medium", LEVEL_TEXT[row.level])}>
                           {row.deviationLabel}
                         </span>
-                      )}
+                      ) : null}
                     </span>
                   </span>
                 </button>
@@ -109,7 +110,7 @@ export function PlanningSectorView({ sectorView, onSelectEmployee }: PlanningSec
                 const shifts = row.shiftsByDate[column.date] ?? []
                 const holiday = row.holidayLabelByDate[column.date] ?? null
                 return (
-                  <td key={column.date} className="px-1 py-1 align-top">
+                  <td key={column.date} className="px-0.5 py-1 align-top">
                     {column.closed ? (
                       <span className="block py-2 text-center text-xs text-muted-foreground/60">—</span>
                     ) : shifts.length === 0 ? (
@@ -143,20 +144,24 @@ export function PlanningSectorView({ sectorView, onSelectEmployee }: PlanningSec
                             onClick={() => onSelectEmployee(row.employeeId)}
                             style={bar.paint ?? undefined}
                             className={cn(
-                              "mb-1 block w-full rounded-md border px-2 py-1.5 text-xs font-medium leading-tight transition hover:brightness-95",
+                              "mb-1 block w-full rounded-md border px-1 py-1 text-[11px] font-medium leading-tight transition hover:brightness-95",
                               bar.paint ? "border" : KIND_SURFACE[shift.kind]
                             )}
                             title={bar.title}
                           >
+                            {/* Un cran plus petit sur les trois lignes. La
+                                pastille est un repère, pas un texte : on y lit
+                                une plage horaire d'un coup d'œil, et la taille
+                                d'avant volait la largeur des jours voisins. */}
                             {bar.sectorName ? (
-                              <span className="block truncate text-[11px] font-semibold uppercase tracking-wide opacity-80">
+                              <span className="block truncate text-[10px] font-semibold opacity-80">
                                 {bar.sectorName}
                               </span>
                             ) : null}
                             <span className="block tabular-nums">
                               {bar.startLabel} – {bar.endLabel}
                             </span>
-                            <span className="block text-[11px] font-normal opacity-70 tabular-nums">
+                            <span className="block text-[10px] font-normal opacity-70 tabular-nums">
                               {bar.durationLabel}
                             </span>
                           </button>
@@ -171,11 +176,11 @@ export function PlanningSectorView({ sectorView, onSelectEmployee }: PlanningSec
         </tbody>
         <tfoot>
           <tr className="border-t bg-muted/30">
-            <th className="sticky left-0 z-10 bg-muted/30 px-3 py-2 text-left text-xs font-medium uppercase tracking-wide text-muted-foreground">
+            <th className="sticky left-0 z-10 bg-muted/30 px-2 py-2 text-left text-xs font-medium uppercase tracking-wide text-muted-foreground">
               Total du jour
             </th>
             {sectorView.columns.map((column) => (
-              <td key={column.date} className="px-1 py-2 text-center text-sm font-medium tabular-nums">
+              <td key={column.date} className="px-0.5 py-2 text-center text-sm font-medium tabular-nums">
                 {column.totalLabel ?? (
                   <span className="text-xs font-normal text-muted-foreground/60">—</span>
                 )}

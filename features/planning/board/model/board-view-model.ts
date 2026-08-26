@@ -752,12 +752,30 @@ function buildSectorView(
       plannedLabel: durationLabel(planned),
       contractLabel: durationLabel(employee.contractMinutes),
       differenceLabel: comparisonAvailable ? signedDurationLabel(difference) : "—",
+      /**
+       * « fait / dû », et le mot en plus seulement quand il change le sens.
+       *
+       * Les phrases d'avant — « 36h45 planifiées · contrat 36h45 » — disaient
+       * trois fois la même chose dans une ligne lue en diagonale, sous chacun
+       * des vingt noms. Deux nombres séparés d'une barre se comparent d'un
+       * regard, et c'est tout ce qu'on demande à cette ligne.
+       *
+       * LE DÉNOMINATEUR EST LA CIBLE, pas le contrat. C'est lui que l'écart
+       * juste à côté mesure ; afficher le contrat pendant qu'on compare à la
+       * part de rayon produirait deux nombres égaux surmontés d'un écart.
+       *
+       * D'où le suffixe. Sans lui, une part de rayon atteinte ressemble trait
+       * pour trait à un contrat rempli, et le gérant croirait la semaine faite
+       * alors qu'il reste les autres rayons. « sélection partielle » dit
+       * l'autre cas : on ne voit qu'un morceau de ses rayons, donc les heures
+       * affichées ne se comparent à rien — et aucun écart ne s'affiche.
+       */
       hoursLabel:
         !comparisonAvailable
-          ? `${durationLabel(planned)} dans la sélection · contrat ${durationLabel(employee.contractMinutes)}`
+          ? `${durationLabel(planned)} / ${durationLabel(employee.contractMinutes)} · sélection partielle`
           : employee.weeklyTargetMinutes === undefined
-          ? `${durationLabel(planned)} planifiées · contrat ${durationLabel(employee.contractMinutes)}`
-          : `${durationLabel(planned)} dans ce rayon · contrat ${durationLabel(employee.contractMinutes)}`,
+          ? `${durationLabel(planned)} / ${durationLabel(target)}`
+          : `${durationLabel(planned)} / ${durationLabel(target)} · rayon`,
       targetKind:
         !comparisonAvailable
           ? "filtered-selection"

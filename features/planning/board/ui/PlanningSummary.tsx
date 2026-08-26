@@ -13,13 +13,25 @@ interface PlanningSummaryProps {
   readonly summary: BoardSummaryVM
 }
 
+/**
+ * LA COULEUR EST RÉSERVÉE À CE QUI BLOQUE.
+ *
+ * Le fond ambre de « publiable avec réserves » faisait passer pour mauvais un
+ * planning qui ne l'est pas : des réserves sont des points à vérifier, pas un
+ * défaut, et un aplat de couleur sous toute la largeur de l'écran dit le
+ * contraire. Il tombe, et le fond vert de « conforme » avec lui — sans quoi le
+ * bon état resterait plus signalé que celui qui demande une vérification.
+ *
+ * Reste le rouge, seul, parce qu'il est le seul à interdire la publication.
+ * Une pastille de couleur suffit à dire l'état dans les deux autres cas.
+ */
 const STATUS_STYLE: Record<BoardSummaryVM["status"], { surface: string; icon: string }> = {
   ok: {
-    surface: "border-emerald-200 bg-emerald-50/60 dark:border-emerald-900 dark:bg-emerald-950/30",
+    surface: "border-border",
     icon: "✓",
   },
   reserves: {
-    surface: "border-amber-200 bg-amber-50/60 dark:border-amber-900 dark:bg-amber-950/30",
+    surface: "border-border",
     icon: "⚠",
   },
   blocked: {

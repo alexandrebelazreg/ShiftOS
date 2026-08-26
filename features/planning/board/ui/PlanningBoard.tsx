@@ -350,7 +350,10 @@ export function PlanningBoard({
         weekOptions={weekOptions}
         onSelectWeek={(week) => requestWeekChange({ type: "select", week })}
         hasPlanning={hasPlanning}
-        unsavedLabel={unsaved ? "● Modifications non enregistrées" : null}
+        // Court, parce qu'il partage la ligne avec les actions : la phrase
+        // entière la faisait replier au moment le plus mauvais — celui où il y
+        // a justement quelque chose à enregistrer.
+        unsavedLabel={unsaved ? "● Non enregistré" : null}
         primaryAction={
           primaryPlanningAction(hasPlanning) === "regenerate" ? (
             <button

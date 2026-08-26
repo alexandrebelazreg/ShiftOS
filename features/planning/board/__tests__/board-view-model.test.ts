@@ -551,6 +551,61 @@ describe("vue semaine — le contrat vit sous le nom", () => {
     expect(view).toContain("row.deviationLabel")
     expect(view).toContain("column.totalLabel")
   })
+
+  /**
+   * Le ✓ vert ne revient pas.
+   *
+   * Il s'affichait sous CHAQUE nom d'une semaine réussie : vingt confirmations
+   * identiques, et la ligne qui manquait à l'appel se perdait dedans. La règle
+   * tient en une phrase — ce qui s'affiche est ce qui cloche — et elle ne se
+   * lit nulle part à l'exécution, d'où ce test.
+   */
+  it("ne confirme plus une ligne juste, il ne signale que l'écart", () => {
+    const view = readFileSync(
+      join(dirname(fileURLToPath(import.meta.url)), "..", "ui", "PlanningSectorView.tsx"),
+      "utf8"
+    )
+    expect(view).not.toContain("objectif atteint")
+    expect(view).not.toContain("contrat respecté")
+    expect(view).not.toContain("row.onTarget")
+  })
+
+  it("écrit « fait / dû » et rien de plus quand la cible est le contrat", () => {
+    // Tous les rayons affichés : les heures vues SONT le contrat entier, donc
+    // la ligne n'a aucune nuance à porter.
+    const board = buildPlanningBoard(input(), selection({ sectorIds: ["drive", "caisse"] }))
+    const row = board.sectorView.rows.find((entry) => String(entry.employeeId) === "luca")
+
+    expect(row?.hoursLabel).toBe("16h / 16h")
+    expect(row?.targetKind).toBe("contract")
+    // Rien à côté : à l'équilibre, la ligne se tait.
+    expect(row?.deviationLabel).toBeNull()
+
+    // Et l'écart reste la seule chose qu'elle dise quand il y en a un.
+    const off = board.sectorView.rows.find((entry) => String(entry.employeeId) === "dylan")
+    expect(off?.hoursLabel).toBe("13h / 8h")
+    expect(off?.deviationLabel).toBe("+5h")
+  })
+
+  it("dit « sélection partielle » quand les heures ne se comparent à rien", () => {
+    const multiSectorShift = {
+      ...shift("multi", "luca", "2026-07-20", 360, 840),
+      sectorAssignments: [
+        { sectorId: "drive", startMinutes: 360, endMinutes: 600 },
+        { sectorId: "caisse", startMinutes: 600, endMinutes: 840 },
+      ],
+    }
+    const board = buildPlanningBoard(
+      { ...input(), shifts: [multiSectorShift] },
+      selection({ sectorIds: ["drive"] })
+    )
+    const row = board.sectorView.rows.find((entry) => String(entry.employeeId) === "luca")
+
+    expect(row?.hoursLabel).toBe("4h / 16h · sélection partielle")
+    // Aucun écart : comparer un morceau de ses rayons à son contrat entier
+    // produirait un retard qui n'existe pas.
+    expect(row?.deviationLabel).toBeNull()
+  })
 })
 
 describe("vue semaine — objectif de rayon et contrat salarié", () => {
@@ -581,7 +636,11 @@ describe("vue semaine — objectif de rayon et contrat salarié", () => {
     )
     const row = board.sectorView.rows[0]
 
-    expect(row.hoursLabel).toBe("8h dans ce rayon · contrat 36h45")
+    // « fait / dû », et le dû est LA CIBLE — la part de rayon, pas le contrat,
+    // sans quoi l'écart affiché à côté mesurerait autre chose que les deux
+    // nombres qu'on lit. Le suffixe empêche de prendre ce 8h/8h pour un
+    // contrat de 36h45 rempli.
+    expect(row.hoursLabel).toBe("8h / 8h · rayon")
     expect(row.onTarget).toBe(true)
     expect(row.targetKind).toBe("sector-allocation")
     expect(board.employeeView?.general).toContainEqual({
