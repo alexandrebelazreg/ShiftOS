@@ -78,83 +78,108 @@ export function PlanningPublicationPanel({
   )
 
   const printable = hasSomethingToPublish(options)
+  /**
+   * L'aperçu est FERMÉ au départ.
+   *
+   * Il occupait les deux tiers de l'écran en permanence, et on ne le regarde
+   * qu'une fois : après avoir réglé, avant d'imprimer. Fermé, les options
+   * tiennent sur une largeur confortable au lieu d'une colonne de 18 rem ;
+   * ouvert, la feuille se déplie sous elles, à la taille où elle sortira.
+   */
+  const [previewOpen, setPreviewOpen] = useState(false)
 
   return (
-    <div className="grid gap-6 lg:grid-cols-[18rem_minmax(0,1fr)]">
+    <div className="space-y-6">
       <aside className="space-y-5 print:hidden">
-        <button
-          type="button"
-          onClick={() => window.print()}
-          disabled={!printable}
-          className="w-full rounded-md bg-primary px-3 py-2 text-sm font-medium text-primary-foreground transition hover:brightness-110 disabled:opacity-50"
-        >
-          Imprimer / Enregistrer en PDF
-        </button>
+        <div className="flex flex-wrap items-center gap-3">
+          <button
+            type="button"
+            onClick={() => window.print()}
+            disabled={!printable}
+            className="rounded-md bg-primary px-3 py-2 text-sm font-medium text-primary-foreground transition hover:brightness-110 disabled:opacity-50"
+          >
+            Imprimer / Enregistrer en PDF
+          </button>
+          <button
+            type="button"
+            onClick={() => setPreviewOpen((open) => !open)}
+            aria-expanded={previewOpen}
+            disabled={!printable}
+            className="rounded-md border px-3 py-2 text-sm transition hover:bg-muted disabled:opacity-50"
+          >
+            {previewOpen ? "Masquer la feuille" : "Voir la feuille"}
+          </button>
+        </div>
 
-        <Field label="Mise en page">
-          <div className="space-y-1.5">
-            {PUBLICATION_LAYOUTS.map((entry) => (
-              <LayoutChoice
-                key={entry.layout}
-                entry={entry}
-                selected={options.layout === entry.layout}
-                onSelect={(layout) => setOptions((current) => ({ ...current, layout }))}
-              />
-            ))}
-          </div>
-        </Field>
-
-        <Field label="Rayons affichés">
-          <div className="space-y-1">
-            {input.sectors.map((sector) => (
-              <Check
-                key={sector.id}
-                label={sector.name}
-                checked={options.sectorIds.includes(sector.id)}
-                onChange={() => setOptions((current) => toggleSector(current, sector.id))}
-              />
-            ))}
-          </div>
-        </Field>
-
-        {/* Le choix des jours n'existe que pour la mise en page qui en fait des
-            feuilles. L'afficher ailleurs promettrait un filtre que les grilles
-            hebdomadaires n'appliquent pas. */}
-        {options.layout === "day" ? (
-          <Field label="Jours affichés">
-            <div className="space-y-1">
-              {input.days.map((day) => (
-                <Check
-                  key={day.date}
-                  label={`${WEEK_DAY_LABELS[day.weekDay]} ${formatDate(day.date)}`}
-                  hint={day.closed ? "fermé" : null}
-                  disabled={day.closed}
-                  checked={options.dates.includes(day.date)}
-                  onChange={() => setOptions((current) => toggleDate(current, day.date))}
+        <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-4">
+          <Field label="Mise en page">
+            <div className="space-y-1.5">
+              {PUBLICATION_LAYOUTS.map((entry) => (
+                <LayoutChoice
+                  key={entry.layout}
+                  entry={entry}
+                  selected={options.layout === entry.layout}
+                  onSelect={(layout) => setOptions((current) => ({ ...current, layout }))}
                 />
               ))}
             </div>
           </Field>
-        ) : null}
 
-        <Field label="Options">
-          <Check
-            label="Afficher les totaux d’heures"
-            checked={options.showTotals}
-            onChange={() =>
-              setOptions((current) => ({ ...current, showTotals: !current.showTotals }))
-            }
-          />
-        </Field>
+          <Field label="Rayons affichés">
+            <div className="space-y-1">
+              {input.sectors.map((sector) => (
+                <Check
+                  key={sector.id}
+                  label={sector.name}
+                  checked={options.sectorIds.includes(sector.id)}
+                  onChange={() => setOptions((current) => toggleSector(current, sector.id))}
+                />
+              ))}
+            </div>
+          </Field>
 
-        <p className="border-t pt-3 text-xs leading-relaxed text-muted-foreground">
-          Dans la fenêtre d’impression, choisissez <strong>Enregistrer au format PDF</strong>,
-          l’orientation <strong>paysage</strong>, et activez les graphiques d’arrière-plan pour
-          conserver les couleurs des rayons.
-        </p>
+          {/* Le choix des jours n'existe que pour la mise en page qui en fait des
+              feuilles. L'afficher ailleurs promettrait un filtre que les grilles
+              hebdomadaires n'appliquent pas. */}
+          {options.layout === "day" ? (
+            <Field label="Jours affichés">
+              <div className="space-y-1">
+                {input.days.map((day) => (
+                  <Check
+                    key={day.date}
+                    label={`${WEEK_DAY_LABELS[day.weekDay]} ${formatDate(day.date)}`}
+                    hint={day.closed ? "fermé" : null}
+                    disabled={day.closed}
+                    checked={options.dates.includes(day.date)}
+                    onChange={() => setOptions((current) => toggleDate(current, day.date))}
+                  />
+                ))}
+              </div>
+            </Field>
+          ) : null}
+
+          <Field label="Options">
+            <Check
+              label="Afficher les totaux d’heures"
+              checked={options.showTotals}
+              onChange={() =>
+                setOptions((current) => ({ ...current, showTotals: !current.showTotals }))
+              }
+            />
+            <p className="mt-3 text-xs leading-relaxed text-muted-foreground">
+              Dans la fenêtre d’impression, choisissez <strong>Enregistrer au format PDF</strong>,
+              l’orientation <strong>paysage</strong>, et activez les graphiques d’arrière-plan pour
+              conserver les couleurs des rayons.
+            </p>
+          </Field>
+        </div>
       </aside>
 
-      <div className="min-w-0 overflow-auto rounded-lg bg-muted/40 p-6 print:overflow-visible print:bg-transparent print:p-0">
+      {/* À L'IMPRESSION, LA FEUILLE SORT QU'ELLE SOIT DÉPLIÉE OU NON.
+          Le repli est un confort d'écran : le masquer avec `hidden` l'aurait
+          retiré du document, et le bouton Imprimer n'aurait plus rien sorti
+          tant qu'on n'avait pas ouvert l'aperçu — un piège silencieux. */}
+      <div className={cn("min-w-0 overflow-auto print:block print:overflow-visible", previewOpen ? "block" : "hidden")}>
         <PlanningPublicationDocument publication={publication} />
       </div>
     </div>

@@ -11,6 +11,7 @@ import {
 import { sectorBarPaint, type SectorBarPaint } from "@/features/planning/board/model/sector-paint"
 
 import type { PublicationOptions } from "@/features/planning/publication/model/publication-options"
+import { durationWithBreak } from "@/features/planning/publication/model/break-time"
 
 /**
  * Le planning tel qu'il sera punaisé au mur.
@@ -452,8 +453,28 @@ function dayPage(
  * passe de la charcuterie au poisson tient deux comptoirs, et une barre unique
  * cacherait précisément ce que la feuille du rayon vient dire.
  */
-function slotsOf(shift: BoardShiftVM, nameSectors: boolean): readonly PublicationSlotVM[] {
+/**
+ * Les cases d'une vacation.
+ *
+ * `impliedSectorId` est le rayon que la feuille porte DÉJÀ en titre : ses cases
+ * n'ont pas à le répéter, seules celles d'un autre comptoir se nomment. C'est
+ * ce qui divise la hauteur d'une case par deux la plupart du temps, et qui fait
+ * apparaître le nom exactement là où il apprend quelque chose — sur les heures
+ * que la personne fait AILLEURS, et qui figurent maintenant sur sa feuille.
+ *
+ * `null` veut dire « aucun rayon implicite » : la feuille d'équipe en mélange
+ * plusieurs, donc tous se nomment.
+ */
+function slotsOf(
+  shift: BoardShiftVM,
+  nameSectors: boolean,
+  impliedSectorId: string | null = null
+): readonly PublicationSlotVM[] {
   if (shift.sectorBlocks.length === 0) {
+    // Aucun bloc de rayon : les minutes travaillées ne se lisent nulle part
+    // ici, et la durée reste donc SANS pause plutôt qu'avec une pause fausse.
+    // Branche défensive — `buildPlanningBoard` écarte les vacations dont aucun
+    // bloc n'appartient à la sélection, donc rien n'arrive ici en pratique.
     return [{
       key: shift.id,
       sectorName: null,
@@ -465,9 +486,13 @@ function slotsOf(shift: BoardShiftVM, nameSectors: boolean): readonly Publicatio
 
   return shift.sectorBlocks.map((block, index) => ({
     key: `${shift.id}_${block.sectorId}_${index}`,
-    sectorName: nameSectors ? block.sectorName : null,
+    sectorName:
+      nameSectors && block.sectorId !== impliedSectorId ? block.sectorName : null,
     label: `${block.startLabel} – ${block.endLabel}`,
-    durationLabel: block.durationLabel,
+    durationLabel: durationWithBreak(
+      block.durationLabel,
+      block.endMinutes - block.startMinutes
+    ),
     // Teinte pleine, sans l'ombrage de bord que la grille utilise pour marquer
     // l'ouverture et la fermeture : la feuille affichée ne parle pas de rôles,
     // et un dégradé sur un bord n'aurait plus rien signifié pour personne.
@@ -482,3 +507,4 @@ function dayLabelOf(input: PlanningBoardInput, date: IsoDate): string {
   const day = input.days.find((entry) => entry.date === date)
   return day ? WEEK_DAY_LABELS[day.weekDay] : date
 }
+

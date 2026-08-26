@@ -214,27 +214,27 @@ export function PublicationView({ initialStore }: { readonly initialStore: Store
         </Card>
       ) : (
         <>
-          {/* Le sélecteur ne s'affiche qu'à partir de deux semaines : sur une
-              seule il n'offrirait aucun choix et repousserait la feuille. */}
+          {/* UNE LISTE DÉROULANTE, ET NON UNE RANGÉE DE BOUTONS.
+              Les semaines s'accumulent : à raison d'une par rayon et par
+              semaine, la rangée finissait par occuper trois lignes avant même
+              d'avoir vu une feuille. Une liste tient sur une ligne quel que
+              soit leur nombre. Elle ne paraît qu'à partir de deux : sur une
+              seule elle n'offrirait aucun choix. */}
           {affichables.length > 1 ? (
-            <div className="flex flex-wrap gap-2 print:hidden">
-              {affichables.map((entry) => (
-                <button
-                  key={entry.id}
-                  type="button"
-                  onClick={() => void open(entry.id)}
-                  aria-pressed={entry.id === selectedId}
-                  className={cn(
-                    "rounded-md border px-3 py-1.5 text-sm transition",
-                    entry.id === selectedId
-                      ? "border-primary bg-primary/10 font-medium"
-                      : "hover:bg-muted"
-                  )}
-                >
-                  {weekButtonLabel(entry)}
-                </button>
-              ))}
-            </div>
+            <label className="flex flex-wrap items-center gap-2 text-sm print:hidden">
+              <span className="text-muted-foreground">Semaine :</span>
+              <select
+                value={selectedId ?? ""}
+                onChange={(event) => void open(event.target.value)}
+                className="rounded-md border bg-background px-2 py-1.5 text-sm font-medium"
+              >
+                {affichables.map((entry) => (
+                  <option key={entry.id} value={entry.id}>
+                    {weekButtonLabel(entry)}
+                  </option>
+                ))}
+              </select>
+            </label>
           ) : null}
 
           {boardInput ? (
