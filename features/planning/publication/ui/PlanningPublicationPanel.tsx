@@ -17,6 +17,8 @@ import {
   type PublicationOptions,
 } from "@/features/planning/publication/model/publication-options"
 import { PlanningPublicationDocument } from "@/features/planning/publication/ui/PlanningPublicationDocument"
+import { usePrintedBy } from "@/features/auth/components/printed-by"
+import { signPrintedLabel } from "@/features/core/shared"
 
 interface PlanningPublicationPanelProps {
   /** Le planning publié à afficher, déjà adapté par l'appelant. */
@@ -59,7 +61,10 @@ export function PlanningPublicationPanel({
   )
   // Figée au montage : une heure d'édition qui bougerait à chaque changement de
   // case daterait le papier de l'instant du clic, pas de celui de la relecture.
-  const [printedAtLabel] = useState(() => `Édité le ${formatNow(new Date())}`)
+  const printedBy = usePrintedBy()
+  const [printedAtLabel] = useState(() =>
+    signPrintedLabel(`Édité le ${formatNow(new Date())}`, printedBy)
+  )
 
   const publication = useMemo(
     () =>

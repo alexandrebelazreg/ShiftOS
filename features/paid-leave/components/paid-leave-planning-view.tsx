@@ -84,6 +84,8 @@ import {
 } from "@/features/sectors"
 import type { StoreConfig } from "@/features/store/schemas/store.schema"
 import { cn } from "@/lib/utils"
+import { usePrintedBy } from "@/features/auth/components/printed-by"
+import { signPrintedLabel } from "@/features/core/shared"
 
 const selectClassName = "h-8 w-full rounded-lg border border-input bg-background px-2.5 text-sm outline-none focus:border-ring focus:ring-3 focus:ring-ring/50 disabled:cursor-not-allowed disabled:opacity-50"
 
@@ -764,6 +766,9 @@ function WishWeekGrid({ employee, request, weeks, disabled, onToggle }: { readon
 }
 
 function ValidationTab({ campaign, weeks, employees, sectors, locked, solveStartedAt, elapsedSeconds, solveMessage, storeName, onUpdate, onSave, onSolve }: EmployeeTabProps & { readonly weeks: readonly PaidLeaveCampaignWeek[]; readonly solveStartedAt: number | null; readonly elapsedSeconds: number; readonly solveMessage: string | null; readonly storeName: string; readonly onSave: (campaign: PaidLeaveCampaign) => void; readonly onSolve: () => void }) {
+  // Lu ici plutôt que reçu en propriété : six niveaux séparent cette feuille de
+  // sa page, et aucune des signatures traversées ne parle d'impression.
+  const printedBy = usePrintedBy()
   const [comparison, setComparison] = useState<"granted" | "wish1">("granted")
   const grants = comparison === "granted" ? campaign.grants : wishOneScenario(campaign, employees)
   const declaredAllocations = comparison === "granted" ? campaign.solution?.reinforcementAllocations : undefined
@@ -841,7 +846,10 @@ function ValidationTab({ campaign, weeks, employees, sectors, locked, solveStart
               employees,
               sectors,
               storeName,
-              printedAtLabel: `Édité le ${formatDateTime(new Date().toISOString())}`,
+              printedAtLabel: signPrintedLabel(
+                `Édité le ${formatDateTime(new Date().toISOString())}`,
+                printedBy
+              ),
             })}
           />
         </CardContent>

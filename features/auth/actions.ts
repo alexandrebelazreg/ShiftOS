@@ -10,6 +10,7 @@ import {
   loginThrottle,
   tooManyAttemptsMessage,
 } from "@/features/auth/login-throttle"
+import { currentSession } from "@/features/auth/dal"
 import { createSupabaseServerClient } from "@/features/auth/supabase/server"
 
 /**
@@ -74,4 +75,56 @@ export async function signOut(): Promise<void> {
   await supabase.auth.signOut()
   revalidatePath("/", "layout")
   redirect("/login")
+}
+
+/**
+ * Enregistre le nom de la personne connectée.
+ *
+ * Il sert à signer les feuilles qui partent au mur : « Édité le … par … ».
+ * Rangé dans `profiles`, donc rattaché au COMPTE et non au navigateur — il
+ * suit la personne d'un poste à l'autre, et un second compte aura le sien.
+ *
+ * L'identité vient de la SESSION, jamais du formulaire : accepter un `id`
+ * posté permettrait de renommer le profil de quelqu'un d'autre.
+ */
+export async function saveProfileName(name: string): Promise<{ readonly error: string } | void> {
+  const session = await currentSession()
+  if (!session) redirect("/login")
+
+  const trimmed = name.trim()
+  // 80 caractères : un nom et un prénom tiennent largement, et la feuille
+  // imprimée a une largeur finie. Vider le champ est permis — c'est ainsi
+  // qu'on retire sa signature.
+  if (trimmed.length > 80) return { error: "Le nom ne peut pas dépasser 80 caractères." }
+
+  /**
+   * ON REDEMANDE LA LIGNE, ET C'EST ESSENTIEL.
+   *
+   * Un `update` refusé par RLS ne lève AUCUNE erreur : la politique ne fait
+   * simplement correspondre aucune ligne, et Supabase rend `error: null`. Sans
+   * ce `select`, l'écran aurait annoncé « Enregistré » sur une écriture qui n'a
+   * jamais eu lieu — et c'est précisément ce qui s'est produit avant que la
+   * politique d'écriture n'existe (migration 0007).
+   *
+   * La ligne rendue est donc la preuve. Pas de ligne, pas d'enregistrement.
+   */
+  const supabase = await createSupabaseServerClient()
+  const { data, error } = await supabase
+    .from("profiles")
+    .update({ full_name: trimmed === "" ? null : trimmed })
+    .eq("id", session.userId)
+    .select("id")
+    .maybeSingle()
+
+  if (error) return { error: "Impossible d’enregistrer le nom." }
+  if (!data) {
+    return {
+      error:
+        "Le nom n’a pas été enregistré : la base refuse l’écriture. La migration 0007 n’a probablement pas été appliquée.",
+    }
+  }
+
+  // Le nom se lit dans le menu latéral, rendu par la mise en page : sans
+  // cette invalidation il resterait l'ancien jusqu'au prochain rechargement.
+  revalidatePath("/", "layout")
 }

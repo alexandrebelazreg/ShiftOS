@@ -49,6 +49,8 @@ import {
 } from "@/features/permanence/recap/permanence-recap"
 import { storeOpensOn } from "@/features/store/lib/opening-days"
 import type { StoreConfig } from "@/features/store/schemas/store.schema"
+import { usePrintedBy } from "@/features/auth/components/printed-by"
+import { signPrintedLabel } from "@/features/core/shared"
 
 /**
  * L'écran des permanences : un mois à la fois, et le compte de ce que chacun a
@@ -171,6 +173,8 @@ export function PermanenceView({ initialStore }: { readonly initialStore: StoreC
     [sheet, roster]
   )
   const yearRows = useMemo(() => buildPermanenceYear(yearSheets, roster), [yearSheets, roster])
+  /** Qui imprime : la feuille au mur le dira sous la date. */
+  const printedBy = usePrintedBy()
 
   /**
    * La feuille qui part au mur.
@@ -189,10 +193,13 @@ export function PermanenceView({ initialStore }: { readonly initialStore: StoreC
             roster,
             paidLeaveByWeek: leaveByWeek,
             storeName: initialStore?.name ?? "Magasin",
-            printedAtLabel: `Imprimé le ${new Intl.DateTimeFormat("fr-FR", { dateStyle: "long" }).format(new Date())}`,
+            printedAtLabel: signPrintedLabel(
+              `Imprimé le ${new Intl.DateTimeFormat("fr-FR", { dateStyle: "long" }).format(new Date())}`,
+              printedBy
+            ),
           })
         : null,
-    [sheet, calendar, roster, leaveByWeek, initialStore]
+    [sheet, calendar, roster, leaveByWeek, initialStore, printedBy]
   )
 
   /** Écrire le mois, et l'écrire une seule fois — l'état et le dépôt ne divergent pas. */

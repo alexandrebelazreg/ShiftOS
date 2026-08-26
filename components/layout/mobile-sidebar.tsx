@@ -3,7 +3,7 @@
 import { useState } from "react"
 import { Menu } from "lucide-react"
 
-import { SidebarNav } from "@/components/layout/sidebar-nav"
+import { SidebarNav, type SidebarIdentity } from "@/components/layout/sidebar-nav"
 import { Button } from "@/components/ui/button"
 import {
   Sheet,
@@ -16,7 +16,7 @@ import {
  * Mobile navigation: a menu button that opens the sidebar in a left drawer.
  * Visible below `lg` only. Closes automatically after navigating.
  */
-export function MobileSidebar() {
+export function MobileSidebar({ identity }: { readonly identity: SidebarIdentity }) {
   const [open, setOpen] = useState(false)
 
   return (
@@ -35,7 +35,7 @@ export function MobileSidebar() {
       </SheetTrigger>
       <SheetContent side="left" className="w-64 p-0" showCloseButton={false}>
         <SheetTitle className="sr-only">Navigation</SheetTitle>
-        <SidebarNav onNavigate={() => setOpen(false)} />
+        <SidebarNav identity={identity} onNavigate={() => setOpen(false)} />
       </SheetContent>
     </Sheet>
   )

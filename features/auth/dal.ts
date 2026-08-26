@@ -25,6 +25,15 @@ export interface Session {
   readonly storeId: string
   readonly role: string
   readonly email: string
+  /**
+   * Le nom que la personne a saisi, ou `null` tant qu'elle ne l'a pas fait.
+   *
+   * Nullable à dessein : c'est un champ libre, personne n'y est forcé, et un
+   * repli sur l'e-mail se décide À L'AFFICHAGE, pas ici. Inventer un nom dans
+   * la session le ferait imprimer au bas d'une feuille affichée au mur, où
+   * « alexandre@… a imprimé ceci » n'est pas ce qu'on veut lire.
+   */
+  readonly fullName: string | null
 }
 
 /**
@@ -50,7 +59,7 @@ export const currentSession = cache(async (): Promise<Session | null> => {
   // une requête légitime.
   const { data: profile } = await supabase
     .from("profiles")
-    .select("store_id, role, email")
+    .select("store_id, role, email, full_name")
     .eq("id", data.user.id)
     .maybeSingle()
 
@@ -61,6 +70,9 @@ export const currentSession = cache(async (): Promise<Session | null> => {
     storeId: profile.store_id as string,
     role: profile.role as string,
     email: (profile.email as string) ?? data.user.email ?? "",
+    // Vide et absent sont la même chose : « pas de nom saisi ». Une chaîne
+    // blanche laissée par un champ effacé ne doit pas s'imprimer.
+    fullName: ((profile.full_name as string | null) ?? "").trim() || null,
   }
 })
 
