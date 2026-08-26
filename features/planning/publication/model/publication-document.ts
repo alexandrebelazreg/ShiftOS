@@ -1,5 +1,9 @@
 import type { IsoDate } from "@/features/core/models"
-import type { BoardShiftVM, PlanningBoardInput } from "@/features/planning/board"
+import type {
+  BoardShiftVM,
+  PlanningBoardInput,
+  PlanningBoardViewModel,
+} from "@/features/planning/board"
 import { buildPlanningBoard } from "@/features/planning/board"
 import {
   durationLabel,
@@ -38,6 +42,27 @@ export interface PublicationContext {
   readonly draft: boolean
   /** Quand la feuille a été éditée, déjà formaté par l'appelant. */
   readonly printedAtLabel: string
+  /**
+   * Le PREMIER rayon de chaque fiche salarié, par identifiant de salarié.
+   *
+   * Lu de la fiche et non du planning : le planning ne dit que ce qui a été
+   * généré, alors que la question posée par une feuille de comptoir est
+   * « qui appartient à ce rayon », y compris quelqu'un en vacances toute la
+   * semaine. La fiche employé ordonne ses rayons avec des flèches ; le premier
+   * est donc un choix délibéré, pas un hasard de saisie.
+   */
+  readonly primarySectorByEmployee?: Readonly<Record<string, string | null>>
+  /**
+   * Le nom de chaque salarié, par identifiant, lu de la FICHE.
+   *
+   * La feuille personnelle en a besoin pour une raison précise : quelqu'un
+   * peut n'apparaître dans AUCUN planning des semaines demandées — il n'est
+   * pas dans le périmètre généré, ou il est en congé tout le mois. Le board ne
+   * connaît alors même pas son nom, et sa feuille disparaissait en silence
+   * alors qu'on venait justement de le cocher. Avec son nom, elle sort, et
+   * elle dit qu'il n'est attendu nulle part — ce qui est l'information.
+   */
+  readonly employeeNames?: Readonly<Record<string, string>>
 }
 
 // ── Les pièces communes aux trois mises en page ──────────────────────────────
@@ -97,6 +122,8 @@ export interface PublicationGridPageVM {
   readonly key: string
   readonly title: string
   readonly subtitle: string | null
+  /** L'en-tête de la colonne de gauche : « Salarié », ou « Semaine ». */
+  readonly rowHeaderLabel: string
   readonly columns: readonly PublicationColumnVM[]
   readonly rows: readonly PublicationRowVM[]
   /** Le total du jour, aligné sur `columns`. `null` quand ils sont masqués. */
@@ -199,10 +226,8 @@ export function buildPublicationDocument(
     sectorIds.length === 0
       ? []
       : options.layout === "sector"
-        ? sectorPages(input, sectorIds, options)
-        : options.layout === "employee"
-          ? [teamPage(input, sectorIds, options)]
-          : dates.map((date) => dayPage(input, sectorIds, date))
+        ? sectorPages(input, sectorIds, options, context)
+        : dates.map((date) => dayPage(input, sectorIds, date))
 
   return {
     title: "Planning hebdomadaire",
@@ -235,8 +260,25 @@ export function buildPublicationDocument(
 function sectorPages(
   input: PlanningBoardInput,
   sectorIds: readonly string[],
-  options: PublicationOptions
+  options: PublicationOptions,
+  context: PublicationContext
 ): readonly PublicationGridPageVM[] {
+  /**
+   * LE BOARD DE TOUS LES RAYONS, construit une fois pour toutes les feuilles.
+   *
+   * C'est lui qui porte les heures faites AILLEURS : celle qui tient le poisson
+   * mardi et la charcuterie jeudi doit voir ses deux journées sur la feuille du
+   * poisson, sans quoi elle croit son jeudi libre. Le board d'un rayon seul ne
+   * les connaît pas — il les a filtrées.
+   */
+  const wide = buildPlanningBoard(input, {
+    view: "sector",
+    sectorIds: input.sectors.map((sector) => sector.id),
+    date: null,
+    employeeId: null,
+  })
+  const primary = context.primarySectorByEmployee ?? {}
+
   return sectorIds.map((sectorId) => {
     const sector = input.sectors.find((entry) => entry.id === sectorId)
     return gridPage({
@@ -245,36 +287,30 @@ function sectorPages(
       key: `sector_${sectorId}`,
       title: sector?.name ?? sectorId,
       subtitle: "Horaires du rayon",
-      // Un seul rayon sur la feuille : son nom est en titre, le répéter dans
-      // chaque case ne dirait rien de plus.
-      nameSectors: false,
+      rowHeaderLabel: "Salarié",
+      // Un seul rayon en titre : ses cases ne le répètent pas, seules celles
+      // d'un autre comptoir se nomment.
+      nameSectors: true,
+      impliedSectorId: sectorId,
       showTotals: options.showTotals,
       emptyLabel: "Aucun salarié planifié dans ce rayon cette semaine.",
+      /**
+       * QUI FIGURE, et pourquoi ces deux-là seulement.
+       *
+       * La feuille listait toute l'équipe rattachée au rayon, absents compris,
+       * et devenait une liste où l'on ne trouvait plus les gens du jour. Elle
+       * garde maintenant ceux qui y ont des heures cette semaine — ce qu'on
+       * vient vérifier au comptoir — et ceux dont c'est le PREMIER rayon, qui
+       * appartiennent à l'équipe même en vacances et dont l'absence est
+       * justement une information.
+       *
+       * Quelqu'un venu dépanner une journée figure donc au premier titre, et
+       * disparaît la semaine suivante s'il ne revient pas.
+       */
+      rowsFrom: wide,
+      keepEmployee: (employeeId, worksInSector) =>
+        worksInSector || primary[employeeId] === sectorId,
     })
-  })
-}
-
-// ── Par employés ─────────────────────────────────────────────────────────────
-
-function teamPage(
-  input: PlanningBoardInput,
-  sectorIds: readonly string[],
-  options: PublicationOptions
-): PublicationGridPageVM {
-  const names = input.sectors
-    .filter((sector) => sectorIds.includes(sector.id))
-    .map((sector) => sector.name)
-  return gridPage({
-    input,
-    sectorIds,
-    key: "team",
-    title: "Équipe",
-    subtitle: names.join(" · "),
-    // Plusieurs rayons se mélangent sur une même ligne : sans leur nom, deux
-    // barres côte à côte ne diraient plus à quel comptoir chacune appartient.
-    nameSectors: names.length > 1,
-    showTotals: options.showTotals,
-    emptyLabel: "Aucun salarié planifié cette semaine.",
   })
 }
 
@@ -286,9 +322,21 @@ function gridPage(spec: {
   readonly key: string
   readonly title: string
   readonly subtitle: string | null
+  readonly rowHeaderLabel: string
   readonly nameSectors: boolean
+  /** Le rayon que le titre porte déjà : ses cases ne le répètent pas. */
+  readonly impliedSectorId?: string | null
   readonly showTotals: boolean
   readonly emptyLabel: string
+  /**
+   * Le board d'où viennent les CELLULES, quand il diffère de celui des
+   * colonnes. Une feuille de rayon prend ses colonnes du rayon — ce sont ses
+   * horaires et ses fermetures — et ses cellules de tous les rayons, pour
+   * montrer les heures faites ailleurs.
+   */
+  readonly rowsFrom?: PlanningBoardViewModel
+  /** Qui garder. `worksInSector` dit s'il a des heures dans le rayon affiché. */
+  readonly keepEmployee?: (employeeId: string, worksInSector: boolean) => boolean
 }): PublicationGridPageVM {
   const board = buildPlanningBoard(spec.input, {
     view: "sector",
@@ -304,10 +352,27 @@ function gridPage(spec: {
     holidayName: column.holidayName,
   }))
 
-  // Toute l'équipe du périmètre, y compris qui n'a aucune heure cette semaine.
-  // Une ligne de repos sur sept jours dit « cette personne n'est pas attendue »,
-  // ce qu'une feuille affichée doit dire ; l'omettre laisserait croire à un oubli.
-  const rows: PublicationRowVM[] = board.sectorView.rows
+  /**
+   * Les heures du rayon décident QUI figure ; les heures de partout décident
+   * CE QU'ON MONTRE de chacun.
+   *
+   * Deux lectures du même salarié, et il faut les deux : sans la première, la
+   * feuille du poisson listerait des gens qui n'y mettent jamais les pieds ;
+   * sans la seconde, elle cacherait à ceux qui y sont le jeudi qu'ils sont
+   * ailleurs le mardi.
+   */
+  const worksHere = new Set(
+    board.sectorView.rows
+      .filter((row) => Object.values(row.shiftsByDate).some((shifts) => shifts.length > 0))
+      .map((row) => String(row.employeeId))
+  )
+  const source = spec.rowsFrom ?? board
+  const rows: PublicationRowVM[] = source.sectorView.rows
+    .filter((row) =>
+      spec.keepEmployee
+        ? spec.keepEmployee(String(row.employeeId), worksHere.has(String(row.employeeId)))
+        : true
+    )
     .map((row) => ({
       key: String(row.employeeId),
       name: nameWithUppercaseFamily(row.name),
@@ -326,7 +391,9 @@ function gridPage(spec: {
               ? holiday ?? "Repos"
               : null,
           holiday: holiday !== null && shifts.length === 0 && !column.closed,
-          slots: shifts.flatMap((shift) => slotsOf(shift, spec.nameSectors)),
+          slots: shifts.flatMap((shift) =>
+          slotsOfShift(shift, spec.nameSectors, spec.impliedSectorId ?? null)
+        ),
         }
       }),
       totalLabel: spec.showTotals ? row.plannedLabel : null,
@@ -337,6 +404,7 @@ function gridPage(spec: {
     key: spec.key,
     title: spec.title,
     subtitle: spec.subtitle,
+    rowHeaderLabel: spec.rowHeaderLabel,
     columns,
     rows,
     totals: spec.showTotals ? board.sectorView.columns.map((column) => column.totalLabel) : null,
@@ -465,7 +533,7 @@ function dayPage(
  * `null` veut dire « aucun rayon implicite » : la feuille d'équipe en mélange
  * plusieurs, donc tous se nomment.
  */
-function slotsOf(
+export function slotsOfShift(
   shift: BoardShiftVM,
   nameSectors: boolean,
   impliedSectorId: string | null = null

@@ -6,11 +6,11 @@ import Link from "next/link"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { PageHeader } from "@/components/layout/page-header"
-import { cn } from "@/lib/utils"
 
+import type { IsoDate } from "@/features/core/models"
 import { weekDayOf } from "@/features/core/shared"
 import { useEmployees } from "@/features/employees/hooks/useEmployees"
-import { adaptEditorStateToBoard } from "@/features/planning/board"
+import { adaptEditorStateToBoard, type PlanningBoardInput } from "@/features/planning/board"
 import type { StoredHolidays } from "@/features/planning/holidays/holiday.repository"
 import { holidayStore } from "@/features/planning/holidays/holiday.store"
 import { frenchHolidaysOf } from "@/features/planning/holidays/model/french-holidays"
@@ -19,8 +19,10 @@ import { isoWeekNumber } from "@/features/planning/board/model/week"
 import {
   planningStore,
   type PlanningRecord,
-  type PlanningSummary,
 } from "@/features/planning/persistence"
+import type { PublicationWeek } from "@/features/planning/publication/model/employee-document"
+import { latestPerSectorScope } from "@/features/planning/publication/model/latest-plannings"
+import { mergeBoardInputs } from "@/features/planning/publication/model/merge-board-inputs"
 import { PlanningPublicationPanel } from "@/features/planning/publication/ui/PlanningPublicationPanel"
 import { useSetupReadiness } from "@/features/onboarding"
 import type { StoreConfig } from "@/features/store/schemas/store.schema"
@@ -44,8 +46,17 @@ import type { StoreConfig } from "@/features/store/schemas/store.schema"
 export function PublicationView({ initialStore }: { readonly initialStore: StoreConfig | null }) {
   const setup = useSetupReadiness(initialStore)
   const { employees } = useEmployees()
-  const [affichables, setAffichables] = useState<readonly PlanningSummary[] | null>(null)
-  const [record, setRecord] = useState<PlanningRecord | null>(null)
+  /**
+   * TOUS les plannings, états complets compris.
+   *
+   * `list()` ne rendait que des résumés, ce qui suffisait tant qu'on n'ouvrait
+   * qu'une semaine à la fois. Deux demandes ont changé cela : montrer sur la
+   * feuille d'un comptoir les heures faites AILLEURS, et suivre quelqu'un sur
+   * plusieurs semaines. Les deux exigent d'avoir sous la main les plannings des
+   * autres rayons et des autres semaines, donc leurs états.
+   */
+  const [records, setRecords] = useState<readonly PlanningRecord[] | null>(null)
+  const [selectedWeek, setSelectedWeek] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
   /**
    * Les fériés que la feuille doit dire.
@@ -59,7 +70,6 @@ export function PublicationView({ initialStore }: { readonly initialStore: Store
    */
   const [storedHolidays, setStoredHolidays] = useState<StoredHolidays>({})
 
-  // La liste des plannings affichables, le plus récent en premier.
   useEffect(() => {
     let active = true
     void holidayStore.read().then((stored) => {
@@ -73,7 +83,7 @@ export function PublicationView({ initialStore }: { readonly initialStore: Store
   useEffect(() => {
     let active = true
     void planningStore
-      .list()
+      .records()
       .then((all) => {
         if (!active) return
         /**
@@ -84,12 +94,8 @@ export function PublicationView({ initialStore }: { readonly initialStore: Store
          * cette page serait restée vide pour toujours — sans une erreur, sans
          * un mot : la liste vide est exactement ce que voit un magasin qui
          * n'a encore rien planifié.
-         *
-         * Un enregistrement EXISTE parce que quelqu'un a cliqué « Enregistrer ».
-         * C'est le geste qui rend un rayon affichable, et il n'y en a plus
-         * d'autre à attendre.
          */
-        setAffichables(all)
+        setRecords(all)
       })
       .catch(() => {
         if (active) setError("Impossible de lire les plannings enregistrés.")
@@ -99,37 +105,83 @@ export function PublicationView({ initialStore }: { readonly initialStore: Store
     }
   }, [])
 
-  // Le premier planning s'ouvre de lui-même : arriver sur cet écran,
-  // c'est vouloir imprimer, pas choisir dans une liste d'un seul élément.
-  const selectedId = record?.id ?? null
-  useEffect(() => {
-    const first = affichables?.[0]
-    if (!first || selectedId !== null) return
-    void open(first.id)
-    // `open` est stable pour ce composant ; la dépendance utile est la liste.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [affichables])
-
-  async function open(id: string) {
-    setError(null)
-    try {
-      const reopened = await planningStore.reopen(id)
-      if (!reopened) throw new Error("Planning introuvable.")
-      setRecord(reopened)
-    } catch (cause) {
-      setError(cause instanceof Error ? cause.message : "Impossible d’ouvrir ce planning.")
+  /**
+   * Les semaines affichables, chacune RÉUNIE de ses plannings.
+   *
+   * Une semaine ne se génère pas d'un coup : le Drive part seul, la zone marché
+   * ensemble. Groupés ici par lundi puis fusionnés, ils redeviennent la semaine
+   * telle que l'équipe la vit — et c'est la seule forme sous laquelle la feuille
+   * peut dire à quelqu'un TOUTES ses heures.
+   */
+  const weeks = useMemo<readonly PublicationWeek[]>(() => {
+    if (!records) return []
+    const byWeek = new Map<string, PlanningRecord[]>()
+    for (const record of records) {
+      const list = byWeek.get(record.periodStart)
+      if (list) list.push(record)
+      else byWeek.set(record.periodStart, [record])
     }
-  }
+
+    return [...byWeek.entries()]
+      // La plus récente en tête : c'est celle qu'on vient afficher.
+      .sort(([left], [right]) => right.localeCompare(left))
+      .flatMap(([weekStart, group]) => {
+        const merged = mergeBoardInputs(
+          // Un seul enregistrement par périmètre : régénérer un rayon en crée
+          // un nouveau à côté du précédent, et les réunir tous compterait
+          // chaque vacation autant de fois qu'on a régénéré.
+          latestPerSectorScope(group).flatMap((record) => {
+            const input = boardInputOf(record)
+            return input ? [input] : []
+          })
+        )
+        return merged ? [{ weekStart: weekStart as IsoDate, label: weekLabelOf(merged), input: merged }] : []
+      })
+    // `boardInputOf` ne dépend que de ce qui suit ; l'extraire en dépendance
+    // ferait recalculer toutes les semaines à chaque frappe de l'écran.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [records, setup.sectors, initialStore, employees, storedHolidays])
 
   /**
-   * Le planning choisi, relu comme la grille le lit.
+   * Le PREMIER rayon de chaque fiche, en identifiants.
+   *
+   * La fiche employé range ses rayons PAR NOM et dans un ordre que le gérant
+   * choisit avec des flèches : le premier est donc un choix, pas un hasard. La
+   * feuille de comptoir s'en sert pour garder son équipe à l'affiche même en
+   * vacances. La traduction nom → identifiant se fait ici, une fois.
+   */
+  const primarySectorByEmployee = useMemo(() => {
+    const idByName = new Map((setup.sectors ?? []).map((sector) => [sector.name, sector.id]))
+    return Object.fromEntries(
+      employees.map((employee) => [
+        employee.id,
+        idByName.get(employee.sectors?.[0] ?? "") ?? null,
+      ])
+    )
+  }, [employees, setup.sectors])
+
+  /**
+   * La semaine regardée : celle qu'on a choisie, ou la plus récente.
+   *
+   * DÉRIVÉE, et non posée dans un effet. Un effet qui aurait écrit le premier
+   * choix aurait rendu deux fois à chaque arrivée, et surtout il aurait fallu
+   * qu'il se redéclenche quand la liste change — un état qui court après une
+   * liste qu'il ne contrôle pas. Ici `null` veut simplement dire « je n'ai rien
+   * choisi », et le repli répond à sa place.
+   */
+  const current = weeks.find((week) => week.weekStart === selectedWeek) ?? weeks[0] ?? null
+
+  /**
+   * Un planning enregistré, relu comme la grille le lit.
    *
    * Les rayons viennent du RECORD, pas d'une sélection d'écran : une semaine
-   * enregistrée a été planifiée pour un périmètre précis, et c'est celui-là qu'on
-   * affiche — même si la configuration a gagné un rayon depuis.
+   * enregistrée a été planifiée pour un périmètre précis, et c'est celui-là
+   * qu'on affiche — même si la configuration a gagné un rayon depuis.
+   *
+   * Déclarée en fonction plutôt qu'en mémo : elle tourne une fois par
+   * enregistrement, et il y en a autant que de rayons × semaines.
    */
-  const boardInput = useMemo(() => {
-    if (!record) return null
+  function boardInputOf(record: PlanningRecord) {
     const scope = record.sectorIds ?? record.state.sectorScope?.sectorIds ?? null
     const sectors = (setup.sectors ?? [])
       .filter((sector) => scope === null || scope.includes(sector.id))
@@ -178,7 +230,7 @@ export function PublicationView({ initialStore }: { readonly initialStore: Store
             ),
           }
     )
-  }, [record, setup.sectors, initialStore, employees, storedHolidays])
+  }
 
   return (
     <div className="space-y-6">
@@ -195,9 +247,9 @@ export function PublicationView({ initialStore }: { readonly initialStore: Store
         </p>
       ) : null}
 
-      {affichables === null || setup.isLoading ? (
+      {records === null || setup.isLoading ? (
         <p className="text-sm text-muted-foreground print:hidden">Chargement…</p>
-      ) : affichables.length === 0 ? (
+      ) : weeks.length === 0 ? (
         <Card className="print:hidden">
           <CardHeader>
             <CardTitle className="text-base">Aucun planning enregistré</CardTitle>
@@ -212,52 +264,60 @@ export function PublicationView({ initialStore }: { readonly initialStore: Store
             </Button>
           </CardContent>
         </Card>
-      ) : (
+      ) : current ? (
         <>
           {/* UNE LISTE DÉROULANTE, ET NON UNE RANGÉE DE BOUTONS.
               Les semaines s'accumulent : à raison d'une par rayon et par
               semaine, la rangée finissait par occuper trois lignes avant même
               d'avoir vu une feuille. Une liste tient sur une ligne quel que
               soit leur nombre. Elle ne paraît qu'à partir de deux : sur une
-              seule elle n'offrirait aucun choix. */}
-          {affichables.length > 1 ? (
+              seule elle n'offrirait aucun choix.
+              Elle choisit une SEMAINE et non un enregistrement : le Drive et la
+              zone marché d'une même semaine y sont déjà réunis, et les
+              proposer séparément aurait redemandé lequel des deux on voulait
+              alors qu'on veut les deux. */}
+          {weeks.length > 1 ? (
             <label className="flex flex-wrap items-center gap-2 text-sm print:hidden">
               <span className="text-muted-foreground">Semaine :</span>
               <select
-                value={selectedId ?? ""}
-                onChange={(event) => void open(event.target.value)}
+                value={current.weekStart}
+                onChange={(event) => setSelectedWeek(event.target.value)}
                 className="rounded-md border bg-background px-2 py-1.5 text-sm font-medium"
               >
-                {affichables.map((entry) => (
-                  <option key={entry.id} value={entry.id}>
-                    {weekButtonLabel(entry)}
+                {weeks.map((week) => (
+                  <option key={week.weekStart} value={week.weekStart}>
+                    {week.label}
                   </option>
                 ))}
               </select>
             </label>
           ) : null}
 
-          {boardInput ? (
-            <PlanningPublicationPanel
-              // Changer de semaine REMONTE le panneau : les rayons et les jours
-              // cochés appartiennent à la semaine qu'on regardait, pas à celle-ci.
-              key={record?.id}
-              input={boardInput}
-              sectorIds={boardInput.sectors.map((sector) => sector.id)}
-              storeName={initialStore?.name ?? "Magasin"}
-              storeCity={initialStore?.city ?? null}
-              draft={false}
-            />
-          ) : null}
+          <PlanningPublicationPanel
+            // Changer de semaine REMONTE le panneau : les rayons et les jours
+            // cochés appartiennent à la semaine qu'on regardait, pas à celle-ci.
+            key={current.weekStart}
+            input={current.input}
+            sectorIds={current.input.sectors.map((sector) => sector.id)}
+            weeks={weeks}
+            employees={employees.map((employee) => ({
+              id: employee.id,
+              name: `${employee.firstName} ${employee.lastName}`.trim(),
+            }))}
+            primarySectorByEmployee={primarySectorByEmployee}
+            storeName={initialStore?.name ?? "Magasin"}
+            storeCity={initialStore?.city ?? null}
+            draft={false}
+          />
         </>
-      )}
+      ) : null}
     </div>
   )
 }
 
-/** « Semaine 33 · 10/08 → 16/08 » — ce qu'un gérant navigue par. */
-function weekButtonLabel(entry: PlanningSummary): string {
-  return `Semaine ${isoWeekNumber(entry.periodStart)} · ${short(entry.periodStart)} → ${short(entry.periodEnd)}`
+/** « S36 · 31/08 → 06/09 » — ce qu'un gérant navigue par, et ce qu'une ligne porte. */
+function weekLabelOf(input: PlanningBoardInput): string {
+  return `S${isoWeekNumber(input.periodStart)} · ${short(input.periodStart)} → ${short(input.periodEnd)}`
 }
 
 /** Le nom du férié qui tombe à cette date, ou la date à défaut. */

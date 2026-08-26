@@ -6,12 +6,17 @@ import { cn } from "@/lib/utils"
 
 import type { PlanningBoardInput } from "@/features/planning/board"
 import { formatDate, WEEK_DAY_LABELS } from "@/features/planning/board/model/labels"
+import {
+  buildEmployeeDocument,
+  type PublicationWeek,
+} from "@/features/planning/publication/model/employee-document"
 import { buildPublicationDocument } from "@/features/planning/publication/model/publication-document"
 import {
   defaultPublicationOptions,
   hasSomethingToPublish,
   PUBLICATION_LAYOUTS,
   toggleDate,
+  toggleEmployee,
   toggleSector,
   type PublicationLayout,
   type PublicationOptions,
@@ -25,6 +30,12 @@ interface PlanningPublicationPanelProps {
   readonly input: PlanningBoardInput
   /** Les rayons du planning : le point de départ de la sélection. */
   readonly sectorIds: readonly string[]
+  /** Toutes les semaines affichables, la plus récente en tête. */
+  readonly weeks: readonly PublicationWeek[]
+  /** L'équipe, pour la feuille personnelle. */
+  readonly employees: readonly { readonly id: string; readonly name: string }[]
+  /** Le premier rayon de chaque fiche : qui reste à l'affiche d'un comptoir. */
+  readonly primarySectorByEmployee: Readonly<Record<string, string | null>>
   readonly storeName: string
   readonly storeCity: string | null
   /** Vrai tant que le planning n'est pas publié : la feuille le dira elle-même. */
@@ -52,6 +63,9 @@ interface PlanningPublicationPanelProps {
 export function PlanningPublicationPanel({
   input,
   sectorIds,
+  weeks,
+  employees,
+  primarySectorByEmployee,
   storeName,
   storeCity,
   draft,
@@ -66,16 +80,41 @@ export function PlanningPublicationPanel({
     signPrintedLabel(`Édité le ${formatNow(new Date())}`, printedBy)
   )
 
-  const publication = useMemo(
-    () =>
-      buildPublicationDocument(input, options, {
-        storeName,
-        storeCity,
-        draft,
-        printedAtLabel,
-      }),
-    [input, options, storeName, storeCity, draft, printedAtLabel]
-  )
+  /**
+   * LES SEMAINES RETENUES par la feuille personnelle.
+   *
+   * Bornes incluses, et dans l'ordre CHRONOLOGIQUE — la liste déroulante range
+   * la plus récente en tête, ce qui est juste pour choisir et faux pour lire :
+   * empiler S38 au-dessus de S36 ferait remonter le temps d'une ligne à
+   * l'autre. Sans bornes, la seule semaine affichée.
+   */
+  const employeeWeeks = useMemo(() => {
+    const from = options.fromWeek ?? input.periodStart
+    const to = options.toWeek ?? from
+    const [low, high] = from <= to ? [from, to] : [to, from]
+    return weeks
+      .filter((week) => week.weekStart >= low && week.weekStart <= high)
+      .slice()
+      .sort((left, right) => left.weekStart.localeCompare(right.weekStart))
+  }, [weeks, options.fromWeek, options.toWeek, input.periodStart])
+
+  const publication = useMemo(() => {
+    const context = {
+      storeName,
+      storeCity,
+      draft,
+      printedAtLabel,
+      primarySectorByEmployee,
+      employeeNames: Object.fromEntries(employees.map((entry) => [entry.id, entry.name])),
+    }
+    // Deux constructeurs, parce que deux formes de document : les feuilles de
+    // rayon et de journée lisent UNE semaine, la feuille personnelle en lit
+    // plusieurs. Un seul constructeur aurait pris la liste des semaines partout
+    // pour n'en servir qu'une deux fois sur trois.
+    return options.layout === "employee"
+      ? buildEmployeeDocument(employeeWeeks, options, context)
+      : buildPublicationDocument(input, options, context)
+  }, [input, options, employeeWeeks, employees, storeName, storeCity, draft, printedAtLabel, primarySectorByEmployee])
 
   const printable = hasSomethingToPublish(options)
   /**
@@ -125,6 +164,7 @@ export function PlanningPublicationPanel({
             </div>
           </Field>
 
+          {options.layout === "employee" ? null : (
           <Field label="Rayons affichés">
             <div className="space-y-1">
               {input.sectors.map((sector) => (
@@ -137,6 +177,52 @@ export function PlanningPublicationPanel({
               ))}
             </div>
           </Field>
+          )}
+
+          {/* LA FEUILLE PERSONNELLE NE FILTRE PAS LES RAYONS, elle choisit des
+              GENS et des SEMAINES. Montrer les rayons ici promettrait un filtre
+              qu'elle n'applique pas — elle doit dire toutes les heures de la
+              personne, sans quoi elle lui cacherait un jour où on l'attend. */}
+          {options.layout === "employee" ? (
+            <>
+              <Field label="Salariés affichés">
+                {/* AUCUN AU DÉPART : sur trois semaines, « tous » ferait sortir
+                    vingt pages que personne n'a demandées. */}
+                <div className="max-h-64 space-y-1 overflow-y-auto pr-1">
+                  {employees.map((employee) => (
+                    <Check
+                      key={employee.id}
+                      label={employee.name}
+                      checked={options.employeeIds.includes(employee.id)}
+                      onChange={() => setOptions((current) => toggleEmployee(current, employee.id))}
+                    />
+                  ))}
+                </div>
+                {options.employeeIds.length === 0 ? (
+                  <p className="mt-2 text-xs text-muted-foreground">
+                    Choisissez au moins un salarié.
+                  </p>
+                ) : null}
+              </Field>
+
+              <Field label="Semaines">
+                <div className="space-y-2">
+                  <WeekBound
+                    label="De"
+                    value={options.fromWeek ?? input.periodStart}
+                    weeks={weeks}
+                    onChange={(fromWeek) => setOptions((current) => ({ ...current, fromWeek }))}
+                  />
+                  <WeekBound
+                    label="À"
+                    value={options.toWeek ?? options.fromWeek ?? input.periodStart}
+                    weeks={weeks}
+                    onChange={(toWeek) => setOptions((current) => ({ ...current, toWeek }))}
+                  />
+                </div>
+              </Field>
+            </>
+          ) : null}
 
           {/* Le choix des jours n'existe que pour la mise en page qui en fait des
               feuilles. L'afficher ailleurs promettrait un filtre que les grilles
@@ -250,5 +336,35 @@ function formatNow(date: Date): string {
   return (
     `${pad(date.getDate())}/${pad(date.getMonth() + 1)}/${date.getFullYear()} ` +
     `à ${pad(date.getHours())}:${pad(date.getMinutes())}`
+  )
+}
+
+/** Une borne de la plage de semaines. Les deux se ressemblent trop pour être écrites deux fois. */
+function WeekBound({
+  label,
+  value,
+  weeks,
+  onChange,
+}: {
+  readonly label: string
+  readonly value: string
+  readonly weeks: readonly PublicationWeek[]
+  readonly onChange: (weekStart: string) => void
+}) {
+  return (
+    <label className="flex items-center gap-2 text-sm">
+      <span className="w-6 shrink-0 text-muted-foreground">{label}</span>
+      <select
+        value={value}
+        onChange={(event) => onChange(event.target.value)}
+        className="min-w-0 flex-1 rounded-md border bg-background px-2 py-1.5 text-sm"
+      >
+        {weeks.map((week) => (
+          <option key={week.weekStart} value={week.weekStart}>
+            {week.label}
+          </option>
+        ))}
+      </select>
+    </label>
   )
 }

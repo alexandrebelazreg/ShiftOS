@@ -13,8 +13,9 @@ import type { PlanningBoardInput } from "@/features/planning/board"
  * Comment la semaine est découpée sur le papier.
  *
  * - `sector`   — une feuille par rayon. Celle qu'on punaise au comptoir.
- * - `employee` — une feuille pour l'équipe, un salarié par ligne. Celle où
- *                chacun cherche son nom.
+ * - `employee` — une feuille PAR salarié, une ligne par semaine. Celle qu'on
+ *                donne en main propre, et sur laquelle trois semaines empilées
+ *                se comparent d'un coup d'œil.
  * - `day`      — une feuille par journée choisie. Celle du matin même.
  */
 export type PublicationLayout = "sector" | "employee" | "day"
@@ -30,6 +31,17 @@ export interface PublicationOptions {
    * le gérant a tout décoché — et la feuille le dit au lieu de tout réimprimer.
    */
   readonly dates: readonly IsoDate[]
+  /**
+   * Les salariés dont on veut la feuille personnelle. VIDE au départ.
+   *
+   * Vide veut dire « aucun », jamais « tous » : la mise en page par employés
+   * peut couvrir plusieurs semaines, et « tous » y ferait sortir vingt pages
+   * que personne n'a demandées, par simple inertie.
+   */
+  readonly employeeIds: readonly string[]
+  /** La première et la dernière semaine de la feuille personnelle, incluses. */
+  readonly fromWeek: string | null
+  readonly toWeek: string | null
   /** Les totaux d'heures figurent-ils sur la feuille affichée ? */
   readonly showTotals: boolean
 }
@@ -47,7 +59,7 @@ export const PUBLICATION_LAYOUTS: readonly {
   {
     layout: "employee",
     label: "Par employés",
-    description: "Une feuille pour l’équipe, un salarié par ligne.",
+    description: "Une feuille par salarié, une ligne par semaine.",
   },
   {
     layout: "day",
@@ -73,6 +85,9 @@ export function defaultPublicationOptions(
     layout: "sector",
     sectorIds: publishable.length > 0 ? publishable : input.sectors.map((sector) => sector.id),
     dates: input.days.filter((day) => !day.closed).map((day) => day.date),
+    employeeIds: [],
+    fromWeek: null,
+    toWeek: null,
     showTotals: true,
   }
 }
@@ -93,8 +108,16 @@ export function toggleSector(options: PublicationOptions, sectorId: string): Pub
  * bouton plutôt que d'ouvrir un aperçu blanc.
  */
 export function hasSomethingToPublish(options: PublicationOptions): boolean {
+  // La feuille personnelle ne dépend pas des rayons : elle montre TOUTES les
+  // heures de la personne, et son seul préalable est d'avoir choisi quelqu'un.
+  if (options.layout === "employee") return options.employeeIds.length > 0
   if (options.sectorIds.length === 0) return false
   return options.layout !== "day" || options.dates.length > 0
+}
+
+/** Ajoute ou retire un salarié de la feuille personnelle. */
+export function toggleEmployee(options: PublicationOptions, employeeId: string): PublicationOptions {
+  return { ...options, employeeIds: toggle(options.employeeIds, employeeId) }
 }
 
 function toggle<T extends string>(values: readonly T[], value: T): readonly T[] {

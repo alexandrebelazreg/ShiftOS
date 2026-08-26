@@ -167,41 +167,83 @@ describe("mise en page par rayons", () => {
     expect(document.pages.every((page) => page.kind === "grid")).toBe(true)
   })
 
-  it("ne montre sur la feuille d’un rayon que les heures faites dans ce rayon", () => {
+  /**
+   * LA FEUILLE D'UN COMPTOIR MONTRE AUSSI LES HEURES FAITES AILLEURS.
+   *
+   * Elle ne montrait QUE les heures du rayon, et c'était un piège : quelqu'un
+   * qui tient le poisson le matin et la charcuterie l'après-midi lisait sur la
+   * feuille du poisson un après-midi vide, et croyait pouvoir rentrer. Ce que
+   * la feuille doit dire n'est pas « ce que ce comptoir attend de vous », c'est
+   * « à quelle heure vous venez ».
+   *
+   * Les heures étrangères se distinguent par leur nom de rayon, écrit dans la
+   * case ; celles du comptoir affiché n'en portent pas, il est déjà en titre.
+   */
+  it("montre aussi les heures faites dans un autre rayon, nommées", () => {
     const document = buildPublicationDocument(input(), options({ layout: "sector" }), context)
     const [drive, poisson] = grids(document.pages)
 
     const noraDrive = drive.rows.find((row) => row.name === "Nora PETIT")
     const noraPoisson = poisson.rows.find((row) => row.name === "Nora PETIT")
 
-    // Le même lundi, lu depuis deux comptoirs : 08:00–14:00 puis 14:00–20:00.
-    expect(noraDrive?.cells[0].slots.map((slot) => slot.label)).toEqual(["08:00 – 14:00"])
-    expect(noraPoisson?.cells[0].slots.map((slot) => slot.label)).toEqual(["14:00 – 20:00"])
-    expect(noraDrive?.totalLabel).toBe("6h")
-    expect(noraPoisson?.totalLabel).toBe("6h")
+    // Le même lundi, lu depuis deux comptoirs : les deux plages sur les deux
+    // feuilles, mais nommées seulement quand elles viennent d'ailleurs.
+    expect(noraDrive?.cells[0].slots.map((slot) => [slot.sectorName, slot.label])).toEqual([
+      [null, "08:00 – 14:00"],
+      ["Poissonnerie", "14:00 – 20:00"],
+    ])
+    expect(noraPoisson?.cells[0].slots.map((slot) => [slot.sectorName, slot.label])).toEqual([
+      ["Drive", "08:00 – 14:00"],
+      [null, "14:00 – 20:00"],
+    ])
   })
 
-  it("n’écrit pas le nom du rayon dans les cases : il est déjà en titre", () => {
+  it("n’écrit pas le nom du rayon sur ses propres cases", () => {
     const [drive] = grids(
       buildPublicationDocument(input(), options({ layout: "sector" }), context).pages
     )
-    const slots = drive.rows.flatMap((row) => row.cells.flatMap((cell) => cell.slots))
+    const own = drive.rows
+      .flatMap((row) => row.cells.flatMap((cell) => cell.slots))
+      .filter((slot) => slot.label === "08:00 – 14:00")
 
-    expect(slots.length).toBeGreaterThan(0)
-    expect(slots.every((slot) => slot.sectorName === null)).toBe(true)
+    expect(own.length).toBeGreaterThan(0)
+    expect(own.every((slot) => slot.sectorName === null)).toBe(true)
   })
 
-  it("ne garde que les salariés affectés au rayon, repos compris", () => {
+  /**
+   * QUI FIGURE : ceux qui y travaillent, et ceux dont c'est le premier rayon.
+   *
+   * La feuille listait toute l'équipe rattachée au rayon, absents compris, et
+   * devenait un annuaire où l'on ne trouvait plus les gens du jour. Le premier
+   * rayon de la fiche fait exception : ces gens-là appartiennent au comptoir
+   * même en vacances, et leur absence est justement une information.
+   */
+  it("garde qui y travaille, et qui l’a pour premier rayon", () => {
     const [, poisson] = grids(
       buildPublicationDocument(input(), options({ layout: "sector" }), context).pages
     )
-    const luca = poisson.rows.find((row) => row.name === "Luca MARTIN")
 
-    // Luca n'est pas affecté à la poissonnerie : il n'a pas de ligne du tout.
-    expect(luca).toBeUndefined()
-    // Nora y est affectée et a une ligne, avec un repos le mardi.
+    // Nora y a des heures : elle figure, avec son repos du mardi.
     const nora = poisson.rows.find((row) => row.name === "Nora PETIT")
     expect(nora?.cells[1].emptyLabel).toBe("Repos")
+    // Luca n'y travaille pas et ne l'a pas pour premier rayon : aucune ligne.
+    expect(poisson.rows.find((row) => row.name === "Luca MARTIN")).toBeUndefined()
+  })
+
+  it("garde celui dont c’est le premier rayon, même sans une seule heure", () => {
+    const [, poisson] = grids(
+      buildPublicationDocument(
+        input(),
+        options({ layout: "sector" }),
+        // Luca ne met jamais les pieds à la poissonnerie cette semaine — mais
+        // c'est son comptoir, et une feuille de comptoir doit le dire.
+        { ...context, primarySectorByEmployee: { luca: "poisson" } }
+      ).pages
+    )
+    const luca = poisson.rows.find((row) => row.name === "Luca MARTIN")
+
+    expect(luca).toBeDefined()
+    expect(luca?.cells.every((cell) => cell.slots.length === 0 || cell.slots.every((slot) => slot.sectorName !== null))).toBe(true)
   })
 
   it("marque la journée fermée et ne compte pas de total pour elle", () => {
@@ -212,45 +254,6 @@ describe("mise en page par rayons", () => {
     expect(drive.columns[2]).toMatchObject({ dayLabel: "Mercredi", closed: true })
     expect(drive.rows[0].cells[2].emptyLabel).toBe("Fermé")
     expect(drive.totals?.[2]).toBeNull()
-  })
-})
-
-describe("mise en page par employés", () => {
-  it("sort une seule feuille, un salarié par ligne, tous rayons confondus", () => {
-    const document = buildPublicationDocument(input(), options({ layout: "employee" }), context)
-    const [page] = grids(document.pages)
-
-    expect(document.pages).toHaveLength(1)
-    expect(page.title).toBe("Équipe")
-    expect(page.subtitle).toBe("Drive · Poissonnerie")
-    expect(page.rows.map((row) => row.name)).toEqual(["Luca MARTIN", "Nora PETIT"])
-  })
-
-  it("nomme les rayons dans les cases, puisque plusieurs s’y croisent", () => {
-    const [page] = grids(
-      buildPublicationDocument(input(), options({ layout: "employee" }), context).pages
-    )
-    const nora = page.rows.find((row) => row.name === "Nora PETIT")
-
-    expect(nora?.cells[0].slots.map((slot) => [slot.sectorName, slot.label])).toEqual([
-      ["Drive", "08:00 – 14:00"],
-      ["Poissonnerie", "14:00 – 20:00"],
-    ])
-    // Douze heures ce lundi-là, réparties sur deux comptoirs.
-    expect(nora?.totalLabel).toBe("12h")
-  })
-
-  it("masque tous les totaux quand on les décoche", () => {
-    const [page] = grids(
-      buildPublicationDocument(
-        input(),
-        options({ layout: "employee", showTotals: false }),
-        context
-      ).pages
-    )
-
-    expect(page.totals).toBeNull()
-    expect(page.rows.every((row) => row.totalLabel === null)).toBe(true)
   })
 })
 
@@ -327,11 +330,11 @@ describe("mise en page par jour", () => {
 
 describe("noms de famille en capitales", () => {
   it("met le nom en capitales et laisse le prénom", () => {
-    const [page] = grids(
-      buildPublicationDocument(input(), options({ layout: "employee" }), context).pages
+    const [drive] = grids(
+      buildPublicationDocument(input(), options({ layout: "sector" }), context).pages
     )
 
-    expect(page.rows.map((row) => row.name)).toEqual(["Luca MARTIN", "Nora PETIT"])
+    expect(drive.rows.map((row) => row.name)).toEqual(["Luca MARTIN", "Nora PETIT"])
   })
 
   it("applique la même règle aux feuilles du jour et à la ligne des repos", () => {
@@ -361,10 +364,12 @@ describe("la feuille ne parle pas de rôles", () => {
   })
 
   it("peint chaque plage de la teinte pleine de son rayon, sans ombrage de bord", () => {
-    const [page] = grids(
-      buildPublicationDocument(input(), options({ layout: "employee" }), context).pages
+    // Lu sur la feuille du Drive, où le lundi de Nora porte ses deux plages :
+    // celle du Drive et celle de la poissonnerie, chacune de sa teinte.
+    const [drive] = grids(
+      buildPublicationDocument(input(), options({ layout: "sector" }), context).pages
     )
-    const nora = page.rows.find((row) => row.name === "Nora PETIT")
+    const nora = drive.rows.find((row) => row.name === "Nora PETIT")
     const slots = nora?.cells[0].slots ?? []
 
     expect(slots.map((slot) => slot.paint?.backgroundColor)).toEqual([

@@ -34,8 +34,11 @@ export function PlanningPublicationGrid({ page }: PlanningPublicationGridProps) 
       </colgroup>
       <thead>
         <tr>
+          {/* « Salarié » sur une feuille de rayon, « Semaine » sur une feuille
+              personnelle où chaque ligne est une semaine. Le mot vient du
+              ViewModel : la grille ne sait pas ce qu'elle empile. */}
           <th className="border border-neutral-400 bg-neutral-100 px-2 py-1.5 text-left text-[11px] font-bold uppercase tracking-wide">
-            Salarié
+            {page.rowHeaderLabel}
           </th>
           {page.columns.map((column) => (
             <th

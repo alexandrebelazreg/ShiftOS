@@ -74,7 +74,8 @@ function input(): PlanningBoardInput {
   }
 }
 
-function render(layout: "sector" | "employee" | "day"): string {
+/** « Par employés » ne se construit plus ici : il lit plusieurs semaines. */
+function render(layout: "sector" | "day"): string {
   const publication = buildPublicationDocument(
     input(),
     { ...defaultPublicationOptions(input(), ["drive", "poisson"]), layout },
@@ -91,11 +92,11 @@ function render(layout: "sector" | "employee" | "day"): string {
 describe("les feuilles se rendent", () => {
   it("porte l’ancre sur laquelle les règles d’impression effacent le reste", () => {
     // Renommer cet attribut sortirait la barre latérale sur le papier.
-    expect(render("employee")).toContain("data-publication-document")
+    expect(render("sector")).toContain("data-publication-document")
   })
 
   it("écrit le total de la semaine sous le nom, et non dans une colonne", () => {
-    const html = render("employee")
+    const html = render("sector")
 
     // Le nom et son total dans la même cellule d'en-tête de ligne.
     expect(html).toMatch(/Luca MARTIN<\/span><span[^>]*>8h<\/span>/)
@@ -106,7 +107,7 @@ describe("les feuilles se rendent", () => {
   })
 
   it("ne laisse traîner ni ouverture ni fermeture dans le balisage", () => {
-    for (const layout of ["sector", "employee", "day"] as const) {
+    for (const layout of ["sector", "day"] as const) {
       expect(render(layout)).not.toMatch(/Ouverture|Fermeture/)
     }
   })
@@ -146,8 +147,20 @@ describe("les feuilles se rendent", () => {
     }
     const publication = buildPublicationDocument(
       withHoliday,
-      { ...defaultPublicationOptions(withHoliday, ["drive", "poisson"]), layout: "employee" },
-      { storeName: "Test", storeCity: null, draft: false, printedAtLabel: "Édité" }
+      // Lu sur les feuilles de rayon : la mise en page « par employés » ne
+      // vit plus ici, elle lit plusieurs semaines et a son propre constructeur.
+      { ...defaultPublicationOptions(withHoliday, ["drive", "poisson"]), layout: "sector" },
+      {
+        storeName: "Test",
+        storeCity: null,
+        draft: false,
+        printedAtLabel: "Édité",
+        // Le Drive est le PREMIER rayon d'Iris : elle figure sur sa feuille
+        // bien qu'elle n'y ait aucune heure, et c'est sa case vide qui porte
+        // le motif du férié. Sans ce rattachement elle n'aurait plus de ligne,
+        // et le mur ne dirait plus pourquoi elle ne vient pas.
+        primarySectorByEmployee: { iris: "drive" },
+      }
     )
     const html = renderToStaticMarkup(<PlanningPublicationDocument publication={publication} />)
 
