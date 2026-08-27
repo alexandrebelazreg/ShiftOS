@@ -11,9 +11,10 @@ import { type StoredHolidays } from "@/features/planning/holidays/holiday.reposi
 import { holidayStore } from "@/features/planning/holidays/holiday.store"
 import { SaveFailureBanner } from "@/components/feedback/save-failure-banner"
 import { useSaveFailure } from "@/components/feedback/use-save-failure"
+import { buildHolidayVolunteerMatrix } from "@/features/planning/holidays/model/holiday-volunteer-matrix"
 import { buildHolidayYear } from "@/features/planning/holidays/model/holiday-year-view-model"
-import type { HolidayOpening } from "@/features/planning/holidays/model/holiday-schedule"
-import { HolidayDayCard } from "@/features/planning/holidays/ui/HolidayDayCard"
+import { HolidayVolunteerMatrix } from "@/features/planning/holidays/ui/HolidayVolunteerMatrix"
+import { HolidayYearTable } from "@/features/planning/holidays/ui/HolidayYearTable"
 import type { StoreConfig } from "@/features/store/schemas/store.schema"
 
 /**
@@ -33,7 +34,6 @@ export function HolidaysView({ initialStore }: { readonly initialStore: StoreCon
   const [stored, setStored] = useState<StoredHolidays | null>(null)
   const { failure, guard } = useSaveFailure()
   const [year, setYear] = useState(() => new Date().getFullYear())
-  const [expanded, setExpanded] = useState<IsoDate | null>(null)
 
   useEffect(() => {
     if (typeof window === "undefined") return
@@ -77,6 +77,11 @@ export function HolidaysView({ initialStore }: { readonly initialStore: StoreCon
         usualHours,
       }),
     [year, stored, employees, usualHours]
+  )
+
+  const volunteerMatrix = useMemo(
+    () => buildHolidayVolunteerMatrix(holidayYear),
+    [holidayYear]
   )
 
   /** Écrire une journée, et n'écrire que ce que le gérant a changé. */
@@ -140,31 +145,44 @@ export function HolidaysView({ initialStore }: { readonly initialStore: StoreCon
         </ul>
       ) : null}
 
-      <p className="rounded-md border border-dashed p-3 text-sm text-muted-foreground">
-        Un volontaire est <strong>éligible</strong>, pas affecté : cocher quelqu’un autorise le
-        générateur à le retenir ce jour-là, sans lui imposer d’y venir.
-      </p>
+      <HolidayYearTable
+        year={holidayYear}
+        onChangeOpening={(date, opening) => patchDay(date, { opening })}
+        onChangeHours={(date, opensAt, closesAt) => patchDay(date, { opensAt, closesAt })}
+      />
 
-      <div className="space-y-3">
-        {holidayYear.days.map((day) => (
-          <HolidayDayCard
-            key={day.date}
-            day={day}
-            expanded={expanded === day.date}
-            onToggleExpanded={() => setExpanded((current) => (current === day.date ? null : day.date))}
-            onChangeOpening={(opening: HolidayOpening) => patchDay(day.date, { opening })}
-            onChangeHours={(opensAt, closesAt) => patchDay(day.date, { opensAt, closesAt })}
-            onToggleVolunteer={(employeeId) => {
-              const current = stored[day.date]?.volunteerIds ?? []
-              patchDay(day.date, {
-                volunteerIds: current.includes(employeeId)
-                  ? current.filter((id) => id !== employeeId)
-                  : [...current, employeeId],
-              })
-            }}
-          />
-        ))}
-      </div>
+      {/* LES VOLONTAIRES SE COCHENT ICI, ET NULLE PART AILLEURS.
+          Ils vivaient dans onze listes dépliables, une par férié : on pouvait
+          régler l'année sans jamais voir que la même personne avait dit oui à
+          tout et une autre à rien. La matrice répond à cette question en la
+          montrant, et c'est son déménagement qui a permis de réduire chaque
+          férié à une ligne. */}
+      <section className="space-y-2">
+        <div className="flex flex-wrap items-baseline justify-between gap-2">
+          <h2 className="font-heading text-base font-medium">
+            Volontaires
+            <span className="ml-2 text-sm font-normal text-muted-foreground">
+              sur les fériés ouverts
+            </span>
+          </h2>
+          <p className="text-sm text-muted-foreground">
+            Un volontaire est <strong className="font-medium text-foreground">éligible</strong>,
+            pas affecté : le cocher autorise le générateur à le retenir, sans lui imposer d’y venir.
+          </p>
+        </div>
+        <HolidayVolunteerMatrix
+          matrix={volunteerMatrix}
+          onToggle={(date, employeeId) => {
+            const current = stored[date]?.volunteerIds ?? []
+            patchDay(date, {
+              volunteerIds: current.includes(employeeId)
+                ? current.filter((id) => id !== employeeId)
+                : [...current, employeeId],
+            })
+          }}
+        />
+      </section>
+
     </div>
   )
 }
