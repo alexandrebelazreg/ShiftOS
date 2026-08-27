@@ -18,7 +18,6 @@ import {
   toggleDate,
   toggleEmployee,
   toggleSector,
-  type PublicationLayout,
   type PublicationOptions,
 } from "@/features/planning/publication/model/publication-options"
 import { PlanningPublicationDocument } from "@/features/planning/publication/ui/PlanningPublicationDocument"
@@ -32,6 +31,9 @@ interface PlanningPublicationPanelProps {
   readonly sectorIds: readonly string[]
   /** Toutes les semaines affichables, la plus récente en tête. */
   readonly weeks: readonly PublicationWeek[]
+  /** La semaine regardée, et de quoi en changer sans quitter la barre. */
+  readonly selectedWeek: string
+  readonly onSelectWeek: (weekStart: string) => void
   /** L'équipe, pour la feuille personnelle. */
   readonly employees: readonly { readonly id: string; readonly name: string }[]
   /** Le premier rayon de chaque fiche : qui reste à l'affiche d'un comptoir. */
@@ -44,6 +46,14 @@ interface PlanningPublicationPanelProps {
 
 /**
  * Préparer la feuille à afficher, puis l'imprimer.
+ *
+ * LA MISE EN PAGE GOUVERNE, et c'est pourquoi elle est en onglets.
+ *
+ * Elle décide des filtres qui EXISTENT — les rayons disparaissent sur la
+ * feuille personnelle, une plage de semaines y apparaît à la place. Présentés
+ * ensemble dans une grille de cases à cocher, ces filtres changeaient sous les
+ * doigts sans prévenir : on cherchait ce qu'on venait de faire disparaître. Un
+ * onglet annonce qu'on change de contexte, et ne montre que le sien.
  *
  * L'aperçu N'EST PAS une image du document : c'est le document, rendu à sa
  * taille réelle en millimètres. Ce que le gérant voit ici est exactement ce qui
@@ -64,6 +74,8 @@ export function PlanningPublicationPanel({
   input,
   sectorIds,
   weeks,
+  selectedWeek,
+  onSelectWeek,
   employees,
   primarySectorByEmployee,
   storeName,
@@ -79,14 +91,20 @@ export function PlanningPublicationPanel({
   const [printedAtLabel] = useState(() =>
     signPrintedLabel(`Édité le ${formatNow(new Date())}`, printedBy)
   )
+  /**
+   * L'aperçu est FERMÉ au départ.
+   *
+   * On ne le regarde qu'une fois : après avoir réglé, avant d'imprimer. Ouvert
+   * en permanence, il repoussait les commandes hors de l'écran.
+   */
+  const [previewOpen, setPreviewOpen] = useState(false)
 
   /**
    * LES SEMAINES RETENUES par la feuille personnelle.
    *
-   * Bornes incluses, et dans l'ordre CHRONOLOGIQUE — la liste déroulante range
-   * la plus récente en tête, ce qui est juste pour choisir et faux pour lire :
-   * empiler S38 au-dessus de S36 ferait remonter le temps d'une ligne à
-   * l'autre. Sans bornes, la seule semaine affichée.
+   * Bornes incluses, et dans l'ordre CHRONOLOGIQUE — la liste range la plus
+   * récente en tête, ce qui est juste pour choisir et faux pour lire : empiler
+   * S38 au-dessus de S36 ferait remonter le temps d'une ligne à l'autre.
    */
   const employeeWeeks = useMemo(() => {
     const from = options.fromWeek ?? input.periodStart
@@ -114,30 +132,137 @@ export function PlanningPublicationPanel({
     return options.layout === "employee"
       ? buildEmployeeDocument(employeeWeeks, options, context)
       : buildPublicationDocument(input, options, context)
-  }, [input, options, employeeWeeks, employees, storeName, storeCity, draft, printedAtLabel, primarySectorByEmployee])
+  }, [
+    input,
+    options,
+    employeeWeeks,
+    employees,
+    storeName,
+    storeCity,
+    draft,
+    printedAtLabel,
+    primarySectorByEmployee,
+  ])
 
   const printable = hasSomethingToPublish(options)
   /**
-   * L'aperçu est FERMÉ au départ.
+   * Ce que le bouton va sortir, COMPTÉ plutôt que promis.
    *
-   * Il occupait les deux tiers de l'écran en permanence, et on ne le regarde
-   * qu'une fois : après avoir réglé, avant d'imprimer. Fermé, les options
-   * tiennent sur une largeur confortable au lieu d'une colonne de 18 rem ;
-   * ouvert, la feuille se déplie sous elles, à la taille où elle sortira.
+   * « Imprimer » ne disait pas combien de feuilles partaient : on découvrait
+   * huit pages dans la fenêtre du navigateur. Le nombre est lu sur le document
+   * lui-même, donc il ne peut pas se désaccorder de ce qui sort.
    */
-  const [previewOpen, setPreviewOpen] = useState(false)
+  const sheets = publication.pages.length
+  const layout = PUBLICATION_LAYOUTS.find((entry) => entry.layout === options.layout)
 
   return (
-    <div className="space-y-6">
-      <aside className="space-y-5 print:hidden">
-        <div className="flex flex-wrap items-center gap-3">
+    <div className="space-y-4">
+      <div className="flex flex-wrap items-end gap-x-1 gap-y-2 border-b print:hidden">
+        {PUBLICATION_LAYOUTS.map((entry) => (
+          <button
+            key={entry.layout}
+            type="button"
+            onClick={() => setOptions((current) => ({ ...current, layout: entry.layout }))}
+            aria-current={options.layout === entry.layout ? "page" : undefined}
+            className={cn(
+              "-mb-px border-b-2 px-3 py-2 text-sm font-medium transition",
+              options.layout === entry.layout
+                ? "border-primary text-foreground"
+                : "border-transparent text-muted-foreground hover:text-foreground"
+            )}
+          >
+            {entry.label}
+          </button>
+        ))}
+
+        {/* La semaine se règle ici pour les feuilles qui en montrent UNE. La
+            feuille personnelle a sa propre plage, plus bas : deux commandes de
+            semaine à deux endroits finiraient par se contredire. */}
+        {options.layout === "employee" || weeks.length < 2 ? null : (
+          <label className="ml-auto flex items-center gap-2 pb-1.5 text-sm">
+            <span className="text-muted-foreground">Semaine</span>
+            <select
+              value={selectedWeek}
+              onChange={(event) => onSelectWeek(event.target.value)}
+              className="rounded-md border bg-background px-2 py-1 text-sm font-medium"
+            >
+              {weeks.map((week) => (
+                <option key={week.weekStart} value={week.weekStart}>
+                  {week.label}
+                </option>
+              ))}
+            </select>
+          </label>
+        )}
+      </div>
+
+      <div className="space-y-4 print:hidden">
+        <p className="text-sm text-muted-foreground">{layout?.description}</p>
+
+        {options.layout === "employee" ? (
+          <>
+            <Field label="Salariés">
+              <Pills
+                entries={employees.map((employee) => ({
+                  key: employee.id,
+                  label: employee.name,
+                  selected: options.employeeIds.includes(employee.id),
+                }))}
+                onToggle={(id) => setOptions((current) => toggleEmployee(current, id))}
+              />
+            </Field>
+            <Field label="Semaines">
+              <div className="flex flex-wrap items-center gap-2">
+                <WeekBound
+                  label="De"
+                  value={options.fromWeek ?? input.periodStart}
+                  weeks={weeks}
+                  onChange={(fromWeek) => setOptions((current) => ({ ...current, fromWeek }))}
+                />
+                <WeekBound
+                  label="à"
+                  value={options.toWeek ?? options.fromWeek ?? input.periodStart}
+                  weeks={weeks}
+                  onChange={(toWeek) => setOptions((current) => ({ ...current, toWeek }))}
+                />
+              </div>
+            </Field>
+          </>
+        ) : (
+          <Field label="Rayons">
+            <Pills
+              entries={input.sectors.map((sector) => ({
+                key: sector.id,
+                label: sector.name,
+                selected: options.sectorIds.includes(sector.id),
+              }))}
+              onToggle={(id) => setOptions((current) => toggleSector(current, id))}
+            />
+          </Field>
+        )}
+
+        {options.layout === "day" ? (
+          <Field label="Jours">
+            <Pills
+              entries={input.days.map((day) => ({
+                key: day.date,
+                label: `${WEEK_DAY_LABELS[day.weekDay]} ${formatDate(day.date)}`,
+                selected: options.dates.includes(day.date),
+                disabled: day.closed,
+              }))}
+              onToggle={(date) => setOptions((current) => toggleDate(current, date as never))}
+            />
+          </Field>
+        ) : null}
+
+        <div className="flex flex-wrap items-center gap-3 border-t pt-4">
           <button
             type="button"
             onClick={() => window.print()}
             disabled={!printable}
             className="rounded-md bg-primary px-3 py-2 text-sm font-medium text-primary-foreground transition hover:brightness-110 disabled:opacity-50"
           >
-            Imprimer / Enregistrer en PDF
+            {printable ? `Imprimer ${sheets} feuille${sheets > 1 ? "s" : ""}` : "Imprimer"}
           </button>
           <button
             type="button"
@@ -146,126 +271,35 @@ export function PlanningPublicationPanel({
             disabled={!printable}
             className="rounded-md border px-3 py-2 text-sm transition hover:bg-muted disabled:opacity-50"
           >
-            {previewOpen ? "Masquer la feuille" : "Voir la feuille"}
+            {previewOpen ? "Masquer" : "Voir"}
           </button>
-        </div>
-
-        <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-4">
-          <Field label="Mise en page">
-            <div className="space-y-1.5">
-              {PUBLICATION_LAYOUTS.map((entry) => (
-                <LayoutChoice
-                  key={entry.layout}
-                  entry={entry}
-                  selected={options.layout === entry.layout}
-                  onSelect={(layout) => setOptions((current) => ({ ...current, layout }))}
-                />
-              ))}
-            </div>
-          </Field>
-
-          {options.layout === "employee" ? null : (
-          <Field label="Rayons affichés">
-            <div className="space-y-1">
-              {input.sectors.map((sector) => (
-                <Check
-                  key={sector.id}
-                  label={sector.name}
-                  checked={options.sectorIds.includes(sector.id)}
-                  onChange={() => setOptions((current) => toggleSector(current, sector.id))}
-                />
-              ))}
-            </div>
-          </Field>
-          )}
-
-          {/* LA FEUILLE PERSONNELLE NE FILTRE PAS LES RAYONS, elle choisit des
-              GENS et des SEMAINES. Montrer les rayons ici promettrait un filtre
-              qu'elle n'applique pas — elle doit dire toutes les heures de la
-              personne, sans quoi elle lui cacherait un jour où on l'attend. */}
-          {options.layout === "employee" ? (
-            <>
-              <Field label="Salariés affichés">
-                {/* AUCUN AU DÉPART : sur trois semaines, « tous » ferait sortir
-                    vingt pages que personne n'a demandées. */}
-                <div className="max-h-64 space-y-1 overflow-y-auto pr-1">
-                  {employees.map((employee) => (
-                    <Check
-                      key={employee.id}
-                      label={employee.name}
-                      checked={options.employeeIds.includes(employee.id)}
-                      onChange={() => setOptions((current) => toggleEmployee(current, employee.id))}
-                    />
-                  ))}
-                </div>
-                {options.employeeIds.length === 0 ? (
-                  <p className="mt-2 text-xs text-muted-foreground">
-                    Choisissez au moins un salarié.
-                  </p>
-                ) : null}
-              </Field>
-
-              <Field label="Semaines">
-                <div className="space-y-2">
-                  <WeekBound
-                    label="De"
-                    value={options.fromWeek ?? input.periodStart}
-                    weeks={weeks}
-                    onChange={(fromWeek) => setOptions((current) => ({ ...current, fromWeek }))}
-                  />
-                  <WeekBound
-                    label="À"
-                    value={options.toWeek ?? options.fromWeek ?? input.periodStart}
-                    weeks={weeks}
-                    onChange={(toWeek) => setOptions((current) => ({ ...current, toWeek }))}
-                  />
-                </div>
-              </Field>
-            </>
-          ) : null}
-
-          {/* Le choix des jours n'existe que pour la mise en page qui en fait des
-              feuilles. L'afficher ailleurs promettrait un filtre que les grilles
-              hebdomadaires n'appliquent pas. */}
-          {options.layout === "day" ? (
-            <Field label="Jours affichés">
-              <div className="space-y-1">
-                {input.days.map((day) => (
-                  <Check
-                    key={day.date}
-                    label={`${WEEK_DAY_LABELS[day.weekDay]} ${formatDate(day.date)}`}
-                    hint={day.closed ? "fermé" : null}
-                    disabled={day.closed}
-                    checked={options.dates.includes(day.date)}
-                    onChange={() => setOptions((current) => toggleDate(current, day.date))}
-                  />
-                ))}
-              </div>
-            </Field>
-          ) : null}
-
-          <Field label="Options">
-            <Check
-              label="Afficher les totaux d’heures"
+          <label className="flex items-center gap-2 text-sm">
+            <input
+              type="checkbox"
               checked={options.showTotals}
               onChange={() =>
                 setOptions((current) => ({ ...current, showTotals: !current.showTotals }))
               }
             />
-            <p className="mt-3 text-xs leading-relaxed text-muted-foreground">
-              Dans la fenêtre d’impression, choisissez <strong>Enregistrer au format PDF</strong>,
-              l’orientation <strong>paysage</strong>, et activez les graphiques d’arrière-plan pour
-              conserver les couleurs des rayons.
-            </p>
-          </Field>
+            Totaux d’heures
+          </label>
+          <p className="ml-auto max-w-xs text-xs leading-snug text-muted-foreground">
+            À l’impression : format PDF, orientation paysage, et graphiques
+            d’arrière-plan activés pour garder les couleurs.
+          </p>
         </div>
-      </aside>
+      </div>
 
       {/* À L'IMPRESSION, LA FEUILLE SORT QU'ELLE SOIT DÉPLIÉE OU NON.
-          Le repli est un confort d'écran : le masquer avec `hidden` l'aurait
-          retiré du document, et le bouton Imprimer n'aurait plus rien sorti
-          tant qu'on n'avait pas ouvert l'aperçu — un piège silencieux. */}
-      <div className={cn("min-w-0 overflow-auto print:block print:overflow-visible", previewOpen ? "block" : "hidden")}>
+          Le repli est un confort d'écran : la masquer avec `hidden` la garde
+          dans le document, alors que la démonter ferait imprimer une page
+          blanche à qui n'a pas pensé à déplier — un piège silencieux. */}
+      <div
+        className={cn(
+          "min-w-0 overflow-auto print:block print:overflow-visible",
+          previewOpen ? "block" : "hidden"
+        )}
+      >
         <PlanningPublicationDocument publication={publication} />
       </div>
     </div>
@@ -283,59 +317,52 @@ function Field({ label, children }: { readonly label: string; readonly children:
   )
 }
 
-function LayoutChoice({
-  entry,
-  selected,
-  onSelect,
+/**
+ * Une rangée de pastilles à bascule.
+ *
+ * Les cases à cocher en colonne coûtaient une colonne entière pour huit rayons,
+ * et un ascenseur pour vingt salariés — le seul endroit de l'application où il
+ * fallait faire défiler pour voir une liste de noms. Les pastilles se replient
+ * sur la largeur disponible, et l'état se lit à la couleur du fond plutôt qu'à
+ * un carré de treize pixels.
+ */
+function Pills({
+  entries,
+  onToggle,
 }: {
-  readonly entry: (typeof PUBLICATION_LAYOUTS)[number]
-  readonly selected: boolean
-  readonly onSelect: (layout: PublicationLayout) => void
+  readonly entries: readonly {
+    readonly key: string
+    readonly label: string
+    readonly selected: boolean
+    readonly disabled?: boolean
+  }[]
+  readonly onToggle: (key: string) => void
 }) {
-  return (
-    <button
-      type="button"
-      onClick={() => onSelect(entry.layout)}
-      aria-pressed={selected}
-      className={cn(
-        "block w-full rounded-md border px-3 py-2 text-left transition",
-        selected ? "border-primary bg-primary/10" : "hover:bg-muted"
-      )}
-    >
-      <span className="block text-sm font-medium">{entry.label}</span>
-      <span className="block text-xs text-muted-foreground">{entry.description}</span>
-    </button>
-  )
-}
+  if (entries.length === 0) {
+    return <p className="text-sm text-muted-foreground">Rien à choisir ici.</p>
+  }
 
-function Check({
-  label,
-  hint = null,
-  checked,
-  disabled = false,
-  onChange,
-}: {
-  readonly label: string
-  readonly hint?: string | null
-  readonly checked: boolean
-  readonly disabled?: boolean
-  readonly onChange: () => void
-}) {
   return (
-    <label className={cn("flex items-center gap-2 text-sm", disabled && "text-muted-foreground/60")}>
-      <input type="checkbox" checked={checked} disabled={disabled} onChange={onChange} />
-      <span className="min-w-0 flex-1 truncate">{label}</span>
-      {hint ? <span className="shrink-0 text-xs text-muted-foreground">{hint}</span> : null}
-    </label>
-  )
-}
-
-/** "13/08/2026 à 14:05" — l'heure d'édition en pied de feuille. */
-function formatNow(date: Date): string {
-  const pad = (value: number) => String(value).padStart(2, "0")
-  return (
-    `${pad(date.getDate())}/${pad(date.getMonth() + 1)}/${date.getFullYear()} ` +
-    `à ${pad(date.getHours())}:${pad(date.getMinutes())}`
+    <div className="flex flex-wrap gap-1.5">
+      {entries.map((entry) => (
+        <button
+          key={entry.key}
+          type="button"
+          onClick={() => onToggle(entry.key)}
+          aria-pressed={entry.selected}
+          disabled={entry.disabled}
+          className={cn(
+            "rounded-md border px-2.5 py-1 text-sm transition",
+            entry.selected
+              ? "border-primary bg-primary/10 font-medium text-foreground"
+              : "text-muted-foreground hover:bg-muted",
+            entry.disabled && "cursor-not-allowed opacity-40 hover:bg-transparent"
+          )}
+        >
+          {entry.label}
+        </button>
+      ))}
+    </div>
   )
 }
 
@@ -353,11 +380,11 @@ function WeekBound({
 }) {
   return (
     <label className="flex items-center gap-2 text-sm">
-      <span className="w-6 shrink-0 text-muted-foreground">{label}</span>
+      <span className="shrink-0 text-muted-foreground">{label}</span>
       <select
         value={value}
         onChange={(event) => onChange(event.target.value)}
-        className="min-w-0 flex-1 rounded-md border bg-background px-2 py-1.5 text-sm"
+        className="min-w-0 rounded-md border bg-background px-2 py-1.5 text-sm"
       >
         {weeks.map((week) => (
           <option key={week.weekStart} value={week.weekStart}>
@@ -366,5 +393,14 @@ function WeekBound({
         ))}
       </select>
     </label>
+  )
+}
+
+/** "13/08/2026 à 14:05" — l'heure d'édition en pied de feuille. */
+function formatNow(date: Date): string {
+  const pad = (value: number) => String(value).padStart(2, "0")
+  return (
+    `${pad(date.getDate())}/${pad(date.getMonth() + 1)}/${date.getFullYear()} ` +
+    `à ${pad(date.getHours())}:${pad(date.getMinutes())}`
   )
 }

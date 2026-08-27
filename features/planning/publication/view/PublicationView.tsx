@@ -235,10 +235,9 @@ export function PublicationView({ initialStore }: { readonly initialStore: Store
   return (
     <div className="space-y-6">
       <div className="print:hidden">
-        <PageHeader
-          title="Affichage"
-          description="Imprimez un planning enregistré pour l’affichage officiel du magasin."
-        />
+        {/* Sans sous-titre : chaque onglet dit déjà ce qu'il produit, une
+            ligne plus bas. Le répéter ici coûtait une ligne pour rien. */}
+        <PageHeader title="Affichage" />
       </div>
 
       {error ? (
@@ -265,51 +264,24 @@ export function PublicationView({ initialStore }: { readonly initialStore: Store
           </CardContent>
         </Card>
       ) : current ? (
-        <>
-          {/* UNE LISTE DÉROULANTE, ET NON UNE RANGÉE DE BOUTONS.
-              Les semaines s'accumulent : à raison d'une par rayon et par
-              semaine, la rangée finissait par occuper trois lignes avant même
-              d'avoir vu une feuille. Une liste tient sur une ligne quel que
-              soit leur nombre. Elle ne paraît qu'à partir de deux : sur une
-              seule elle n'offrirait aucun choix.
-              Elle choisit une SEMAINE et non un enregistrement : le Drive et la
-              zone marché d'une même semaine y sont déjà réunis, et les
-              proposer séparément aurait redemandé lequel des deux on voulait
-              alors qu'on veut les deux. */}
-          {weeks.length > 1 ? (
-            <label className="flex flex-wrap items-center gap-2 text-sm print:hidden">
-              <span className="text-muted-foreground">Semaine :</span>
-              <select
-                value={current.weekStart}
-                onChange={(event) => setSelectedWeek(event.target.value)}
-                className="rounded-md border bg-background px-2 py-1.5 text-sm font-medium"
-              >
-                {weeks.map((week) => (
-                  <option key={week.weekStart} value={week.weekStart}>
-                    {week.label}
-                  </option>
-                ))}
-              </select>
-            </label>
-          ) : null}
-
-          <PlanningPublicationPanel
-            // Changer de semaine REMONTE le panneau : les rayons et les jours
-            // cochés appartiennent à la semaine qu'on regardait, pas à celle-ci.
-            key={current.weekStart}
-            input={current.input}
-            sectorIds={current.input.sectors.map((sector) => sector.id)}
-            weeks={weeks}
-            employees={employees.map((employee) => ({
-              id: employee.id,
-              name: `${employee.firstName} ${employee.lastName}`.trim(),
-            }))}
-            primarySectorByEmployee={primarySectorByEmployee}
-            storeName={initialStore?.name ?? "Magasin"}
-            storeCity={initialStore?.city ?? null}
-            draft={false}
-          />
-        </>
+        <PlanningPublicationPanel
+          // Changer de semaine REMONTE le panneau : les rayons et les jours
+          // cochés appartiennent à la semaine qu'on regardait, pas à celle-ci.
+          key={current.weekStart}
+          input={current.input}
+          sectorIds={current.input.sectors.map((sector) => sector.id)}
+          weeks={weeks}
+          selectedWeek={current.weekStart}
+          onSelectWeek={setSelectedWeek}
+          employees={employees.map((employee) => ({
+            id: employee.id,
+            name: `${employee.firstName} ${employee.lastName}`.trim(),
+          }))}
+          primarySectorByEmployee={primarySectorByEmployee}
+          storeName={initialStore?.name ?? "Magasin"}
+          storeCity={initialStore?.city ?? null}
+          draft={false}
+        />
       ) : null}
     </div>
   )
