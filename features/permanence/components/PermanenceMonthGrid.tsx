@@ -52,7 +52,20 @@ export function PermanenceMonthGrid({
 }) {
   return (
     <div className="overflow-x-auto rounded-lg border">
-      <table className="w-full border-collapse text-sm">
+      {/* LA LARGEUR NE DÉPEND PLUS DU CONTENU.
+          Un tableau en disposition automatique laisse la case la plus large
+          décider de sa colonne : deux repos posés sur un mardi élargissaient le
+          mardi de tout le mois, et les six semaines se décalaient sous les
+          yeux — au moment précis où l'on venait d'en changer une seule. La
+          largeur est donc répartie ici une fois pour toutes, et c'est au
+          contenu de s'y tenir : les pastilles de repos se replient. */}
+      <table className="w-full table-fixed border-collapse text-sm">
+        <colgroup>
+          <col className="w-20" />
+          {calendar.weeks[0]?.days.map((day) => <col key={day.weekDay} />)}
+          <col className="w-24" />
+          <col className="w-24" />
+        </colgroup>
         {/* L'EN-TÊTE EST ÉCRIT UNE FOIS.
             Chaque semaine était son propre tableau, dans son propre cadre :
             « Lundi Mardi Mercredi Jeudi Vendredi Samedi · CP · Astreinte »
@@ -63,7 +76,7 @@ export function PermanenceMonthGrid({
             celle du 17 sont identiques poste pour poste. */}
         <thead>
           <tr>
-            <th className="w-20 border-b border-r bg-muted p-2 text-left font-semibold">
+            <th className="border-b border-r bg-muted p-2 text-left font-semibold">
               Sem.
             </th>
             {calendar.weeks[0]?.days.map((day) => (
@@ -71,7 +84,7 @@ export function PermanenceMonthGrid({
                 key={day.weekDay}
                 scope="col"
                 className={cn(
-                  "min-w-[6.5rem] border-b border-r p-2 text-center font-medium last:border-r-0",
+                  "border-b border-r p-2 text-center font-medium last:border-r-0",
                   day.weekDay === "saturday" || day.weekDay === "sunday"
                     ? "bg-orange-100 text-orange-900 dark:bg-orange-950/40 dark:text-orange-100"
                     : "bg-muted/40"
@@ -80,8 +93,8 @@ export function PermanenceMonthGrid({
                 {WEEK_DAY_LABELS[day.weekDay]}
               </th>
             ))}
-            <th className="w-24 border-b border-l bg-muted p-2 text-center font-semibold">CP</th>
-            <th className="w-24 border-b border-l bg-muted p-2 text-center font-semibold">
+            <th className="border-b border-l bg-muted p-2 text-center font-semibold">CP</th>
+            <th className="border-b border-l bg-muted p-2 text-center font-semibold">
               Astreinte
             </th>
           </tr>
@@ -326,11 +339,11 @@ function RestCell({
                 <button
                   type="button"
                   onClick={() => onToggle(employeeId)}
-                  className="flex items-center gap-1 rounded-full border bg-muted/60 px-2 py-0.5 text-xs hover:bg-muted"
+                  className="flex max-w-full items-center gap-1 rounded-full border bg-muted/60 px-2 py-0.5 text-xs hover:bg-muted"
                   aria-label={`Retirer ${member?.shortName ?? "cette personne"} des repos du ${dayLabel}`}
                 >
-                  {member?.shortName ?? "Hors tour"}
-                  <X className="size-3" aria-hidden />
+                  <span className="min-w-0 truncate">{member?.shortName ?? "Hors tour"}</span>
+                  <X className="size-3 shrink-0" aria-hidden />
                 </button>
               </li>
             )
