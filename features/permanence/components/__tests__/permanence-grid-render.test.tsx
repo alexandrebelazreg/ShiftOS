@@ -70,10 +70,22 @@ function render(
 const blank = emptyPermanenceMonth(2026, 1, "2026-01-01T00:00:00.000Z")
 
 describe("la grille des permanences", () => {
-  it("pose une bande par semaine, numérotée comme la feuille", () => {
+  /**
+   * UNE BANDE PAR SEMAINE, DANS UN SEUL TABLEAU.
+   *
+   * Chaque semaine était son propre `<table>`, dans son propre cadre, avec son
+   * propre en-tête « Lundi Mardi… » — six fois le même pour un mois. Les
+   * semaines sont maintenant des `<tbody>` d'un tableau unique, ce qui divise
+   * la hauteur du mois par deux sans rien retirer de la feuille.
+   *
+   * Le compte des en-têtes est ce qui compte ici : un tableau, un « Lundi ».
+   */
+  it("pose une bande par semaine dans un seul tableau", () => {
     const markup = render(blank)
 
-    expect(markup.match(/<table/g)).toHaveLength(5)
+    expect(markup.match(/<table/g)).toHaveLength(1)
+    expect(markup.match(/<tbody/g)).toHaveLength(5)
+    expect(markup.match(/>Lundi</g)).toHaveLength(1)
     for (const week of ["S1", "S2", "S3", "S4", "S5"]) {
       expect(markup).toContain(`>${week}</th>`)
     }
@@ -122,8 +134,9 @@ describe("la grille des permanences", () => {
 
   it("barre d’un tiret les journées des semaines à cheval", () => {
     // S1 commence le 29 décembre : lundi, mardi et mercredi n'appartiennent pas
-    // au mois et ne portent ni date ni liste déroulante.
-    expect(render(blank)).toContain(">—</span>")
+    // au mois et ne portent ni date ni liste déroulante. Le tiret vit dans la
+    // ligne des dates de la bande, la seule qui change d'une semaine à l'autre.
+    expect(render(blank)).toMatch(/—<\/td>/)
   })
 
   it("ne met pas de liste déroulante sur une journée fermée", () => {

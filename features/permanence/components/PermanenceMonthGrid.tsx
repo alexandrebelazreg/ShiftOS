@@ -51,127 +51,160 @@ export function PermanenceMonthGrid({
   readonly onOnCall: (weekKey: string, employeeId: string | null) => void
 }) {
   return (
-    <div className="space-y-4">
-      {calendar.weeks.map((week) => {
-        const slots = weekSlotsOf(month, week.key)
-        const onLeave = (paidLeaveByWeek.get(week.key) ?? []).filter((employeeId) =>
-          roster.some((member) => member.employeeId === employeeId)
-        )
-        return (
-          <div key={week.key} className="overflow-x-auto rounded-lg border">
-            <table className="w-full border-collapse text-sm">
-              <thead>
-                <tr>
-                  <th className="w-24 border-b border-r bg-muted p-2 text-left font-semibold">
-                    S{week.number}
-                  </th>
-                  {week.days.map((day) => (
-                    <DayHeader key={day.date} day={day} />
-                  ))}
-                  <th className="w-32 border-b border-l bg-muted p-2 text-center font-semibold">
-                    CP
-                  </th>
-                  <th className="w-32 border-b border-l bg-muted p-2 text-center font-semibold">
-                    Astreinte
-                  </th>
-                </tr>
-              </thead>
-              <tbody>
-                {(["opening", "closing"] as const).map((role) => (
-                  <tr key={role}>
-                    <th className="border-b border-r bg-muted/40 p-2 text-left font-medium">
-                      {PERMANENCE_ROLE_LABELS[role]}
-                    </th>
-                    {week.days.map((day) => (
-                      <td
-                        key={day.date}
-                        className={cn("border-b border-r p-1 last:border-r-0", closedCellClass(day))}
-                      >
-                        {day.open ? (
-                          <PersonSelect
-                            roster={roster}
-                            value={month.assignments[permanenceSlotKey(day.date, role)] ?? null}
-                            onChange={(employeeId) => onAssign(day.date, role, employeeId)}
-                            ariaLabel={`${PERMANENCE_ROLE_LABELS[role]} du ${day.label}`}
-                          />
-                        ) : (
-                          <ClosedCell day={day} />
-                        )}
-                      </td>
-                    ))}
-                    {role === "opening" ? (
-                      <>
-                        <td rowSpan={3} className="border-b border-l p-1 align-top">
-                          <PaidLeaveCell roster={roster} onLeave={onLeave} />
-                        </td>
-                        <td rowSpan={3} className="border-b border-l p-1 align-top">
-                          <PersonSelect
-                            roster={roster}
-                            value={slots.onCallEmployeeId}
-                            onChange={(employeeId) => onOnCall(week.key, employeeId)}
-                            ariaLabel={`Astreinte de la semaine ${week.number}`}
-                          />
-                        </td>
-                      </>
-                    ) : null}
-                  </tr>
-                ))}
+    <div className="overflow-x-auto rounded-lg border">
+      <table className="w-full border-collapse text-sm">
+        {/* L'EN-TÊTE EST ÉCRIT UNE FOIS.
+            Chaque semaine était son propre tableau, dans son propre cadre :
+            « Lundi Mardi Mercredi Jeudi Vendredi Samedi · CP · Astreinte »
+            réimprimé six fois pour un mois, mille quatre cents pixels pour ce
+            qui en demande la moitié. Les semaines sont maintenant des BANDES
+            d'un même tableau, et le mois se lit d'un seul coup — ce qui fait
+            apparaître ce que six cadres séparés cachaient : la semaine du 3 et
+            celle du 17 sont identiques poste pour poste. */}
+        <thead>
+          <tr>
+            <th className="w-20 border-b border-r bg-muted p-2 text-left font-semibold">
+              Sem.
+            </th>
+            {calendar.weeks[0]?.days.map((day) => (
+              <th
+                key={day.weekDay}
+                scope="col"
+                className={cn(
+                  "min-w-[6.5rem] border-b border-r p-2 text-center font-medium last:border-r-0",
+                  day.weekDay === "saturday" || day.weekDay === "sunday"
+                    ? "bg-orange-100 text-orange-900 dark:bg-orange-950/40 dark:text-orange-100"
+                    : "bg-muted/40"
+                )}
+              >
+                {WEEK_DAY_LABELS[day.weekDay]}
+              </th>
+            ))}
+            <th className="w-24 border-b border-l bg-muted p-2 text-center font-semibold">CP</th>
+            <th className="w-24 border-b border-l bg-muted p-2 text-center font-semibold">
+              Astreinte
+            </th>
+          </tr>
+        </thead>
 
-                <tr>
-                  <th className="border-r bg-muted/40 p-2 text-left font-medium">Repos</th>
+        {calendar.weeks.map((week) => {
+          const slots = weekSlotsOf(month, week.key)
+          const onLeave = (paidLeaveByWeek.get(week.key) ?? []).filter((employeeId) =>
+            roster.some((member) => member.employeeId === employeeId)
+          )
+          return (
+            <tbody key={week.key} className="border-t-2">
+              {/* LES DATES APPARTIENNENT À LA SEMAINE, pas à l'en-tête.
+                  Un en-tête unique ne peut pas porter « Lundi 3 » — le lundi
+                  change de date d'une bande à l'autre. Cette ligne fine les
+                  donne, et c'est aussi elle qui nomme un férié : sans elle,
+                  l'Assomption du samedi 15 aurait disparu de la feuille. */}
+              <tr className="bg-muted/20">
+                <th className="border-b border-r p-1.5 text-left align-middle font-semibold">
+                  S{week.number}
+                </th>
+                {week.days.map((day) => (
+                  <DayDateCell key={day.date} day={day} />
+                ))}
+                <td className="border-b border-l" colSpan={2} />
+              </tr>
+
+              {(["opening", "closing"] as const).map((role) => (
+                <tr key={role}>
+                  <th className="border-b border-r bg-muted/40 px-2 py-0.5 text-left text-xs font-medium">
+                    {PERMANENCE_ROLE_LABELS[role]}
+                  </th>
                   {week.days.map((day) => (
                     <td
                       key={day.date}
-                      className={cn(
-                        "border-r p-1 align-top last:border-r-0",
-                        day.inMonth ? null : "bg-muted/60"
-                      )}
+                      className={cn("border-b border-r p-0.5 last:border-r-0", closedCellClass(day))}
                     >
-                      {day.inMonth ? (
-                        <RestCell
+                      {day.open ? (
+                        <PersonSelect
                           roster={roster}
-                          resting={month.rest[day.date] ?? []}
-                          onToggle={(employeeId) => onToggleRest(day.date, employeeId)}
-                          dayLabel={day.label}
+                          value={month.assignments[permanenceSlotKey(day.date, role)] ?? null}
+                          onChange={(employeeId) => onAssign(day.date, role, employeeId)}
+                          ariaLabel={`${PERMANENCE_ROLE_LABELS[role]} du ${day.label}`}
                         />
-                      ) : null}
+                      ) : (
+                        <ClosedCell day={day} />
+                      )}
                     </td>
                   ))}
+                  {role === "opening" ? (
+                    <>
+                      <td rowSpan={3} className="border-b border-l p-0.5 align-top">
+                        <PaidLeaveCell roster={roster} onLeave={onLeave} />
+                      </td>
+                      <td rowSpan={3} className="border-b border-l p-0.5 align-top">
+                        <PersonSelect
+                          roster={roster}
+                          value={slots.onCallEmployeeId}
+                          onChange={(employeeId) => onOnCall(week.key, employeeId)}
+                          ariaLabel={`Astreinte de la semaine ${week.number}`}
+                        />
+                      </td>
+                    </>
+                  ) : null}
                 </tr>
-              </tbody>
-            </table>
-          </div>
-        )
-      })}
+              ))}
+
+              <tr>
+                <th className="border-b border-r bg-muted/40 px-2 py-0.5 text-left text-xs font-medium">Repos</th>
+                {week.days.map((day) => (
+                  <td
+                    key={day.date}
+                    className={cn(
+                      "border-b border-r p-0.5 align-top last:border-r-0",
+                      day.inMonth ? null : "bg-muted/60"
+                    )}
+                  >
+                    {day.inMonth ? (
+                      <RestCell
+                        roster={roster}
+                        resting={month.rest[day.date] ?? []}
+                        onToggle={(employeeId) => onToggleRest(day.date, employeeId)}
+                        dayLabel={day.label}
+                      />
+                    ) : null}
+                  </td>
+                ))}
+              </tr>
+            </tbody>
+          )
+        })}
+      </table>
     </div>
   )
 }
 
-/** Le jour, sa date, et son férié s'il en a un — comme en tête de colonne de la feuille. */
-function DayHeader({ day }: { readonly day: PermanenceDay }) {
+/**
+ * La date du jour dans cette semaine-là, et son férié s'il en a un.
+ *
+ * Le NOM du jour n'est plus ici : il est dans l'en-tête unique, en haut du
+ * tableau. Ne reste que ce qui change d'une bande à l'autre — le quantième, et
+ * le nom du férié quand il y en a un.
+ */
+function DayDateCell({ day }: { readonly day: PermanenceDay }) {
   const weekend = day.weekDay === "saturday" || day.weekDay === "sunday"
   return (
-    <th
-      scope="col"
+    <td
       className={cn(
-        "min-w-32 border-b border-r p-2 text-center font-medium last:border-r-0",
+        "border-b border-r p-1 text-center text-xs font-medium tabular-nums last:border-r-0",
         !day.inMonth
           ? "bg-muted/60 text-muted-foreground"
           : day.holidayName
             ? "bg-amber-100 text-amber-900 dark:bg-amber-950/40 dark:text-amber-100"
             : weekend
               ? "bg-orange-100 text-orange-900 dark:bg-orange-950/40 dark:text-orange-100"
-              : "bg-muted/40"
+              : null
       )}
     >
-      <span className="block">{WEEK_DAY_LABELS[day.weekDay]}</span>
-      <span className="block text-xs font-normal tabular-nums">
-        {day.inMonth ? day.label : "—"}
-      </span>
+      {day.inMonth ? day.label : "—"}
       {day.holidayName ? (
-        <span className="block text-xs font-normal">{day.holidayName}</span>
+        <span className="ml-1 font-normal">· {day.holidayName}</span>
       ) : null}
-    </th>
+    </td>
   )
 }
 
@@ -249,7 +282,7 @@ function PersonSelect({
       value={value ?? ""}
       onChange={(event) => onChange(event.target.value === "" ? null : event.target.value)}
       className={cn(
-        "h-8 w-full rounded-md border border-input bg-transparent px-1.5 text-sm",
+        "h-7 w-full rounded-md border border-input bg-transparent px-1.5 text-xs",
         value === null ? "text-muted-foreground" : "font-medium"
       )}
     >
