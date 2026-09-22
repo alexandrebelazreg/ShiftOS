@@ -35,6 +35,7 @@ export const PLANNING_RULES_V3 = [
   "saturday-closing-fairness",
   "coverage-deficit",
   "hard-coverage-floor",
+  "maximum-presence",
   "avoidable-surplus",
   "declared-metrics",
   "time-step",
@@ -121,6 +122,8 @@ export interface PlanningSolverProofV3 {
 
 /** Figures the validator recomputes from scratch, for display and comparison. */
 export interface PlanningMetricsV3 {
+  readonly weightedCoverageCost?: number
+  readonly unstaffedMinutes?: number
   /** Worked minutes per employee and ISO week: `"employeeId|weekKey"`. */
   readonly weeklyMinutesByEmployeeWeek: Readonly<Record<string, number>>
   /** Worked minutes per employee and date: `"employeeId|date"`. */

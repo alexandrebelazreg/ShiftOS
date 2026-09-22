@@ -498,6 +498,20 @@ def closing_loads(problem: dict[str, Any]) -> tuple[list[Fraction], list[Fractio
     all. Those employees sort first, which is the right reading — the week they
     can finally close is the week to give them one.
     """
+    if problem.get("sectors"):
+        policies = {str(s["id"]): s.get("closingFairness") or {} for s in problem["sectors"]}
+        if not any(p.get("balanceClosings") or p.get("balanceSaturdayClosings") for p in policies.values()):
+            return None
+        general, saturday = [], []
+        for employee in sorted(problem["employees"], key=lambda e: str(e["id"])):
+            entries = [h for h in problem.get("closingHistory") or [] if str(h["employeeId"]) == str(employee["id"])]
+            for flag, count, opportunities, target in (
+                ("balanceClosings", "closings", "opportunities", general),
+                ("balanceSaturdayClosings", "saturdayClosings", "saturdayOpportunities", saturday),
+            ):
+                own = [h for h in entries if policies.get(str(h.get("sectorId")), {}).get(flag)]
+                target.append(Fraction(sum(h[count] for h in own), max(1, sum(h[opportunities] for h in own))))
+        return general, saturday
     rules = problem.get("rules") or {}
     fairness = rules.get("closingFairness")
     if not fairness:
@@ -644,7 +658,7 @@ def _walk(
             is_saturday = _is_saturday(day.date)
 
             def fairness_key(index: int) -> tuple[Fraction, Fraction, float, int, int]:
-                lead = saturday[index] if is_saturday else general[index]
+                lead = (saturday[index] if is_saturday else general[index]) + Fraction(closings_used[index], max(1, min(5, len(employees[index]["workingDays"]))))
                 second = general[index] if is_saturday else saturday[index]
                 return (lead, second, closer_key(week, index), closings_used[index], index)
 

@@ -40,6 +40,8 @@ export function fingerprintProblem(problem: PlanningProblemV3): string {
     `rules=${JSON.stringify(problem.rules)}`,
     `objectives=${problem.objectives.join(",")}`,
   ]
+  if (problem.previousWork !== undefined) parts.push(`previousWork=${JSON.stringify(problem.previousWork)}`)
+  if (problem.stabilityAssignments !== undefined) parts.push(`stability=${JSON.stringify(problem.stabilityAssignments)}`)
   if (problem.sectors !== undefined) parts.push(`sectors=${JSON.stringify(problem.sectors)}`)
   for (const employee of [...problem.employees].sort(byId)) {
     // The daily bounds and the right to split belong here as much as the
@@ -49,6 +51,9 @@ export function fingerprintProblem(problem: PlanningProblemV3): string {
     parts.push(
       `E|${String(employee.id)}|${employee.contractMinutes}|${employee.workingDays.join(".")}|${employee.fixedRestDays.join(".")}|${employee.minimumDailyMinutes}|${employee.maximumDailyMinutes}|${employee.canOpen ? 1 : 0}${employee.canClose ? 1 : 0}${employee.canSplitShift ? 1 : 0}|${employee.maximumOpenings ?? "-"}|${employee.maximumClosings ?? "-"}${employee.allowedSectorIds === undefined ? "" : `|${employee.allowedSectorIds.join(".")}`}`
     )
+  }
+  for (const employee of [...problem.employees].sort(byId)) {
+    if (employee.prefersOpening || employee.prefersClosing) parts.push(`P|${employee.id}|${employee.prefersOpening ? 1 : 0}${employee.prefersClosing ? 1 : 0}`)
   }
   for (const day of [...problem.days].sort((left, right) => left.date.localeCompare(right.date))) {
     parts.push(
@@ -72,6 +77,11 @@ export function fingerprintProblem(problem: PlanningProblemV3): string {
     parts.push(
       `A|${String(entry.employeeId)}|${entry.date}|${entry.available ? 1 : 0}${entry.mandatory ? 1 : 0}${entry.fixedRest ? 1 : 0}|${entry.earliestStartMinutes}|${entry.latestEndMinutes}|${entry.maximumMinutes}`
     )
+  }
+  for (const entry of [...problem.employeeDays].sort(byEmployeeDay)) {
+    if (entry.fixedStartMinutes != null || entry.fixedEndMinutes != null || entry.mustOpen || entry.mustClose) {
+      parts.push(`F|${entry.employeeId}|${entry.date}|${entry.fixedStartMinutes ?? "-"}|${entry.fixedEndMinutes ?? "-"}|${entry.mustOpen ? 1 : 0}${entry.mustClose ? 1 : 0}`)
+    }
   }
   // Closing history — hashed ONLY when a balance is on, which is exactly when
   // it can change an answer. Hashing it unconditionally would give a new

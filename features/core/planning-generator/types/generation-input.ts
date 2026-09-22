@@ -31,6 +31,7 @@ import type { BusinessPlanningContext } from "@/features/core/planning-generator
  * engine reads; each defaults to empty when a caller has none.
  */
 export interface PlanningGenerationInput {
+  readonly previousWork?: import("@/features/core/planning-v3/types/problem").PlanningProblemV3["previousWork"]
   readonly store: Store
   readonly employees: readonly Employee[]
   readonly demand: Demand

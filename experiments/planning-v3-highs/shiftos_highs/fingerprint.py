@@ -34,6 +34,10 @@ def fingerprint_problem(problem: dict[str, Any]) -> str:
         f'rules={_js_stringify(problem["rules"])}',
         f'objectives={",".join(problem["objectives"])}',
     ]
+    if "previousWork" in problem:
+        parts.append(f'previousWork={_js_stringify(problem["previousWork"])}')
+    if "stabilityAssignments" in problem:
+        parts.append(f'stability={_js_stringify(problem["stabilityAssignments"])}')
     if "sectors" in problem:
         parts.append(f'sectors={_js_stringify(problem["sectors"])}')
     for employee in sorted(problem["employees"], key=lambda item: str(item["id"])):
@@ -50,6 +54,9 @@ def fingerprint_problem(problem: dict[str, Any]) -> str:
             f'{employee["maximumClosings"] if employee["maximumClosings"] is not None else "-"}'
             f'{"|" + ".".join(employee["allowedSectorIds"]) if "allowedSectorIds" in employee else ""}'
         )
+    for employee in sorted(problem["employees"], key=lambda item: str(item["id"])):
+        if employee.get("prefersOpening") or employee.get("prefersClosing"):
+            parts.append(f'P|{employee["id"]}|{int(bool(employee.get("prefersOpening")))}{int(bool(employee.get("prefersClosing")))}')
     for day in sorted(problem["days"], key=lambda item: item["date"]):
         parts.append(
             "D|{}|{}|{}|{}|{}{}".format(
@@ -77,6 +84,10 @@ def fingerprint_problem(problem: dict[str, Any]) -> str:
             f'{entry["earliestStartMinutes"]}|{entry["latestEndMinutes"]}|'
             f'{entry["maximumMinutes"]}'
         )
+    for entry in sorted(problem["employeeDays"], key=lambda item: (str(item["employeeId"]), item["date"])):
+        if entry.get("fixedStartMinutes") is not None or entry.get("fixedEndMinutes") is not None or entry.get("mustOpen") or entry.get("mustClose"):
+            start, end = entry.get("fixedStartMinutes"), entry.get("fixedEndMinutes")
+            parts.append(f'F|{entry["employeeId"]}|{entry["date"]}|{start if start is not None else "-"}|{end if end is not None else "-"}|{int(bool(entry.get("mustOpen")))}{int(bool(entry.get("mustClose")))}')
     # Closing history — mirrors the TypeScript block exactly, including its
     # absence. Hashed only when a balance is on, which is exactly when it can
     # change an answer; `rules` already carries the policy and moves the digest

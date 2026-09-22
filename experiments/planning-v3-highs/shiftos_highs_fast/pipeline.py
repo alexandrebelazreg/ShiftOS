@@ -44,6 +44,7 @@ from shiftos_highs.demand import (
     workable_capacity_minutes,
 )
 from shiftos_highs.evaluate import evaluate
+from shiftos_highs.quality import Quality
 from shiftos_highs.fingerprint import fingerprint_problem, fingerprint_solution
 
 from .allocation import (
@@ -930,6 +931,7 @@ class _Pair:
     #: still kept, because the failure belongs to the allocation and not to the
     #: skeleton — see where it is recorded.
     placement_failed: bool = False
+    quality_score: tuple[float, int, int] = (float("inf"), 10**9, 10**9)
 
 
 @dataclass
@@ -963,6 +965,7 @@ class _Best:
     #: True quand ce planning vient du filet de faisabilité : légal, jamais
     #: optimisé. Il tient lieu de plancher, pas de réponse.
     from_fallback: bool = False
+    quality_score: tuple[float, int, int] = (float("inf"), 10**9, 10**9)
 
     def better_than(self, slots: int, minutes: int, sector_penalty: int = 0) -> bool:
         return (slots, minutes, sector_penalty) < (
@@ -1090,6 +1093,7 @@ def solve_fast(
     repair_pairs: int = 3,
 ) -> dict[str, Any]:
     started = time.perf_counter()
+    quality = Quality(problem) if problem.get("sectors") else None
     deadline = started + max(0.0, time_limit_seconds)
 
     def elapsed() -> float:
@@ -1552,6 +1556,7 @@ def solve_fast(
         already_had_zero = best.under_covered_slots == 0 and best.deficit_minutes == 0
         if already_had_zero and problem.get("sectors"):
             zero_coverage_tie_placements += 1
+        quality_score = quality.score(result.assignments) if quality else None
         pair_short_days = _short_days(problem, demand, result.assignments)
         placed.append(
             _Pair(
@@ -1562,9 +1567,14 @@ def solve_fast(
                 minutes=minutes,
                 label=label,
                 short_days=pair_short_days,
+                quality_score=quality_score if quality_score is not None else (slots, minutes, sector_penalty),
             )
         )
-        if best.better_than(slots, minutes, sector_penalty):
+        quality_score = quality.score(result.assignments) if quality else None
+        improved = (quality_score < best.quality_score) if quality_score is not None else best.better_than(slots, minutes, sector_penalty)
+        if improved:
+            if quality_score is not None:
+                best.quality_score = quality_score
             best.assignments = result.assignments
             best.under_covered_slots = slots
             best.deficit_minutes = minutes
@@ -1595,7 +1605,7 @@ def solve_fast(
         # zero rank-penalty is also unbeatable; otherwise inspect at most six
         # more legal placements, a bounded tie-break rather than a longer search.
         if slots == 0 and minutes == 0:
-            if not problem.get("sectors") or sector_penalty == 0:
+            if quality is None or sector_penalty == 0:
                 return True
         if already_had_zero and zero_coverage_tie_placements >= 6:
             return True
@@ -1837,7 +1847,7 @@ def solve_fast(
     swap_deltas = tuple(model.step * multiple for multiple in (1, 2, 3, 4))
     seen: set[str] = {pair.allocation.signature() for pair in placed}
 
-    for pair in sorted(placed, key=lambda item: (item.slots, item.minutes, item.label))[
+    for pair in sorted(placed, key=lambda item: (item.quality_score, item.label) if quality else (item.slots, item.minutes, item.label))[
         :repair_pairs
     ]:
         if stop or remaining() <= 3.0:
@@ -1950,7 +1960,7 @@ def solve_fast(
             anchor = best.allocation
             if anchor is None:
                 break
-            before = (best.under_covered_slots, best.deficit_minutes)
+            before = best.quality_score if quality else (best.under_covered_slots, best.deficit_minutes)
 
             worst = _worst_days(problem, demand, best.assignments, limit=block_size)
             if worst and remaining() > 5.0:
@@ -1984,7 +1994,7 @@ def solve_fast(
                     stop = True
                     break
 
-            if (best.under_covered_slots, best.deficit_minutes) == before:
+            if (best.quality_score if quality else (best.under_covered_slots, best.deficit_minutes)) == before:
                 if block_size >= len(model.dates):
                     break
                 block_size += 1
@@ -2090,6 +2100,7 @@ def solve_fast(
             "placementNodes": best.placement_nodes,
             "referenceShortSlots": best.under_covered_slots,
             "referenceDeficitMinutes": best.deficit_minutes,
+            "qualityScore": list(best.quality_score) if quality else None,
             "uniqueAllocations": counters.unique_allocations,
             "allocationRootsBuilt": counters.roots_built,
             "generations": counters.generations,
@@ -2128,7 +2139,7 @@ def solve_fast(
                     },
                 }
                 for pair in sorted(
-                    placed, key=lambda item: (item.slots, item.minutes, item.label)
+                    placed, key=lambda item: (item.quality_score, item.label) if quality else (item.slots, item.minutes, item.label)
                 )[:8]
             ],
             "familiesThatImproved": counters.families_seen,

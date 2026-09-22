@@ -43,6 +43,7 @@ MILP then chooses from a domain where every value is placeable by construction.
 """
 
 from __future__ import annotations
+from shiftos_highs.sequence import streak_windows
 
 import time
 from dataclasses import dataclass
@@ -619,6 +620,12 @@ def solve_for_skeleton(
             dev = day_deviation[day_index]
             add({**coefficients, dev: -1.0}, -np.inf, budget / step)
             add({column: -value for column, value in coefficients.items()} | {dev: -1.0}, -np.inf, -budget / step)
+
+    for employee_index, employee in enumerate(employees):
+        for window, maximum in streak_windows(problem, str(employee["id"])):
+            add({column: 1.0 for (index, day_index, minutes), column in columns.items()
+                 if index == employee_index and minutes > 0 and days[day_index]["date"] in window},
+                -np.inf, float(maximum))
 
     # ── Ce que le placement a déjà réfuté ───────────────────────────────────
     #

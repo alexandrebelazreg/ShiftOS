@@ -58,6 +58,47 @@ const oneShift = (sectorAssignments: PlanningAssignmentV3["sectorAssignments"]):
   employeeId, date, segments: [{ startMinutes: 480, endMinutes: 840 }], sectorAssignments,
 })
 
+describe("audit multi-secteur — règles effectivement travaillées", () => {
+  it("applique le plafond au rayon travaillé, sans pénaliser ses autres habilitations", () => {
+    const base = problem()
+    const p = { ...base, sectors: base.sectors!.map((sector) => sector.id === "b" ? {
+      ...sector, workRules: { minimumShiftMinutes: 240, maximumDailyMinutes: 300, maximumContinuousMinutes: 480, minimumRestMinutes: 720 },
+    } : sector) }
+    expect(validate(p, oneShift([{ sectorId: "a", startMinutes: 480, endMinutes: 840 }])).validHardConstraints).toBe(true)
+    expect(validate(p, oneShift([{ sectorId: "b", startMinutes: 480, endMinutes: 840 }])).violations.some((v) => v.rule === "daily-minutes")).toBe(true)
+  })
+
+  it("respecte le repos après la dernière journée de la semaine précédente", () => {
+    const p = { ...problem(), previousWork: [{ employeeId, date: "2026-07-26" as const, endMinutes: 1380, consecutiveDays: 4 }] }
+    const report = validate(p, oneShift([{ sectorId: "a", startMinutes: 480, endMinutes: 840 }]))
+    expect(report.violations.some((v) => v.rule === "minimum-rest")).toBe(true)
+    expect(report.violations.some((v) => v.rule === "consecutive-days")).toBe(false)
+  })
+
+  it("contrôle les capacités maximales même sans demande positive", () => {
+    const p = { ...problem(), demandSlots: [{ id: "capacity", sectorId: "a", date, startMinutes: 480, endMinutes: 840, requiredEmployees: 0, maximumEmployees: 0 }] }
+    expect(validate(p, oneShift([{ sectorId: "a", startMinutes: 480, endMinutes: 840 }])).violations.some((v) => v.rule === "maximum-presence")).toBe(true)
+  })
+
+  it("ne transforme pas une obligation d'ouverture en cible souple", () => {
+    const base = problem()
+    const p = { ...base, sectors: base.sectors!.map((sector) => ({ ...sector,
+      days: sector.days.map((day) => ({ ...day, minimumOpenings: 2 })),
+    })), demandSlots: [{ id: "target", sectorId: "a", date, startMinutes: 480, endMinutes: 1200, requiredEmployees: 1, maximumEmployees: null }] }
+    expect(validate(p, oneShift([{ sectorId: "a", startMinutes: 480, endMinutes: 840 }])).violations.some((v) => v.rule === "opening-count")).toBe(true)
+  })
+
+  it("mesure la qualité indépendamment du découpage des besoins", () => {
+    const base = problem()
+    const slot = { id: "target", sectorId: "a", date, startMinutes: 480, endMinutes: 1200, requiredEmployees: 1, maximumEmployees: null }
+    const assignment = oneShift([{ sectorId: "a", startMinutes: 480, endMinutes: 840 }])
+    const whole = validate({ ...base, demandSlots: [slot] }, assignment)
+    const split = validate({ ...base, demandSlots: [{ ...slot, id: "am", endMinutes: 840 }, { ...slot, id: "pm", startMinutes: 840 }] }, assignment)
+    expect(whole.metrics.weightedCoverageCost).toBe(split.metrics.weightedCoverageCost)
+    expect(whole.metrics.unstaffedMinutes).toBe(360)
+  })
+})
+
 describe("V3 rapide — invariants multi-secteur", () => {
   it("construit deux rayons sans compter deux fois les contrats partagés", () => {
     const input = referenceInput()
@@ -120,18 +161,10 @@ describe("V3 rapide — invariants multi-secteur", () => {
         .map((entry) => entry.maximumMinutes)
     )
     const other = drive.assignedEmployeeIds.find((id) => id !== firstEmployee)!
-    // Celle qui travaille les deux comptoirs subit le plus strict des deux…
-    expect(capOf(String(firstEmployee))).toBe(480)
-    // …et le problème dit LEQUEL des cinq plafonds a gagné, sans quoi le
-    // diagnostic devine — et il a déjà deviné « magasin » quand c'était un rayon.
-    expect(
-      built.problem.employeeDays.find(
-        (entry) => String(entry.employeeId) === String(firstEmployee) && entry.available
-      )?.maximumMinutesSource
-    ).toBe("sector")
-    // …et celle qui ne met jamais les pieds à Fruits garde ses 10 h. C'est
-    // exactement le cas qui rendait une poissonnière infaisable : un comptoir
-    // voisin lui imposait un plafond de 8 h sur une amplitude de 11 h.
+    // Authorisation is an envelope; only actual work in Fruits imposes 8 h.
+    expect(capOf(String(firstEmployee))).toBe(600)
+    expect(built.problem.sectors?.find((sector) => sector.id === "fruits")?.workRules?.maximumDailyMinutes
+      ?? built.problem.sectors?.[1].workRules?.maximumDailyMinutes).toBe(480)
     expect(capOf(String(other))).toBe(600)
   })
 
@@ -358,7 +391,8 @@ describe("V3 rapide — invariants multi-secteur", () => {
     expect(built.ok).toBe(true)
     if (!built.ok) return
     const worked = built.problem.employeeDays.find((entry) => entry.available)
-    expect(worked?.maximumMinutes).toBe(450)
+    expect(worked?.maximumMinutes).toBe(600)
+    expect(built.problem.sectors?.[0].workRules?.maximumDailyMinutes).toBe(450)
     expect(worked?.maximumMinutesSource).toBe("sector")
   })
 
@@ -413,7 +447,7 @@ describe("V3 rapide — invariants multi-secteur", () => {
     expect(total(built.problem)).toBe(total(flat.problem))
   })
 
-  it("nomme les rayons quand ils ne s'accordent pas sur la présence obligatoire", () => {
+  it("combine les présences obligatoires et facultatives par salarié", () => {
     const input = referenceInput()
     const first = input.business!.sectors![0]
     const built = buildPlanningProblemV3({
@@ -427,15 +461,9 @@ describe("V3 rapide — invariants multi-secteur", () => {
       },
     })
 
-    expect(built.ok).toBe(false)
-    if (built.ok) return
-    // Sans ce contrôle, la contradiction n'apparaissait qu'au fond du moteur
-    // Python, sous la forme « optional-work-days-not-supported » : une limite
-    // du solveur, pas le rayon à corriger.
-    const issue = built.errors.find((error) => error.code === "incompatible_multi_sector_mandatory_presence")
-    expect(issue?.message).toContain("Fromage")
-    expect(issue?.message).toContain("Poisson")
-    expect(built.errors.some((error) => error.code === "optional_work_days")).toBe(false)
+    expect(built.ok).toBe(true)
+    if (!built.ok) return
+    expect(built.problem.employeeDays.filter((entry) => entry.available).every((entry) => entry.mandatory)).toBe(true)
   })
 
   it("laisse passer des rayons qui s'accordent sur la présence obligatoire", () => {

@@ -1,3 +1,4 @@
+import policy from "@/features/core/planning-v3/multi-sector-policy.json"
 import type { PlanningEmployeeV3, PlanningProblemV3 } from "@/features/core/planning-v3/types/problem"
 import type {
   PlanningAssignmentV3,
@@ -5,9 +6,9 @@ import type {
   PlanningSegmentV3,
 } from "@/features/core/planning-v3/types/solution"
 
-export const MINIMUM_SECTOR_ASSIGNMENT_MINUTES = 60
-export const MAXIMUM_SECTORS_PER_DAY = 2
-export const MAXIMUM_SECTOR_SWITCHES_PER_DAY = 1
+export const MINIMUM_SECTOR_ASSIGNMENT_MINUTES = policy.minimumSectorBlockMinutes
+export const MAXIMUM_SECTORS_PER_DAY = policy.maximumSectorsPerDay
+export const MAXIMUM_SECTOR_SWITCHES_PER_DAY = policy.maximumSectorSwitchesPerDay
 
 export interface SectorAssignmentIssue {
   readonly code:

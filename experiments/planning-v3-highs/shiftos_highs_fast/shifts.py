@@ -28,10 +28,12 @@ Splits come in two kinds, and both are generated:
 from __future__ import annotations
 
 import time
+from datetime import date as Date
 from dataclasses import dataclass
 from typing import Any
 
 from shiftos_highs.demand import DemandModel
+from shiftos_highs.policy import POLICY
 
 from .allocation import Allocation, AllocationModel
 from .skeleton import Skeleton
@@ -42,7 +44,7 @@ from .skeleton import Skeleton
 #: pour moins d'une heure n'a pas de sens d'exploitation. Ne s'applique qu'aux
 #: CHANGEMENTS de rayon — un shift qui reste au même comptoir a des blocs
 #: confondus avec ses segments, déjà bornés par la durée minimale de shift.
-MINIMUM_SECTOR_BLOCK_MINUTES = 60
+MINIMUM_SECTOR_BLOCK_MINUTES = POLICY["minimumSectorBlockMinutes"]
 
 #: Au-delà de combien de candidats l'espace d'une zone est reconstruit plus
 #: étroit, et combien de lectures à deux comptoirs chaque forme garde alors.
@@ -100,6 +102,7 @@ class Shift:
     sector_assignments: tuple[SectorAssignment, ...] = ()
     sector_switches: int = 0
     sector_preference_penalty: int = 0
+    minimum_rest: int = 0
 
     @property
     def first_start(self) -> int:
@@ -163,6 +166,7 @@ def _tighten_for_rest(
     rest = int(problem["rules"]["minimumRestMinutes"])
 
     windows: dict[tuple[int, int], tuple[int, int]] = {}
+    sector_rules = {str(s["id"]): s.get("workRules") or {} for s in problem.get("sectors") or []}
     for employee_index, employee in enumerate(employees):
         for day_index, day in enumerate(days):
             entry = entries.get((str(employee["id"]), day["date"]))
@@ -181,7 +185,7 @@ def _tighten_for_rest(
         ]
         for position in range(1, len(worked)):
             previous, current = worked[position - 1], worked[position]
-            gap = (current - previous) * 1_440
+            gap = (Date.fromisoformat(days[current]["date"]) - Date.fromisoformat(days[previous]["date"])).days * 1_440
 
             if skeleton.closes(employee_index, previous):
                 floor = int(days[previous]["closesAtMinutes"]) + rest - gap
@@ -223,45 +227,9 @@ def _peak_gaps(demand: DemandModel, date: str, step: int) -> list[tuple[int, int
     return gaps
 
 
-def role_implied_by_demand(
-    problem: dict[str, Any], sector_id: str, sector_day: dict[str, Any]
-) -> bool:
-    """La demande de ce comptoir impose-t-elle DÉJÀ son ouverture et sa fermeture ?
-
-    Un bloc de rayon ne peut ni commencer avant l'ouverture ni finir après la
-    fermeture élargie. Donc si la demande réclame au moins une personne en
-    continu de l'ouverture à la fermeture, alors couvrir la première tranche
-    C'EST ouvrir, et couvrir la dernière C'EST fermer : `minimumOpenings` et
-    `exactClosings` ne disent rien de plus.
-
-    Rien de plus, mais pas de la même façon : la demande est SOUPLE — le moteur
-    minimise un déficit — tandis que les rôles sont DURS. Les imposer en plus
-    transforme un petit manque en semaine entièrement impossible, ce qui n'aide
-    personne : sur une semaine réelle, cinq comptoirs ainsi doublés ne rendaient
-    aucun planning, là où la seule demande en produit un à neuf créneaux près.
-
-    Quand la demande NE couvre PAS la plage, les rôles restent la seule chose
-    qui exprime l'exigence et gardent toute leur force.
-    """
-    opens_at = sector_day.get("opensAtMinutes")
-    closes_at = sector_day.get("closesAtMinutes")
-    if not isinstance(opens_at, int) or not isinstance(closes_at, int):
-        return False
-    covered = sorted(
-        (int(slot["startMinutes"]), int(slot["endMinutes"]))
-        for slot in problem["demandSlots"]
-        if str(slot.get("sectorId") or problem["sectorId"]) == sector_id
-        and slot["date"] == sector_day["date"]
-        and int(slot["requiredEmployees"]) >= 1
-    )
-    if not covered:
-        return False
-    reach = opens_at
-    for start, end in covered:
-        if start > reach:
-            return False
-        reach = max(reach, end)
-    return reach >= closes_at
+def role_implied_by_demand(problem: dict[str, Any], sector_id: str, sector_day: dict[str, Any]) -> bool:
+    """Only zero role requirements are redundant; soft demand proves nothing."""
+    return int(sector_day.get("minimumOpenings") or 0) == 0 and int(sector_day.get("exactClosings") or 0) == 0
 
 
 def sole_server_duties(
@@ -526,6 +494,14 @@ def demand_by_cell(problem: dict[str, Any]) -> dict[tuple[str, str, int], int]:
         for start in range(int(slot["startMinutes"]), int(slot["endMinutes"]), step):
             key = (sector_id, slot["date"], start)
             lookup[key] = max(lookup.get(key, 0), required)
+    entries = {(str(e["employeeId"]), e["date"]): e for e in problem["employeeDays"]}
+    for key in list(lookup):
+        sid, day, minute = key
+        eligible = sum(1 for employee in problem["employees"]
+            if sid in (employee.get("allowedSectorIds") or [problem["sectorId"]])
+            and (entry := entries.get((str(employee["id"]), day))) is not None
+            and entry["available"] and entry["earliestStartMinutes"] <= minute < entry["latestEndMinutes"])
+        lookup[key] = lookup[key] * 1000 // max(1, eligible)
     return lookup
 
 
@@ -589,9 +565,25 @@ def _sector_patterns(
                 return False
         return True
 
+    previous = next((entry for entry in problem.get("previousWork") or [] if str(entry["employeeId"]) == str(employee["id"])), None)
+    previous_gap = (Date.fromisoformat(date) - Date.fromisoformat(previous["date"])).days * 1440 if previous else 0
+
     def legal(blocks: tuple[SectorAssignment, ...]) -> bool:
         if not honours_forced(blocks):
             return False
+        if previous:
+            rest = max([int(problem["rules"]["minimumRestMinutes"]), int(previous.get("minimumRestMinutes") or 0)] + [
+                int((sector_by_id[b.sector_id].get("workRules") or {}).get("minimumRestMinutes", 0)) for b in blocks])
+            if previous_gap - previous["endMinutes"] + segments[0].start < rest:
+                return False
+        total_minutes = sum(segment.end - segment.start for segment in segments)
+        for sid in {block.sector_id for block in blocks}:
+            own = sector_by_id[sid].get("workRules")
+            if own:
+                if total_minutes > own["maximumDailyMinutes"]:
+                    return False
+                if any(not own["minimumShiftMinutes"] <= segment.end - segment.start <= own["maximumContinuousMinutes"] for segment in segments):
+                    return False
         if len(segments) > 1:
             gaps = [right.start - left.end for left, right in zip(segments, segments[1:])]
             for sector_id in {block.sector_id for block in blocks}:
@@ -662,7 +654,7 @@ def _sector_patterns(
         for second_rank, second_sector in enumerate(allowed):
             if first_sector == second_sector:
                 continue
-            for before in range(60, total - 60 + 1, step):
+            for before in range(MINIMUM_SECTOR_BLOCK_MINUTES, total - MINIMUM_SECTOR_BLOCK_MINUTES + 1, step):
                 # A switch away from every demand or operating boundary has the
                 # same business effect as its nearest boundary and only blows
                 # up the candidate space. Keeping meaningful cut points is what
@@ -758,6 +750,7 @@ def generate_shifts(
         for entry in problem["employeeDays"]
     }
 
+    sector_rules = {str(s["id"]): s.get("workRules") or {} for s in problem.get("sectors") or []}
     for employee_index, employee in enumerate(employees):
         for day_index, day in enumerate(days):
             _check_deadline(deadline)
@@ -864,6 +857,9 @@ def generate_shifts(
                             sector_assignments=sector_assignments,
                             sector_switches=switches,
                             sector_preference_penalty=preference_penalty,
+                            minimum_rest=max([int(rules["minimumRestMinutes"])] + [
+                                int(sector_rules.get(b.sector_id, {}).get("minimumRestMinutes", 0))
+                                for b in sector_assignments]),
                         )
                     )
                     bucket.append(index)

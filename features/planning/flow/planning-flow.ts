@@ -1,3 +1,4 @@
+import { previousWorkFromRecords } from "@/features/planning/flow/previous-work"
 import type {
   DateRange,
   HolidayPlanEntry,
@@ -241,6 +242,8 @@ export function preparePlanningGeneration(
       employeeConstraints: planningCoreInput.employeeConstraints,
       // Reduced here, from records the caller supplied, and handed to the core
       // as integers. The builder owns no repository and neither does any solver.
+      previousWork: previousWorkFromRecords(request.savedPlannings, request.scope.period.start,
+        Math.round((request.store.minRestBetweenShifts ?? 0) * 60)),
       closingHistory: closingHistoryFor({ ...request, employees: planningEmployees }),
       business: {
         // Calls that predate sector-aware planning remain an explicit V2 API

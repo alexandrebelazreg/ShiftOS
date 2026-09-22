@@ -26,6 +26,7 @@ export interface PlanningBaselineShiftV3 {
   readonly shiftId: string
   readonly employeeId: EmployeeId
   readonly date: IsoDate
+  readonly sectorAssignments?: readonly { readonly sectorId: string; readonly startMinutes: number; readonly endMinutes: number }[]
   readonly segments: readonly PlanningSegmentV3[]
 }
 

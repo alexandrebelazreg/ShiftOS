@@ -52,6 +52,7 @@ from scipy.optimize import Bounds, LinearConstraint, milp
 from scipy.sparse import coo_matrix
 
 from shiftos_highs.demand import _daily_ceiling
+from shiftos_highs.sequence import streak_windows
 
 
 @dataclass(frozen=True, slots=True)
@@ -488,6 +489,22 @@ def solve_allocation(
             dev = day_deviation[day_index]
             add({**coefficients, dev: -1.0}, -np.inf, budget / step)
             add({column: -value for column, value in coefficients.items()} | {dev: -1.0}, -np.inf, -budget / step)
+
+    for employee_index, employee in enumerate(employees):
+        for window, maximum in streak_windows(problem, str(employee["id"])):
+            coefficients = {}
+            mandatory = 0
+            for day_index, day in enumerate(days):
+                if day["date"] not in window:
+                    continue
+                cell = model.cell(employee_index, day_index)
+                if cell is None:
+                    continue
+                if cell.mandatory:
+                    mandatory += 1
+                else:
+                    coefficients[works[(employee_index, day_index)]] = 1.0
+            add(coefficients, -np.inf, float(maximum - mandatory))
 
     # overflow ≥ minutes − continuousCap, in steps. The objective pushes it down,
     # so it settles at exactly the excess.

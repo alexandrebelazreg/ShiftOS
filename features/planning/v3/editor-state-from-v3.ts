@@ -153,6 +153,9 @@ export function baselineFromEditorState(state: EditorState): PlanningBaselineV3 
         shiftId: String(assignment.id),
         employeeId: assignment.employeeId,
         date: shift.date,
+        ...(shift.sectorAssignments ? { sectorAssignments: shift.sectorAssignments.map((block) => ({
+          sectorId: block.sectorId, startMinutes: minutesOf(block.startTime), endMinutes: minutesOf(block.endTime),
+        })) } : {}),
         segments,
       },
     ]

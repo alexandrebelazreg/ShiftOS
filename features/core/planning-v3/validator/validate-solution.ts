@@ -1,4 +1,5 @@
 import type { IsoDate, WeekDay } from "@/features/core/models"
+import { auditMultiSectorQuality } from "./multi-sector-quality"
 import { coverageDeficitMinutes, minimumConcurrentPresence } from "@/features/core/shared"
 
 import type {
@@ -241,6 +242,19 @@ export function validatePlanningSolutionV3(
     const employee = employeeById.get(employeeId)!
     const minutes = totalMinutes(segments)
     if (minutes === 0) continue
+    const assignment = assignmentByKey.get(key)
+    const usedSectors = new Set(assignment ? normalizedSectorAssignments(problem, assignment).map((b) => b.sectorId) : [])
+    for (const sector of problem.sectors ?? []) {
+      if (!usedSectors.has(sector.id) || !sector.workRules) continue
+      const own = sector.workRules
+      if (minutes > own.maximumDailyMinutes || segments.some((segment) =>
+        segment.endMinutes - segment.startMinutes < own.minimumShiftMinutes ||
+        segment.endMinutes - segment.startMinutes > own.maximumContinuousMinutes)) {
+        add("daily-minutes", "blocking", `${employee.firstName} : durée incompatible avec les règles du rayon ${sector.name} le ${date}.`, { employeeId: employee.id, date })
+      }
+    }
+    if (employee.minimumDailyMinutes > problem.rules.minimumShiftMinutes && minutes < employee.minimumDailyMinutes) add("daily-minutes", "blocking",
+      `${employee.firstName} : durée inférieure au minimum quotidien le ${date}.`, { employeeId: employee.id, date })
     for (const segment of segments) {
       const continuousMinutes = segment.endMinutes - segment.startMinutes
       if (continuousMinutes < problem.rules.minimumShiftMinutes) {
@@ -288,12 +302,12 @@ export function validatePlanningSolutionV3(
   // ── Rest between two days, consecutive days ───────────────────────────────
   const orderedDays = [...problem.days].sort((left, right) => left.date.localeCompare(right.date))
   for (const employee of problem.employees) {
-    let previous: { date: IsoDate; endMinutes: number } | null = null
-    let streak = 0
+    const history = problem.previousWork?.find((entry) => entry.employeeId === employee.id)
+    let previous: { date: IsoDate; endMinutes: number; minimumRestMinutes?: number } | null = history ?? null
+    let streak = problem.rules.maximumConsecutiveWorkedDaysSource === "configured" && history && daysBetween(history.date, orderedDays[0].date) === 1 ? history.consecutiveDays : 0
     for (const day of orderedDays) {
       const segments = worked.get(`${String(employee.id)}|${day.date}`) ?? []
       if (segments.length === 0) {
-        previous = null
         streak = 0
         continue
       }
@@ -304,14 +318,18 @@ export function validatePlanningSolutionV3(
       ) {
         add("consecutive-days", "blocking", `${employee.firstName} enchaîne ${streak} jours travaillés au ${day.date}, au-delà du maximum de ${problem.rules.maximumConsecutiveWorkedDays}.`, { employeeId: employee.id, date: day.date, expected: problem.rules.maximumConsecutiveWorkedDays, actual: streak })
       }
+      const assignment = assignmentByKey.get(`${String(employee.id)}|${day.date}`)
+      const used = new Set(assignment ? normalizedSectorAssignments(problem, assignment).map((block) => block.sectorId) : [])
+      const ownRest = Math.max(problem.rules.minimumRestMinutes,
+        ...(problem.sectors ?? []).filter((sector) => used.has(sector.id)).map((sector) => sector.workRules?.minimumRestMinutes ?? 0))
       if (previous) {
         const gapDays = daysBetween(previous.date, day.date)
         const rest = gapDays * 24 * 60 - previous.endMinutes + segments[0].startMinutes
-        if (rest < problem.rules.minimumRestMinutes) {
+        if (rest < Math.max(ownRest, previous.minimumRestMinutes ?? 0)) {
           add("minimum-rest", "blocking", `${employee.firstName} : ${rest} minutes de repos entre le ${previous.date} et le ${day.date}, en dessous du minimum de ${problem.rules.minimumRestMinutes} minutes.`, { employeeId: employee.id, date: day.date, expected: problem.rules.minimumRestMinutes, actual: rest })
         }
       }
-      previous = { date: day.date, endMinutes: segments[segments.length - 1].endMinutes }
+      previous = { date: day.date, endMinutes: segments[segments.length - 1].endMinutes, minimumRestMinutes: ownRest }
     }
   }
 
@@ -617,6 +635,19 @@ export function validatePlanningSolutionV3(
     // Absent means NO floor was declared. It never means zero and never
     // borrows `requiredEmployees`: a problem built before this field existed
     // must validate exactly as it did before.
+    if (slot.maximumEmployees != null) {
+      const sectorId = slot.sectorId ?? problem.sectorId
+      for (let start = slot.startMinutes; start < slot.endMinutes; start += problem.timeStepMinutes) {
+        const present = solution.assignments.filter((assignment) => assignment.date === slot.date &&
+          normalizedSectorAssignments(problem, assignment).some((block) => block.sectorId === sectorId &&
+            block.startMinutes <= start && block.endMinutes >= start + problem.timeStepMinutes)).length
+        if (present > slot.maximumEmployees) {
+          add("maximum-presence", "blocking", `Le ${slot.date}, le rayon ${sectorId} dépasse sa capacité de ${slot.maximumEmployees} personnes.`,
+            { date: slot.date, expected: slot.maximumEmployees, actual: present })
+          break
+        }
+      }
+    }
     if (slot.hardMinimumEmployees !== undefined && covered < slot.hardMinimumEmployees) {
       add(
         "hard-coverage-floor",
@@ -688,6 +719,7 @@ export function validatePlanningSolutionV3(
       actual: avoidableSurplusMinutes,
     })
   }
+  const quality = problem.sectors ? auditMultiSectorQuality(problem, solution) : undefined
   const informations: PlanningViolationV3[] = [
     {
       rule: "declared-metrics",
@@ -696,6 +728,7 @@ export function validatePlanningSolutionV3(
       actual: structuralSurplusMinutes,
     },
     ...fairnessInformations,
+    ...(quality?.informations ?? []),
   ]
 
   const metrics: PlanningMetricsV3 = {
@@ -708,6 +741,7 @@ export function validatePlanningSolutionV3(
     totalSurplusMinutes,
     structuralSurplusMinutes,
     avoidableSurplusMinutes,
+    ...(quality ? { weightedCoverageCost: quality.weightedCoverageCost, unstaffedMinutes: quality.unstaffedMinutes } : {}),
   }
 
   return {
@@ -773,28 +807,10 @@ export function demandedMinutesOn(problem: PlanningProblemV3, day: PlanningDayV3
  * quelques minutes une semaine entièrement refusée.
  */
 function roleImpliedByDemand(
-  problem: PlanningProblemV3,
-  sectorId: string,
-  sectorDay: { readonly date: IsoDate; readonly opensAtMinutes: number | null; readonly closesAtMinutes: number | null }
+  _problem: PlanningProblemV3, _sectorId: string,
+  day: { readonly minimumOpenings: number; readonly exactClosings: number }
 ): boolean {
-  const { opensAtMinutes, closesAtMinutes } = sectorDay
-  if (opensAtMinutes === null || closesAtMinutes === null) return false
-  const covered = problem.demandSlots
-    .filter(
-      (slot) =>
-        (slot.sectorId ?? problem.sectorId) === sectorId
-        && slot.date === sectorDay.date
-        && slot.requiredEmployees >= 1
-    )
-    .map((slot) => [slot.startMinutes, slot.endMinutes] as const)
-    .sort((left, right) => left[0] - right[0])
-  if (covered.length === 0) return false
-  let reach = opensAtMinutes
-  for (const [start, end] of covered) {
-    if (start > reach) return false
-    reach = Math.max(reach, end)
-  }
-  return reach >= closesAtMinutes
+  return day.minimumOpenings === 0 && day.exactClosings === 0
 }
 
 function totalContractMinutes(problem: PlanningProblemV3): number {

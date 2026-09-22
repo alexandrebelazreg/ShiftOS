@@ -518,14 +518,14 @@ class ElasticClosingTests(unittest.TestCase):
 
 
 class RolesAlreadyCarriedByDemandTests(unittest.TestCase):
-    """Deux réglages disent la même chose ; un seul doit être dur."""
+    """Soft coverage never removes explicit hard role requirements."""
 
-    def test_a_counter_covered_end_to_end_carries_its_own_roles(self) -> None:
+    def test_soft_demand_does_not_imply_hard_roles(self) -> None:
         from shiftos_highs_fast.shifts import role_implied_by_demand
 
         problem = _zone(counters=1)
         sector_day = problem["sectors"][0]["days"][0]
-        self.assertTrue(role_implied_by_demand(problem, "c0", sector_day))
+        self.assertFalse(role_implied_by_demand(problem, "c0", sector_day))
 
     def test_a_gap_in_the_demand_keeps_the_roles_binding(self) -> None:
         from shiftos_highs_fast.shifts import role_implied_by_demand
@@ -545,19 +545,18 @@ class RolesAlreadyCarriedByDemandTests(unittest.TestCase):
             role_implied_by_demand(problem, "c0", problem["sectors"][0]["days"][0])
         )
 
-    def test_the_engine_degrades_into_a_deficit_instead_of_refusing(self) -> None:
+    def test_impossible_explicit_roles_are_proven_infeasible(self) -> None:
         from shiftos_highs_fast.pipeline import solve_fast
 
-        # Un comptoir couvert de bout en bout mais impossible à ouvrir : ce doit
-        # être un manque de couverture, jamais un refus total.
+        # Five mandatory openers cannot be supplied by two employees.
         problem = _zone(counters=1)
         for sector in problem["sectors"]:
             for day in sector["days"]:
                 day["minimumOpenings"] = 5   # plus que l'effectif entier
                 day["exactClosings"] = 5
         answer = solve_fast(problem, time_limit_seconds=30.0)
-        self.assertNotEqual(answer["status"], "infeasible-proven")
-        self.assertIsNotNone(answer["solution"])
+        self.assertEqual(answer["status"], "infeasible-proven")
+        self.assertIsNone(answer["solution"])
 
     def test_a_counter_whose_demand_leaves_the_boundary_open_is_still_proven(self) -> None:
         from shiftos_highs_fast.pipeline import _sector_role_conflicts

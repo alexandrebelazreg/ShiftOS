@@ -1,0 +1,12 @@
+{
+  "version": 1,
+  "minimumShiftMinutes": 240,
+  "maximumContinuousMinutes": 480,
+  "closingExtensionMinutes": 45,
+  "minimumSectorBlockMinutes": 60,
+  "maximumSectorsPerDay": 2,
+  "maximumSectorSwitchesPerDay": 1,
+  "darkCounterWeight": 4,
+  "openingPriorityMinutes": 60,
+  "openingDarkMultiplier": 2
+}

@@ -2,6 +2,7 @@ import type { PlanningProblemV3 } from "@/features/core/planning-v3/types/proble
 import type { PlanningSolutionV3 } from "@/features/core/planning-v3/types/solution"
 import type { PlanningValidationReportV3 } from "@/features/core/planning-v3/types/validation"
 import { fingerprintProblem, validatePlanningSolutionV3 } from "@/features/core/planning-v3/validator"
+import { applyLocks } from "@/features/core/planning-contract/locks"
 
 import { checkSolvePlanningResponse } from "@/features/core/planning-contract/invariants"
 import { requestedPreservations } from "@/features/core/planning-contract/types/solve-request"
@@ -88,7 +89,8 @@ export function acceptV3Result(
   // 3. The schedule must answer the problem that was actually asked. Cheap, and
   // the only thing standing between a stale or replayed response and a manager
   // publishing last week's schedule under this week's header.
-  const expected = fingerprintProblem(request.problem)
+  const effective = applyLocks(request.problem, request.regeneration, request.baseline).problem
+  const expected = fingerprintProblem(effective)
   if (response.solution.problemFingerprint !== expected) {
     return {
       accepted: false,
@@ -98,7 +100,7 @@ export function acceptV3Result(
   }
 
   // 4. Re-audited from scratch, here, against the problem this client built.
-  const report = validatePlanningSolutionV3(request.problem, response.solution)
+  const report = validatePlanningSolutionV3(effective, response.solution)
   if (!report.validHardConstraints) {
     return {
       accepted: false,

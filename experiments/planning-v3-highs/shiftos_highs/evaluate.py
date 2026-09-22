@@ -10,25 +10,8 @@ def _days_between(left: str, right: str) -> int:
 
 
 def _role_implied_by_demand(problem: dict[str, Any], sector_id: str, sector_day: dict[str, Any]) -> bool:
-    """Miroir de `shifts.role_implied_by_demand`, sans dependre du moteur rapide."""
-    opens_at, closes_at = sector_day.get("opensAtMinutes"), sector_day.get("closesAtMinutes")
-    if not isinstance(opens_at, int) or not isinstance(closes_at, int):
-        return False
-    covered = sorted(
-        (int(slot["startMinutes"]), int(slot["endMinutes"]))
-        for slot in problem["demandSlots"]
-        if str(slot.get("sectorId") or problem["sectorId"]) == sector_id
-        and slot["date"] == sector_day["date"]
-        and int(slot["requiredEmployees"]) >= 1
-    )
-    if not covered:
-        return False
-    reach = opens_at
-    for start, end in covered:
-        if start > reach:
-            return False
-        reach = max(reach, end)
-    return reach >= closes_at
+    """Only zero role requirements are redundant; soft demand proves nothing."""
+    return int(sector_day.get("minimumOpenings") or 0) == 0 and int(sector_day.get("exactClosings") or 0) == 0
 
 
 def evaluate(problem: dict[str, Any], assignments: list[dict[str, Any]]) -> dict[str, Any]:
@@ -114,6 +97,14 @@ def evaluate(problem: dict[str, Any], assignments: list[dict[str, Any]]) -> dict
         total = sum(segment["endMinutes"] - segment["startMinutes"] for segment in segments)
         if total < rules["minimumShiftMinutes"]:
             violations.append(f"minimum-shift:{employee_id}:{day_date}")
+        if int(employee.get("minimumDailyMinutes") or 0) > rules["minimumShiftMinutes"] and total < int(employee["minimumDailyMinutes"]):
+            violations.append(f"minimum-daily:{employee_id}:{day_date}")
+        own_blocks = assignment_by_key[(employee_id, day_date)].get("sectorAssignments") or []
+        for sid in {str(b["sectorId"]) for b in own_blocks}:
+            own = sectors.get(sid, {}).get("workRules")
+            if own and (total > own["maximumDailyMinutes"] or any(
+                not own["minimumShiftMinutes"] <= b["endMinutes"] - b["startMinutes"] <= own["maximumContinuousMinutes"] for b in segments)):
+                violations.append(f"sector-duration:{employee_id}:{day_date}:{sid}")
         if total > rules["maximumShiftMinutes"]:
             violations.append(f"maximum-shift:{employee_id}:{day_date}")
         for segment in segments:
@@ -162,27 +153,32 @@ def evaluate(problem: dict[str, Any], assignments: list[dict[str, Any]]) -> dict
 
     ordered_days = sorted(problem["days"], key=lambda item: item["date"])
     for employee_id in employees:
-        previous: tuple[str, int] | None = None
-        streak = 0
+        history = next((h for h in problem.get("previousWork") or [] if str(h["employeeId"]) == employee_id), None)
+        previous = (history["date"], history["endMinutes"]) if history else None
+        previous_rest = int((history or {}).get("minimumRestMinutes") or 0)
+        streak = int(history["consecutiveDays"]) if rules.get("maximumConsecutiveWorkedDaysSource") == "configured" and history and _days_between(history["date"], ordered_days[0]["date"]) == 1 else 0
         for day in ordered_days:
             segments = worked.get((employee_id, day["date"]), [])
             if not segments:
-                previous = None
                 streak = 0
                 continue
             streak += 1
             maximum_streak = rules.get("maximumConsecutiveWorkedDays")
             if maximum_streak is not None and streak > maximum_streak:
                 violations.append(f"consecutive:{employee_id}:{day['date']}")
+            own_blocks = assignment_by_key[(employee_id, day["date"])].get("sectorAssignments") or []
+            own_rest = max([int(rules["minimumRestMinutes"])] + [
+                int((sectors.get(str(b["sectorId"]), {}).get("workRules") or {}).get("minimumRestMinutes", 0)) for b in own_blocks])
             if previous is not None:
                 rest = (
                     _days_between(previous[0], day["date"]) * 24 * 60
                     - previous[1]
                     + segments[0]["startMinutes"]
                 )
-                if rest < rules["minimumRestMinutes"]:
+                if rest < max(own_rest, previous_rest):
                     violations.append(f"rest:{employee_id}:{day['date']}:{rest}")
             previous = (day["date"], segments[-1]["endMinutes"])
+            previous_rest = own_rest
 
     for day in problem["days"]:
         if day["closed"]:
@@ -309,6 +305,10 @@ def evaluate(problem: dict[str, Any], assignments: list[dict[str, Any]]) -> dict
                 if any(segment["startMinutes"] <= start and segment["endMinutes"] >= end for segment in segments):
                     present += 1
             minimum_present = min(minimum_present, present)
+            if present < int(slot.get("hardMinimumEmployees") or 0):
+                violations.append(f"hard-coverage-floor:{sector_id}:{slot['date']}:{start}")
+            if slot.get("maximumEmployees") is not None and present > int(slot["maximumEmployees"]):
+                violations.append(f"maximum-presence:{sector_id}:{slot['date']}:{start}")
             missing = max(0, slot["requiredEmployees"] - present)
             slot_deficit += missing * step
             atomics.append({"startMinutes": start, "present": present, "missing": missing})

@@ -44,8 +44,12 @@ export function buildSolvePlanningRequest(
     return Object.freeze({ problem, ...withBaseline })
   }
 
+  const stability = problem.sectors && regeneration.minimizeOtherChanges && withBaseline.baseline
+    ? withBaseline.baseline.shifts.map(({ employeeId, date, segments, sectorAssignments }) => ({
+      employeeId, date, segments, ...(sectorAssignments ? { sectorAssignments } : {}),
+    })) : undefined
   return Object.freeze({
-    problem,
+    problem: stability ? { ...problem, stabilityAssignments: stability } : problem,
     regeneration: normalizeRegeneration(regeneration),
     ...withBaseline,
   })
@@ -68,6 +72,9 @@ function normalizeBaseline(baseline: PlanningBaselineV3): PlanningBaselineV3 {
         shiftId: shift.shiftId,
         employeeId: shift.employeeId,
         date: shift.date,
+        ...(shift.sectorAssignments ? { sectorAssignments: Object.freeze([...shift.sectorAssignments]
+          .sort((a, b) => a.startMinutes - b.startMinutes || a.sectorId.localeCompare(b.sectorId))
+          .map((block) => Object.freeze({ ...block }))) } : {}),
         segments: Object.freeze(
           [...shift.segments]
             .sort((left, right) => left.startMinutes - right.startMinutes)

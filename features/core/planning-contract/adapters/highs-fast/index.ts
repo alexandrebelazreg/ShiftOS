@@ -159,7 +159,13 @@ export function createHighsFastAdapter(
     // moteur qui aurait ignoré un verrou — c'est justement ce qu'on veut
     // rendre impossible.
     const locks = applyLocks(request.problem, request.regeneration, request.baseline)
-    const effective: SolvePlanningRequest = { ...request, problem: locks.problem }
+    const stability = request.problem.sectors && request.regeneration?.minimizeOtherChanges && request.baseline
+      ? request.baseline.shifts.map(({ employeeId, date, segments, sectorAssignments }) => ({
+        employeeId, date, segments, ...(sectorAssignments ? { sectorAssignments } : {}),
+      })) : undefined
+    const effective: SolvePlanningRequest = { ...request, problem: {
+      ...locks.problem, ...(stability ? { stabilityAssignments: stability } : {}),
+    } }
 
     // L'ÉQUITÉ, POSÉE COMME CONTRAINTE plutôt que confiée à une préférence.
     //
@@ -296,6 +302,7 @@ function fromEnvelope(
   const support: EnginePreservationSupport = {
     ...HIGHS_FAST_PRESERVATION_SUPPORT,
     locks: HIGHS_FAST_PRESERVATION_SUPPORT.locks && locks.refused.length === 0,
+    minimizeOtherChanges: request.problem.stabilityAssignments !== undefined,
   }
 
   const response = toSolvePlanningResponse("highs-fast", request, audited, support)

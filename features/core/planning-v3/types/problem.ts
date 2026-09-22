@@ -126,6 +126,13 @@ export interface PlanningSectorV3 {
   /** Absent sur les problèmes enregistrés avant les règles multi-secteur. */
   readonly splitRules?: PlanningSectorSplitRulesV3
   readonly closingFairness?: PlanningClosingFairnessV3 | null
+  /** Restrictions applied only on days actually worked in this sector. */
+  readonly workRules?: {
+    readonly minimumShiftMinutes: number
+    readonly maximumDailyMinutes: number
+    readonly maximumContinuousMinutes: number
+    readonly minimumRestMinutes: number
+  }
 }
 
 /** One calendar day of the horizon, with its opening window and daily target. */
@@ -322,6 +329,21 @@ export interface PlanningClosingHistoryV3 {
 
 /** The complete, immutable problem. */
 export interface PlanningProblemV3 {
+  /** Last known work before the horizon; absent means history unavailable. */
+  readonly previousWork?: readonly {
+    readonly employeeId: EmployeeId
+    readonly date: IsoDate
+    readonly endMinutes: number
+    readonly consecutiveDays: number
+    readonly minimumRestMinutes?: number
+  }[]
+  /** Soft baseline, independent of hard locks. */
+  readonly stabilityAssignments?: readonly {
+    readonly employeeId: EmployeeId
+    readonly date: IsoDate
+    readonly segments: readonly { readonly startMinutes: number; readonly endMinutes: number }[]
+    readonly sectorAssignments?: readonly { readonly sectorId: string; readonly startMinutes: number; readonly endMinutes: number }[]
+  }[]
   readonly version: PlanningProblemVersionV3
   readonly planningId: PlanningId
   readonly sectorId: string

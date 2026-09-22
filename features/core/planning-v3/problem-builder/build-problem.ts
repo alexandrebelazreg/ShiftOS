@@ -1,3 +1,4 @@
+import multiSectorPolicy from "@/features/core/planning-v3/multi-sector-policy.json"
 import type { EmployeeId, IsoDate, PlanningId, WeekDay } from "@/features/core/models"
 import { holidayBlocksEmployee, WEEK_DAYS } from "@/features/core/models"
 import { enumerateDates, intervalMinutes, isoWeekKey, weekDayOf } from "@/features/core/shared"
@@ -744,9 +745,9 @@ export function buildPlanningProblemV3(
  * s'attarder un peu — jamais au-delà de la fermeture du magasin, et jamais pour
  * fermer plus tôt : la couverture nominale reste due.
  */
-export const SECTOR_CLOSING_EXTENSION_MINUTES = 45
+export const SECTOR_CLOSING_EXTENSION_MINUTES = multiSectorPolicy.closingExtensionMinutes
 
-export const MULTI_SECTOR_MINIMUM_SHIFT_MINUTES = 240
+export const MULTI_SECTOR_MINIMUM_SHIFT_MINUTES = multiSectorPolicy.minimumShiftMinutes
 
 /**
  * Plafond de travail continu appliqué à une génération commune, en minutes.
@@ -758,7 +759,7 @@ export const MULTI_SECTOR_MINIMUM_SHIFT_MINUTES = 240
  * nulle part. C'est délibérément conservé — resserrer ne peut pas rendre
  * illégal un planning déjà accepté — mais c'est écrit, pas caché.
  */
-export const MULTI_SECTOR_MAXIMUM_CONTINUOUS_MINUTES = 480
+export const MULTI_SECTOR_MAXIMUM_CONTINUOUS_MINUTES = multiSectorPolicy.maximumContinuousMinutes
 
 /**
  * Construit le problème multi-secteur à partir des traductions mono-secteur.
@@ -787,40 +788,7 @@ function buildMultiSectorProblemV3(
   }
   if (errors.length > 0) return { ok: false, errors }
 
-  // ── Présence obligatoire : une zone, une réponse ──────────────────────────
-  //
-  // `workEveryNonFixedRestDay` décide si un jour disponible est TRAVAILLÉ ou
-  // seulement travaillable. Le moteur ne sait pas traiter un jour optionnel :
-  // il choisit les durées en supposant que le support de la matrice est fixé
-  // par la seule disponibilité, et refuse la génération entière quand ce n'est
-  // pas le cas.
-  //
-  // Quand les comptoirs répondent différemment, un salarié rattaché au seul
-  // comptoir permissif obtient exactement ce jour optionnel, et la génération
-  // s'arrêtait sur `optional-work-days-not-supported` : un message qui décrit
-  // une limite du solveur sans nommer le comptoir à corriger. La contradiction
-  // se voit ici, dans la configuration, alors disons-la ici.
-  const mandatoryGroups = new Map<boolean, string[]>()
-  for (const sector of active) {
-    const flag = sector.workEveryNonFixedRestDay === true
-    mandatoryGroups.set(flag, [...(mandatoryGroups.get(flag) ?? []), sector.name])
-  }
-  if (mandatoryGroups.size > 1) {
-    return {
-      ok: false,
-      errors: [{
-        code: "incompatible_multi_sector_mandatory_presence",
-        path: "business.sectors",
-        message:
-          `Les rayons sélectionnés ne s'accordent pas sur la présence obligatoire : `
-          + `${(mandatoryGroups.get(true) ?? []).join(", ")} impose de travailler chaque jour non repos, `
-          + `${(mandatoryGroups.get(false) ?? []).join(", ")} ne l'impose pas. `
-          + `Harmonisez « travaille tous les jours hors repos fixe » avant la génération commune. `
-          + `Le planning affiché n'a pas été modifié.`,
-      }],
-    }
-  }
-
+  // Mandatory presence is resolved per employee/day below (any applicable obligation).
   const employeeById = new Map<string, PlanningEmployeeV3>()
   for (const { problem } of parts) {
     for (const employee of problem.employees) {
@@ -862,6 +830,13 @@ function buildMultiSectorProblemV3(
     id: sector.id,
     name: sector.name,
     closingFairness: problem.rules.closingFairness,
+    workRules: {
+      minimumShiftMinutes: Math.max(MULTI_SECTOR_MINIMUM_SHIFT_MINUTES, problem.rules.minimumShiftMinutes),
+      maximumDailyMinutes: problem.rules.maximumShiftMinutes,
+      maximumContinuousMinutes: Math.min(MULTI_SECTOR_MAXIMUM_CONTINUOUS_MINUTES,
+        problem.rules.maximumContinuousMinutes ?? MULTI_SECTOR_MAXIMUM_CONTINUOUS_MINUTES),
+      minimumRestMinutes: problem.rules.minimumRestMinutes,
+    },
     splitRules: {
       splitShiftAllowed: problem.rules.splitShiftAllowed,
       minimumSplitMinutes: problem.rules.minimumSplitMinutes ?? null,
@@ -986,7 +961,7 @@ function buildMultiSectorProblemV3(
       // Ces cinq-là sont des réglages que quelqu'un a saisis quelque part, et
       // chacun a son propre écran. Le minimum désigne donc toujours un endroit
       // réel à aller corriger.
-      const ownRawSectorCap = Math.min(
+      const ownRawSectorCap = Math.max(
         ...active
           .filter((sector) => employee.allowedSectorIds?.includes(sector.id))
           .map((sector) => sector.maximumDailyDuration ?? Number.POSITIVE_INFINITY)
@@ -1043,7 +1018,7 @@ function buildMultiSectorProblemV3(
   const rules: PlanningRulesV3 = {
     minimumShiftMinutes: Math.max(
       MULTI_SECTOR_MINIMUM_SHIFT_MINUTES,
-      ...parts.map(({ problem }) => problem.rules.minimumShiftMinutes)
+      Math.min(...parts.map(({ problem }) => problem.rules.minimumShiftMinutes))
     ),
     // ENVELOPPE, pas intersection — même traitement que les coupures juste en
     // dessous, et pour la même raison.
@@ -1054,7 +1029,7 @@ function buildMultiSectorProblemV3(
     // autorisé. Le garder en intersection revenait à faire décider la journée
     // de la poissonnière par le rayon Fromage.
     maximumShiftMinutes: Math.max(...parts.map(({ problem }) => problem.rules.maximumShiftMinutes)),
-    minimumRestMinutes: Math.max(...parts.map(({ problem }) => problem.rules.minimumRestMinutes)),
+    minimumRestMinutes: Math.min(...parts.map(({ problem }) => problem.rules.minimumRestMinutes)),
     // Le repli structurel se calcule sur la ZONE, jamais par intersection.
     //
     // `defaultMaximumConsecutiveWorkedDays` promet d'être NON CONTRAIGNANT :
@@ -1086,9 +1061,7 @@ function buildMultiSectorProblemV3(
       : null,
     maximumContinuousMinutes: Math.min(
       MULTI_SECTOR_MAXIMUM_CONTINUOUS_MINUTES,
-      ...parts
-        .map(({ problem }) => problem.rules.maximumContinuousMinutes)
-        .filter((value): value is number => typeof value === "number")
+      Math.max(...parts.map(({ problem }) => problem.rules.maximumContinuousMinutes ?? MULTI_SECTOR_MAXIMUM_CONTINUOUS_MINUTES))
     ),
     maximumSplitsPerDay: splitShiftAllowed
       ? nullableMaximum(splitParts.map(({ problem }) => problem.rules.maximumSplitsPerDay))
@@ -1118,6 +1091,7 @@ function buildMultiSectorProblemV3(
       planningId: input.settings.planningId as PlanningId,
       sectorId: active[0].id,
       sectors: sectorModels,
+      ...(input.previousWork?.length ? { previousWork: input.previousWork } : {}),
       period: { start: input.settings.period.start, end: input.settings.period.end },
       timeStepMinutes: step,
       employees,
@@ -1143,30 +1117,19 @@ function commonMultiSectorRuleConflict(
   const conflict = (minimumLabel: string, minimum: number, minimumSources: string, maximumLabel: string, maximum: number, maximumSources: string) =>
     `Impossible de construire une règle commune pour ${selected} : ${minimumLabel} ${duration(minimum)} (${minimumSources}) dépasse ${maximumLabel} ${duration(maximum)} (${maximumSources}). Le planning affiché n'a pas été modifié.`
 
-  // Par comptoir, et non plus sur l'enveloppe.
-  //
-  // `maximumShiftMinutes` est désormais le plus PERMISSIF des plafonds, donc le
-  // comparer au minimum commun ne dirait plus rien : un comptoir plafonné sous
-  // ce minimum ne peut accueillir aucun shift légal, et c'est lui qu'il faut
-  // nommer, pas la zone.
-  const tightest = parts
-    .map(({ sector, problem }) => ({ name: sector.name, maximum: problem.rules.maximumShiftMinutes }))
-    .sort((left, right) => left.maximum - right.maximum)[0]
-  if (tightest !== undefined && rules.minimumShiftMinutes > tightest.maximum) {
-    return conflict(
-      "la durée minimale retenue de",
-      rules.minimumShiftMinutes,
-      sourceNames((candidate) => candidate.minimumShiftMinutes, rules.minimumShiftMinutes) || "minimum légal de 4 h",
-      "la durée maximale du rayon le plus strict, de",
-      tightest.maximum,
-      tightest.name
-    )
+  for (const { sector, problem } of parts) {
+    const minimum = Math.max(MULTI_SECTOR_MINIMUM_SHIFT_MINUTES, problem.rules.minimumShiftMinutes)
+    const maximum = Math.min(problem.rules.maximumShiftMinutes,
+      problem.rules.maximumContinuousMinutes ?? MULTI_SECTOR_MAXIMUM_CONTINUOUS_MINUTES,
+      MULTI_SECTOR_MAXIMUM_CONTINUOUS_MINUTES)
+    if (minimum > maximum) return conflict("la durée minimale de", minimum, sector.name,
+      "la durée maximale continue de", maximum, sector.name)
   }
   if (rules.maximumContinuousMinutes != null && rules.minimumShiftMinutes > rules.maximumContinuousMinutes) {
     return conflict(
       "la durée minimale retenue de",
       rules.minimumShiftMinutes,
-      sourceNames((candidate) => candidate.minimumShiftMinutes, rules.minimumShiftMinutes) || "minimum légal de 4 h",
+      sourceNames((candidate) => candidate.minimumShiftMinutes, rules.minimumShiftMinutes) || "minimum multi-secteur de 4 h",
       "la durée continue maximale retenue de",
       rules.maximumContinuousMinutes,
       sourceNames((candidate) => candidate.maximumContinuousMinutes, rules.maximumContinuousMinutes) || "limite commune de 8 h"

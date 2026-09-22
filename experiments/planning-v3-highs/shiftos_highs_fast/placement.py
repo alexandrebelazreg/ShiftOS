@@ -40,6 +40,7 @@ so the pipeline never reports its answer as a global optimum.
 from __future__ import annotations
 
 from dataclasses import dataclass
+from datetime import date as Date
 from typing import Any
 
 import numpy as np
@@ -47,6 +48,7 @@ from scipy.optimize import Bounds, LinearConstraint, milp
 from scipy.sparse import coo_matrix
 
 from shiftos_highs.demand import DemandModel
+from shiftos_highs.sequence import streak_windows
 
 from .allocation import Allocation, AllocationModel
 from .shifts import ShiftSpace, latest_close, role_implied_by_demand
@@ -54,64 +56,14 @@ from .shifts import ShiftSpace, latest_close, role_implied_by_demand
 _SCIPY_OPTIMAL = 0
 _SCIPY_INFEASIBLE = 2
 
-#: Ce que coûte la PREMIÈRE personne manquante sur un comptoir, en unités de
-#: déficit ordinaire. Laisser un comptoir désert n'est pas la même faute que
-#: lui retirer un renfort, et un coût linéaire les confond.
-DARK_COUNTER_WEIGHT = 4
+from shiftos_highs.quality import (
+    Quality, DARK_COUNTER_WEIGHT, OPENING_PRIORITY_MINUTES,
+    OPENING_DARK_MULTIPLIER, opening_priority_cells,
+)
 
-#: Combien de temps, après l'ouverture d'un comptoir, une absence se paie plus
-#: cher — et de combien.
-#:
-#: Le déficit était UNIFORME : une heure manquante à l'ouverture coûtait
-#: exactement le même prix qu'une heure manquante à quinze heures, si bien que
-#: le moteur plaçait le trou là où ses durées tombaient le mieux, souvent au
-#: début. Pour un magasin les deux heures ne se valent pas : un comptoir qui
-#: ouvre en retard se voit, un creux de milieu d'après-midi beaucoup moins.
-#:
-#: C'est un POIDS, jamais une règle dure. Le moteur ira combler l'ouverture en
-#: priorité et, s'il ne le peut vraiment pas, rendra quand même un planning au
-#: lieu de déclarer la semaine impossible — ce qu'un plancher incassable aurait
-#: fait.
-OPENING_PRIORITY_MINUTES = 60
-OPENING_DARK_MULTIPLIER = 2
+# Compatibility export; multi-sector no longer creates slot-count binaries.
+SHORT_SLOT_WEIGHT = 0
 
-
-def opening_priority_cells(problem: dict[str, Any]) -> set[tuple[str, str, int]]:
-    """Les cellules de la première heure d'ouverture de chaque comptoir.
-
-    Définies ICI et partagées : le placement les fait payer plus cher, l'oracle
-    doit les faire payer pareil, et le barème qui compare les deux aussi. Trois
-    lectures divergentes de la même règle, c'est trois mesures incomparables.
-
-    Vide en mono-secteur : sa production est mesurée par des fixtures de
-    référence, et rien de ce qui suit ne doit la déplacer.
-    """
-    step = int(problem["timeStepMinutes"])
-    cells: set[tuple[str, str, int]] = set()
-    for sector in problem.get("sectors") or []:
-        sector_id = str(sector["id"])
-        for sector_day in sector["days"]:
-            if sector_day["closed"]:
-                continue
-            opens_at = int(sector_day["opensAtMinutes"])
-            closes_at = int(sector_day["closesAtMinutes"])
-            for start in range(
-                opens_at, min(opens_at + OPENING_PRIORITY_MINUTES, closes_at), step
-            ):
-                cells.add((sector_id, str(sector_day["date"]), start))
-    return cells
-
-
-#: Ce que coûte un CRÉNEAU entamé, en unités de déficit, dans une zone.
-#:
-#: Un poids, pas une priorité. Le mono met ce compte en tête avec un `BIG` qui
-#: écrase le reste, et c'est tenable chez lui : ses créneaux sont couvrables,
-#: donc le compte discrimine. Dans une zone qui manque de bras ils sont presque
-#: tous entamés — le terme devient une quasi-constante que la relaxation ne sait
-#: que fractionner, et le MILP ne rendait plus aucun horaire. À poids modéré il
-#: départage sans dominer : la recherche classe ses candidats sur ce compte
-#: d'abord, et le placement doit au moins le voir.
-SHORT_SLOT_WEIGHT = 1
 
 
 @dataclass(frozen=True, slots=True)
@@ -208,6 +160,11 @@ def place(
     employees = sorted(problem["employees"], key=lambda item: str(item["id"]))
     days = sorted([d for d in problem["days"] if not d["closed"]], key=lambda d: d["date"])
     rules = problem["rules"]
+
+    for employee_index, employee in enumerate(employees):
+        for window, maximum in streak_windows(problem, str(employee["id"])):
+            if sum(allocation.minutes[employee_index][i] > 0 for i, day in enumerate(days) if day["date"] in window) > maximum:
+                return PlacementResult(None, 0, 0, True, True, time.perf_counter() - started)
 
     shifts = space.shifts
     shift_count = len(shifts)
@@ -309,7 +266,10 @@ def place(
     deficit_offset = shift_count
     dark_offset = deficit_offset + len(intervals)
     slot_offset = dark_offset + (len(intervals) if layered else 0)
-    columns = slot_offset + len(slot_ids)
+    fairness_offset = slot_offset + (0 if layered else len(slot_ids))
+    quality = Quality(problem) if layered else None
+    fairness = quality.fairness if quality else []
+    columns = fairness_offset + len(fairness)
 
     def target_of(index: int) -> int:
         """La demande que ce placement doit servir sur cette cellule."""
@@ -342,13 +302,24 @@ def place(
             with_deficit = dict(presence)
             with_deficit.update(missing)
             rows.add(with_deficit, float(target), np.inf)
-        for slot in slot_of_interval[index]:
+        for slot in ([] if layered else slot_of_interval[index]):
             if target > 0:
                 rows.add(
                     {**missing, slot_offset + slot: -float(target)},
                     -np.inf,
                     0.0,
                 )
+
+    ceilings: dict[tuple[str, str, int], int] = {}
+    for slot in problem["demandSlots"]:
+        maximum = slot.get("maximumEmployees")
+        if maximum is None:
+            continue
+        for minute in range(slot["startMinutes"], slot["endMinutes"], step):
+            key = (str(slot.get("sectorId") or problem["sectorId"]), slot["date"], minute)
+            ceilings[key] = min(ceilings.get(key, int(maximum)), int(maximum))
+    for key, maximum in ceilings.items():
+        rows.add({index: 1.0 for index in covering.get(key, [])}, -np.inf, float(maximum))
 
     # Opening/closing belongs to the sector assignment that touches the
     # boundary, never to the outer span of the employee's day.
@@ -442,13 +413,37 @@ def place(
         ]
         for position in range(1, len(worked)):
             previous, current = worked[position - 1], worked[position]
-            gap = (current - previous) * 1_440
+            gap = (Date.fromisoformat(days[current]["date"]) - Date.fromisoformat(days[previous]["date"])).days * 1_440
             coefficients: dict[int, float] = {}
             for index in space.by_cell.get((employee_index, current), ()):
                 coefficients[index] = coefficients.get(index, 0.0) + shifts[index].first_start
             for index in space.by_cell.get((employee_index, previous), ()):
                 coefficients[index] = coefficients.get(index, 0.0) - shifts[index].last_end
             rows.add(coefficients, rest - gap, np.inf)
+            if problem.get("sectors"):
+                # Both adjacent assignments contribute their applicable rest
+                # requirement; two rows express max(previous, current).
+                for day_index in (previous, current):
+                    own = dict(coefficients)
+                    for index in space.by_cell.get((employee_index, day_index), ()):
+                        own[index] = own.get(index, 0.0) - shifts[index].minimum_rest
+                    rows.add(own, -gap, np.inf)
+
+    # Convex weekly fairness uses continuous epigraphs, never new binaries.
+    # At integer role counts these supporting lines exactly equal n² + 2hn.
+    for offset, term in enumerate(fairness):
+        counts = {}
+        for shift in shifts:
+            if model.employees[shift.employee_index] != term.employee_id:
+                continue
+            count = term.matches(days[shift.day_index]["date"], [
+                {"sectorId": b.sector_id, "startMinutes": b.start, "endMinutes": b.end}
+                for b in shift.sector_assignments], quality.days)
+            if count:
+                counts[shift.index] = count
+        for n in range(term.maximum):
+            rows.add({**{index: -(2*n + 1 + 2*term.history)*count for index, count in counts.items()},
+                      fairness_offset + offset: 1.0}, -n*(n+1), np.inf)
 
     # ── Objective ───────────────────────────────────────────────────────────
     #
@@ -471,10 +466,7 @@ def place(
                 OPENING_DARK_MULTIPLIER if (sector_id, date, start) in priority else 1
             )
             objective[dark_offset + index] = float(step * weight)
-    if layered:
-        for index in range(len(slot_ids)):
-            objective[slot_offset + index] = float(step * SHORT_SLOT_WEIGHT)
-    else:
+    if not layered:
         biggest_deficit = sum(target_of(index) for index in range(len(intervals))) * step
         big = float(biggest_deficit + 1) * 10.0
         for index in range(len(slot_ids)):
@@ -511,6 +503,18 @@ def place(
             + shift.index * 1e-12
         )
 
+    if quality:
+        for shift in shifts:
+            objective[shift.index] = quality.assignment_cost(
+                model.employees[shift.employee_index], days[shift.day_index]["date"],
+                [{"startMinutes": s.start, "endMinutes": s.end} for s in shift.segments],
+                [{"sectorId": b.sector_id, "startMinutes": b.start, "endMinutes": b.end}
+                 for b in shift.sector_assignments],
+            )
+
+    for offset, term in enumerate(fairness):
+        objective[fairness_offset + offset] = quality.scale * term.weight / term.denominator
+
     lower_bounds = np.zeros(columns)
     upper_bounds = np.ones(columns)
     for index in range(len(intervals)):
@@ -522,6 +526,9 @@ def place(
         )
 
     integrality = np.ones(columns, dtype=np.int8)
+    for offset, term in enumerate(fairness):
+        upper_bounds[fairness_offset + offset] = term.maximum**2 + 2*term.history*term.maximum
+        integrality[fairness_offset + offset] = 0
     bounds = Bounds(lower_bounds, upper_bounds)
     constraint = rows.constraint(columns)
     # Ce que la recherche du meilleur horaire laisse à la recherche d'un
