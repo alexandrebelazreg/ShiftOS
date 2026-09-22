@@ -231,6 +231,48 @@
   page: a3-landscape;
 }
 
+@page a4-portrait {
+  size: A4 portrait;
+  margin: 0;
+}
+
+/* Les billets individuels : A4 portrait, deux par page.
+ *
+ * Marge de page NULLE, et c'est voulu : la marge utile est portée par le billet
+ * lui-même (`p-[10mm]`). La cumuler avec celle de `@page` rognerait la seconde
+ * moitié, et le trait de coupe ne tomberait plus au milieu de la feuille. */
+.leave-slips {
+  page: a4-portrait;
+  break-after: page;
+}
+
+.leave-slips:last-child {
+  break-after: auto;
+}
+
+/* La semaine de fermeture, hachurée.
+ *
+ * Une trame et non un aplat : la feuille s'imprime en noir et blanc sur le
+ * photocopieur du magasin, où deux gris se ressemblent. Une hachure survit à la
+ * photocopie, et elle se distingue à l'œil d'une case peinte à la couleur du
+ * rayon — ce qui est tout l'enjeu : personne ne doit croire qu'il doit cette
+ * semaine-là à son arbitrage.
+ *
+ * En `background-image` plutôt qu'en attribut `style` : la politique de
+ * sécurité du site interdit les attributs de style, et le nonce ne les couvre
+ * pas. Une moitié de la page casserait sans rien dire. */
+.leave-sheet-closed {
+  background-image: repeating-linear-gradient(
+    45deg,
+    #00000026 0,
+    #00000026 1.2mm,
+    transparent 1.2mm,
+    transparent 2.4mm
+  );
+  print-color-adjust: exact;
+  -webkit-print-color-adjust: exact;
+}
+
 @media print {
   body:has([data-publication-document])
     *:not(:has([data-publication-document])):not([data-publication-document]):not(

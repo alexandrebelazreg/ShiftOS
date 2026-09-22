@@ -1,7 +1,11 @@
 import type { EmployeeRecord } from "@/features/employees/types/employee.types"
 import { nameWithUppercaseFamily } from "@/features/planning/board/model/labels"
 import { campaignWeeks } from "@/features/paid-leave/calendar/campaign-weeks"
-import { campaignWeekIds, effectiveRequestedWeeks, preferenceRank } from "@/features/paid-leave/domain/campaign"
+import {
+  activeClosureWeeks,
+  paidLeaveTargets,
+  preferenceRank,
+} from "@/features/paid-leave/domain/campaign"
 import type { PaidLeaveCampaign, PaidLeaveWeekId } from "@/features/paid-leave/models/paid-leave-campaign"
 import type { SectorDemandConfiguration } from "@/features/sectors"
 
@@ -21,6 +25,16 @@ import type { SectorDemandConfiguration } from "@/features/sectors"
 export interface LeaveSheetCell {
   readonly weekId: PaidLeaveWeekId
   readonly granted: boolean
+  /**
+   * Le magasin ferme cette semaine-là, et tout le monde est absent.
+   *
+   * À PART de `granted`, et pas fondu dedans. Ce n'est pas la même chose pour
+   * celui qui lit la feuille au mur : une case accordée répond à ce qu'il a
+   * demandé, une case fermée s'impose à toute la colonne. Les confondre ferait
+   * croire à vingt personnes qu'elles ont obtenu la même semaine — et à chacune
+   * qu'elle la doit à l'arbitrage.
+   */
+  readonly closed: boolean
   /** Le rang du vœu servi. `null` sur une semaine posée hors de tout vœu. */
   readonly rank: 1 | 2 | 3 | null
 }
@@ -90,7 +104,12 @@ export function buildLeaveSheet({
   readonly printedAtLabel: string
 }): LeaveSheetVM {
   const weeks = campaignWeeks(campaign.year, campaign.period)
-  const weekIds = campaignWeekIds(campaign)
+  // Les semaines ATTRIBUABLES, pour que « x / y » compare des choses de même
+  // nature : une demande dont une semaine tombe sur la fermeture ne peut pas
+  // recevoir d'attribution pour celle-là, et la compter ferait lire « 2 / 3 »
+  // à quelqu'un qui a tout ce qu'il pouvait avoir.
+  const targetOf = paidLeaveTargets(campaign)
+  const closed = activeClosureWeeks(campaign)
   const activeSectors = sectors.filter((sector) => sector.status === "active")
   const sectorByName = new Map(activeSectors.map((sector) => [sector.name, sector]))
 
@@ -122,11 +141,9 @@ export function buildLeaveSheet({
     sectorId: sector.id,
     sectorName: sector.name,
     color: sector.color ?? null,
-    rows: (bySector.get(sector.id) ?? [])
-      .map((employee) => buildRow(campaign, employee, columns, weekIds))
-      // Le nom de famille commande le tri, comme sur toute liste affichée : on
-      // cherche « Martin », pas « Luca ».
-      .sort((left, right) => left.name.localeCompare(right.name, "fr-FR")),
+    rows: [...(bySector.get(sector.id) ?? [])]
+      .sort(byFamilyName)
+      .map((employee) => buildRow(campaign, employee, columns, targetOf(employee.id), closed)),
   }))
 
   return {
@@ -152,11 +169,34 @@ export function buildLeaveSheet({
   }
 }
 
+/**
+ * Le tri des noms sur un document imprimé : FAMILLE d'abord.
+ *
+ * Il se faisait sur le nom MIS EN FORME, qui commence par le prénom
+ * (« Luca MARTIN »). La feuille était donc rangée par prénom — exactement ce que
+ * son propre commentaire disait de ne pas faire. Sur un mur de trente lignes,
+ * on cherche MARTIN, et on le cherchait ligne à ligne.
+ *
+ * Trié sur les champs BRUTS plutôt que sur la chaîne affichée : découper un nom
+ * composé pour en extraire la famille marche jusqu'au premier « de la Tour »,
+ * et la fiche porte déjà les deux champs séparément.
+ *
+ * Le prénom départage : deux MARTIN doivent rester dans le même ordre d'une
+ * impression à l'autre.
+ */
+export function byFamilyName(left: EmployeeRecord, right: EmployeeRecord): number {
+  return (
+    left.lastName.localeCompare(right.lastName, "fr-FR")
+    || left.firstName.localeCompare(right.firstName, "fr-FR")
+  )
+}
+
 function buildRow(
   campaign: PaidLeaveCampaign,
   employee: EmployeeRecord,
   columns: readonly LeaveSheetColumn[],
-  weekIds: ReadonlySet<PaidLeaveWeekId>
+  grantable: number,
+  closed: ReadonlySet<PaidLeaveWeekId>
 ): LeaveSheetRow {
   const request = campaign.requests[employee.id]
   const granted = new Set(campaign.grants[employee.id] ?? [])
@@ -166,10 +206,18 @@ function buildRow(
     // que l'œil cherche sur un mur.
     name: nameWithUppercaseFamily(`${employee.firstName} ${employee.lastName}`.trim()),
     grantedCount: granted.size,
-    requestedCount: effectiveRequestedWeeks(request, weekIds),
+    // CE QU'ON POUVAIT LUI ACCORDER, et non ce qu'elle a demandé.
+    //
+    // « 3 / 5 » se lit comme un échec de l'arbitrage. Si les deux semaines
+    // manquantes sont refusées par son SOLDE, l'arbitrage n'y est pour rien et
+    // la personne restera « incomplète » à vie sur toutes les feuilles. C'est
+    // le même choix que le compte rendu de génération a dû faire, et le billet
+    // individuel le refait : trois endroits, une seule définition.
+    requestedCount: grantable,
     cells: columns.map((column) => ({
       weekId: column.weekId,
       granted: granted.has(column.weekId),
+      closed: closed.has(column.weekId),
       rank: granted.has(column.weekId) && request ? preferenceRank(request, column.weekId) : null,
     })),
   }

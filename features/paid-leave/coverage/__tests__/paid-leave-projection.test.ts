@@ -250,7 +250,7 @@ describe("le coût du compromis, personne par personne", () => {
       grants: { a: ["2026-W21"] },
     })
 
-    expect(projection.compromises).toEqual([
+    expect(projection.setbacks).toEqual([
       { employeeId: "a", name: "a Test", keptFromWish1: 0, movedWeeks: 1, worstRank: 2 },
     ])
   })
@@ -265,7 +265,7 @@ describe("le coût du compromis, personne par personne", () => {
       grants: { a: ["2026-W20"] },
     })
 
-    expect(projection.compromises).toEqual([])
+    expect(projection.setbacks).toEqual([])
   })
 
   it("met les plus touchés en tête", () => {
@@ -277,7 +277,7 @@ describe("le coût du compromis, personne par personne", () => {
       grants: { a: [], b: [] },
     })
 
-    expect(projection.compromises.map((entry) => [entry.employeeId, entry.movedWeeks])).toEqual([
+    expect(projection.setbacks.map((entry) => [entry.employeeId, entry.movedWeeks])).toEqual([
       ["b", 2],
       ["a", 1],
     ])

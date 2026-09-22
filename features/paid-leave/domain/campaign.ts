@@ -61,12 +61,13 @@ export function createPaidLeaveCampaign({
         Object.fromEntries(
           weeks.map((week) => [
             week.id,
-            { minimumHours: 0, toleratedDeficitHours: 0 },
+            { minimumHours: 0, toleratedDeficitHours: 0, maximumAbsent: null },
           ])
         ),
       ])
     ),
     reinforcementPools: [],
+    closureWeekIds: [],
     grants: {},
     solution: null,
     validatedSnapshot: null,
@@ -95,7 +96,7 @@ export function synchronizePaidLeaveCampaign(
     coverage[sector.id] = Object.fromEntries(
       weeks.map((week) => [
         week.id,
-        existing[week.id] ?? { minimumHours: 0, toleratedDeficitHours: 0 },
+        existing[week.id] ?? { minimumHours: 0, toleratedDeficitHours: 0, maximumAbsent: null },
       ])
     )
   }
@@ -112,6 +113,68 @@ export function synchronizePaidLeaveCampaign(
  */
 export function campaignWeekIds(campaign: PaidLeaveCampaign): ReadonlySet<PaidLeaveWeekId> {
   return new Set(campaignWeeks(campaign.year, campaign.period).map((week) => week.id))
+}
+
+/**
+ * Les semaines de fermeture qui s'appliquent VRAIMENT à cette campagne.
+ *
+ * Filtrées par la période, et le nom le dit : un changement de période laisse
+ * derrière lui des semaines de fermeture devenues hors champ, et les compter
+ * décompterait du solde une fermeture qui n'a plus lieu ici.
+ *
+ * Pas `closureWeekIds`, qui serait le nom évident : ce nom est déjà celui du
+ * CHAMP, dont le contenu n'est pas filtré. Deux choses différentes sous un seul
+ * nom finissent toujours par être confondues — c'est arrivé ici même avec
+ * `PaidLeaveCompromise`, et on ne le refait pas.
+ */
+export function activeClosureWeeks(
+  campaign: PaidLeaveCampaign
+): ReadonlySet<PaidLeaveWeekId> {
+  const weeks = campaignWeekIds(campaign)
+  return new Set((campaign.closureWeekIds ?? []).filter((weekId) => weeks.has(weekId)))
+}
+
+/**
+ * Les semaines que la campagne peut encore ATTRIBUER — la période moins la
+ * fermeture.
+ *
+ * DEUX ENSEMBLES, ET LA DIFFÉRENCE EST TOUT LE SUJET. « Dans la campagne » et
+ * « attribuable » ne veulent pas dire la même chose dès qu'une fermeture existe :
+ * un vœu posé sur une semaine de fermeture n'est pas HORS PÉRIODE — il est sans
+ * objet, puisque la personne sera de toute façon en congé. Les confondre
+ * transformerait ce vœu en vœu orphelin et ferait dire à l'écran qu'une semaine
+ * demandée est tombée hors de la campagne, ce qui est faux.
+ *
+ * D'où la règle : qui demande « le solveur peut-il placer ici ? » passe cet
+ * ensemble ; qui demande « cette semaine est-elle dans la campagne ? » passe
+ * {@link campaignWeekIds}. `orphanedWishes` est du second genre, et c'est le
+ * seul.
+ */
+export function attributableWeekIds(
+  campaign: PaidLeaveCampaign
+): ReadonlySet<PaidLeaveWeekId> {
+  const closed = activeClosureWeeks(campaign)
+  return new Set([...campaignWeekIds(campaign)].filter((weekId) => !closed.has(weekId)))
+}
+
+/**
+ * Ce qu'il reste à poser APRÈS la fermeture.
+ *
+ * La fermeture consomme le solde comme n'importe quel congé : deux semaines
+ * fermées sur un solde de cinq en laissent trois à arbitrer. Sans cette
+ * soustraction, la campagne accorderait cinq semaines À CÔTÉ de la fermeture, et
+ * la personne en aurait posé sept.
+ *
+ * `null` traverse : pas de solde connu, donc rien à vérifier — et surtout pas un
+ * zéro fabriqué par la soustraction, qui fermerait la campagne à tout le monde
+ * dès qu'une semaine de fermeture existe.
+ */
+export function remainingEntitlementWeeks(
+  entitlementWeeks: number | null | undefined,
+  closureCount: number
+): number | null {
+  if (entitlementWeeks === null || entitlementWeeks === undefined) return null
+  return Math.max(0, Math.floor(entitlementWeeks) - closureCount)
 }
 
 /**
@@ -139,6 +202,92 @@ export function effectiveRequestedWeeks(
   // Quand les trois portent le même nombre, ce qui est le cas normal, le
   // maximum EST ce nombre.
   return Math.max(0, ...wishPlanSizes(request, weekIds))
+}
+
+/**
+ * Combien de semaines on peut RÉELLEMENT lui accorder.
+ *
+ * Trois bornes, et la troisième est nouvelle : ce qu'elle a demandé, ce que ses
+ * vœux offrent encore, et ce qu'il lui RESTE À POSER. Rien ne vérifiait la
+ * dernière — la cible venait du vœu, jamais d'un droit — si bien qu'une campagne
+ * pouvait accorder cinq semaines à quelqu'un qui n'en avait plus que trois. La
+ * paie le découvrait après.
+ *
+ * Une seule définition pour tout l'écran : la cible du solveur, le compteur
+ * « x / y accordées », le raccourci « Accorder V1 » et le scénario de référence
+ * la partagent. Deux façons de dire « combien peut-il en obtenir » finiraient
+ * par diverger, et l'écart ne se verrait qu'à la validation.
+ *
+ * `null` vaut « pas de solde connu » : la borne disparaît, et le calcul est
+ * exactement celui d'avant ce champ.
+ */
+export function grantableWeekCount(
+  request: PaidLeaveRequest | undefined,
+  weekIds: ReadonlySet<PaidLeaveWeekId>,
+  entitlementWeeks?: number | null
+): number {
+  const wanted = Math.min(
+    effectiveRequestedWeeks(request, weekIds),
+    grantableWishes(request, weekIds).length
+  )
+  if (entitlementWeeks === null || entitlementWeeks === undefined) return wanted
+  return Math.max(0, Math.min(wanted, Math.floor(entitlementWeeks)))
+}
+
+/**
+ * LA CIBLE D'UNE PERSONNE DANS CETTE CAMPAGNE — une seule définition, partout.
+ *
+ * Quatre bornes, et aucune ne se devine : ce qu'elle a demandé, ce que ses vœux
+ * offrent encore, ce qu'il lui reste à poser, et ce que la fermeture a déjà
+ * consommé. Quatre endroits les composaient séparément — le contrat du solveur,
+ * le scénario de référence, le partage d'équité et le compte rendu — et il a
+ * suffi d'ajouter la quatrième pour que trois d'entre eux se trompent.
+ *
+ * UNE FABRIQUE, ET NON UNE FONCTION PAR APPEL : les deux ensembles de semaines
+ * et le nombre de semaines fermées ne dépendent pas du salarié. Les recalculer
+ * soixante fois serait sans conséquence mesurable, mais offrirait à chaque
+ * appelant la tentation de les calculer lui-même « pour aller plus vite », et
+ * c'est ainsi que les définitions divergent.
+ */
+export function paidLeaveTargets(
+  campaign: PaidLeaveCampaign
+): (employeeId: string) => number {
+  const attributable = attributableWeekIds(campaign)
+  const closureCount = activeClosureWeeks(campaign).size
+  return (employeeId) =>
+    grantableWeekCount(
+      campaign.requests[employeeId],
+      attributable,
+      remainingEntitlementWeeks(
+        campaign.employeeSettings?.[employeeId]?.entitlementWeeks,
+        closureCount
+      )
+    )
+}
+
+/**
+ * Les attributions sont-elles encore celles que le calcul a rendues ?
+ *
+ * La question se pose à CHAQUE fois qu'on veut confronter quelque chose à la
+ * solution : la liste des servis au premier vœu, le prix des concessions. Ces
+ * nombres ne valent que pour la campagne que le solveur a produite ; dès que le
+ * gérant déplace une semaine à la main, ils parlent d'un état qui n'existe plus.
+ *
+ * Les afficher quand même promettrait un gain sur une référence disparue, et
+ * ferait crier un avertissement à chaque retouche — un avertissement qui crie à
+ * tort est un avertissement qu'on apprend à ignorer.
+ */
+export function grantsMatchSolution(campaign: PaidLeaveCampaign): boolean {
+  const solved = campaign.solution?.grants
+  if (!solved) return false
+  const keys = new Set([...Object.keys(solved), ...Object.keys(campaign.grants)])
+  for (const key of keys) {
+    const before = [...(solved[key] ?? [])].sort()
+    const after = [...(campaign.grants[key] ?? [])].sort()
+    if (before.length !== after.length) return false
+    if (before.some((weekId, index) => weekId !== after[index])) return false
+  }
+  return true
 }
 
 /**
@@ -297,6 +446,8 @@ function defaultEmployeeSettings(
     linkedEmployeeId: null,
     entryDate: employee.createdAt.slice(0, 10),
     firstChoiceHistory: historyFromCampaigns(employee.id, previousCampaigns),
+    // Inconnu tant que le gérant ne l'a pas saisi : on ne l'invente pas.
+    entitlementWeeks: null,
   }
 }
 

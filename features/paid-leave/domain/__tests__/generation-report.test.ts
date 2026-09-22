@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest"
 
+import type { AbsenceRecord } from "@/features/absences/types/absence-record"
 import type { EmployeeRecord } from "@/features/employees/types/employee.types"
 import {
   describePaidLeaveOutcome,
@@ -61,6 +62,123 @@ describe("les avertissements avant de lancer le calcul", () => {
 
     expect(sectorWarning?.message).toContain("Luca Test")
     expect(sectorWarning?.message).toContain("aucun minimum de couverture")
+  })
+
+  it("nomme qui a des vœux sur des semaines où il est déjà absent", () => {
+    // Semaine 20 de 2026 : du lundi 11 au dimanche 17 mai.
+    const warnings = paidLeaveGenerationWarnings({
+      campaign: campaign({ requests: { e1: request(["2026-W20"]) } }),
+      employees: [employee("e1", "Luca", "Drive")],
+      sectors: [sector("Drive")],
+      weekIds: WEEKS,
+      absences: [
+        { id: "a1", employeeId: "e1", type: "sick_leave", start: "2026-05-12", end: "2026-05-15" },
+      ] as AbsenceRecord[],
+    })
+    const warning = warnings.find((entry) => entry.kind === "already-absent")
+
+    expect(warning?.message).toContain("Luca Test")
+    expect(warning?.message).toContain("déjà absent")
+  })
+
+  it("signale une semaine ACCORDÉE qui tombe sur une absence enregistrée", () => {
+    // L'ordre des saisies fait tout : la semaine est accordée, PUIS l'arrêt
+    // arrive. Le solveur n'aurait jamais produit cet état, et rien ne le
+    // signalait — la couverture compte la personne absente une seule fois, donc
+    // aucune cellule ne rougit, et la paie découvre une semaine décomptée du
+    // solde pendant un arrêt.
+    const warnings = paidLeaveGenerationWarnings({
+      campaign: campaign({
+        requests: { e1: request(["2026-W20"]) },
+        grants: { e1: ["2026-W20"] },
+      }),
+      employees: [employee("e1", "Luca", "Drive")],
+      sectors: [sector("Drive")],
+      weekIds: WEEKS,
+      absences: [
+        { id: "a1", employeeId: "e1", type: "sick_leave", start: "2026-05-11", end: "2026-05-13" },
+      ] as AbsenceRecord[],
+    })
+    const warning = warnings.find((entry) => entry.kind === "granted-while-absent")
+
+    expect(warning?.message).toContain("Luca Test")
+    expect(warning?.message).toContain("ACCORDÉES")
+  })
+
+  it("se tait sur les attributions quand rien ne se chevauche", () => {
+    const warnings = paidLeaveGenerationWarnings({
+      campaign: campaign({
+        requests: { e1: request(["2026-W20"]) },
+        grants: { e1: ["2026-W20"] },
+      }),
+      employees: [employee("e1", "Luca", "Drive")],
+      sectors: [sector("Drive")],
+      weekIds: WEEKS,
+      absences: [
+        { id: "a1", employeeId: "e1", type: "sick_leave", start: "2026-05-26", end: "2026-05-28" },
+      ] as AbsenceRecord[],
+    })
+
+    expect(warnings.map((warning) => warning.kind)).toEqual([])
+  })
+
+  it("se tait quand l’absence ne touche aucun vœu", () => {
+    // L’arrêt tombe en S22, les vœux sont en S20.
+    const warnings = paidLeaveGenerationWarnings({
+      campaign: campaign({ requests: { e1: request(["2026-W20"]) } }),
+      employees: [employee("e1", "Luca", "Drive")],
+      sectors: [sector("Drive")],
+      weekIds: WEEKS,
+      absences: [
+        { id: "a1", employeeId: "e1", type: "sick_leave", start: "2026-05-26", end: "2026-05-28" },
+      ] as AbsenceRecord[],
+    })
+
+    expect(warnings.map((warning) => warning.kind)).toEqual([])
+  })
+
+  it("nomme qui demande plus que son solde restant", () => {
+    // La cible est bornée par le solde, donc le calcul n'accordera jamais trop.
+    // Sans cette ligne, la personne paraîtrait simplement mal servie, et le
+    // gérant chercherait la cause dans la couverture — où elle n'est pas.
+    const warnings = paidLeaveGenerationWarnings({
+      campaign: {
+        ...campaign({ requests: { e1: request(["2026-W20", "2026-W21"]) } }),
+        employeeSettings: {
+          e1: { employeeId: "e1", priority: false, linkedEmployeeId: null, entryDate: "2020-01-01", firstChoiceHistory: 0, entitlementWeeks: 1 },
+        },
+      },
+      employees: [employee("e1", "Luca", "Drive")],
+      sectors: [sector("Drive")],
+      weekIds: WEEKS,
+    })
+    const warning = warnings.find((entry) => entry.kind === "over-entitlement")
+
+    expect(warning?.message).toContain("Luca Test")
+    expect(warning?.message).toContain("solde")
+  })
+
+  it("se tait quand le solde couvre la demande, ou qu’il est inconnu", () => {
+    const sansSolde = paidLeaveGenerationWarnings({
+      campaign: campaign({ requests: { e1: request(["2026-W20", "2026-W21"]) } }),
+      employees: [employee("e1", "Luca", "Drive")],
+      sectors: [sector("Drive")],
+      weekIds: WEEKS,
+    })
+    expect(sansSolde.map((entry) => entry.kind)).toEqual([])
+
+    const soldeSuffisant = paidLeaveGenerationWarnings({
+      campaign: {
+        ...campaign({ requests: { e1: request(["2026-W20"]) } }),
+        employeeSettings: {
+          e1: { employeeId: "e1", priority: false, linkedEmployeeId: null, entryDate: "2020-01-01", firstChoiceHistory: 0, entitlementWeeks: 3 },
+        },
+      },
+      employees: [employee("e1", "Luca", "Drive")],
+      sectors: [sector("Drive")],
+      weekIds: WEEKS,
+    })
+    expect(soldeSuffisant.map((entry) => entry.kind)).toEqual([])
   })
 
   it("se tait quand le rayon est reconnu", () => {

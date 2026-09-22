@@ -27,6 +27,10 @@ import {
 } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
+import { absenceService } from "@/features/absences/services/absence.service"
+import { supabaseConfigured } from "@/features/auth/supabase/config"
+import { absentWeeksByEmployee } from "@/features/paid-leave/domain/already-absent"
+import type { AbsenceRecord } from "@/features/absences/types/absence-record"
 import { employeeService } from "@/features/employees/services/employee.service"
 import type { EmployeeRecord } from "@/features/employees/types/employee.types"
 import {
@@ -38,15 +42,25 @@ import {
   calculatePaidLeaveCoverage,
   type PaidLeaveCoverageSummary,
 } from "@/features/paid-leave/coverage/paid-leave-coverage"
-import { buildPaidLeaveProjection, wishOneScenario } from "@/features/paid-leave/coverage/paid-leave-projection"
+import {
+  buildPaidLeaveProjection,
+  describePaidLeaveTension,
+  wishOneScenario,
+} from "@/features/paid-leave/coverage/paid-leave-projection"
+import { comparePaidLeaveSolution } from "@/features/paid-leave/domain/solution-diff"
 import { PaidLeaveProjectionReport } from "@/features/paid-leave/components/paid-leave-projection-report"
 import { buildLeaveSheet } from "@/features/paid-leave/publication/leave-sheet"
 import { PaidLeaveSheet } from "@/features/paid-leave/publication/PaidLeaveSheet"
+import { buildLeaveSlips } from "@/features/paid-leave/publication/leave-slips"
+import { PaidLeaveSlips } from "@/features/paid-leave/publication/PaidLeaveSlips"
 import {
+  activeClosureWeeks,
   campaignWeekIds,
+  grantsMatchSolution,
   createPaidLeaveCampaign,
   effectiveRequestedWeeks,
   linkPriorityEmployees,
+  paidLeaveTargets,
   preferenceRank,
   synchronizePaidLeaveCampaign,
   togglePaidLeaveWish,
@@ -63,6 +77,8 @@ import {
 } from "@/features/paid-leave/domain/validation"
 import type {
   PaidLeaveCampaign,
+  PaidLeaveConcessionLever,
+  PaidLeaveCoverageRule,
   PaidLeavePeriod,
   PaidLeavePeriodKind,
   PaidLeaveRequest,
@@ -101,12 +117,16 @@ export function PaidLeavePlanningView({ initialStore }: { readonly initialStore:
   const [solveStartedAt, setSolveStartedAt] = useState<number | null>(null)
   const [elapsedSeconds, setElapsedSeconds] = useState(0)
   const [solveMessage, setSolveMessage] = useState<string | null>(null)
+  // Ce qui est DÉJÀ posé ailleurs : un arrêt, un congé parental, une
+  // formation. Sans elles, le solveur accordait des congés payés par-dessus.
+  const [absences, setAbsences] = useState<readonly AbsenceRecord[]>([])
 
   useEffect(() => {
     let active = true
     async function load() {
       const loadedEmployees = await employeeService.list()
       if (!active) return
+      const loadedAbsences = await absenceService.list()
       const loadedSectors = await sectorStore.list()
       const stored = await paidLeaveStore.list()
       const synchronized = stored.map((campaign) =>
@@ -118,6 +138,7 @@ export function PaidLeavePlanningView({ initialStore }: { readonly initialStore:
       for (const campaign of synchronized) await paidLeaveStore.save(campaign)
       const requestedId = await paidLeaveStore.activeId()
       setEmployees(loadedEmployees)
+      setAbsences(loadedAbsences)
       setSectors(loadedSectors)
       setCampaigns(synchronized)
       setActiveId(
@@ -154,12 +175,28 @@ export function PaidLeavePlanningView({ initialStore }: { readonly initialStore:
     [sectors]
   )
 
+  /**
+   * Enregistre, et REND la promesse de l'enregistrement.
+   *
+   * Elle était jetée (`void`), ce qui convenait tant que le calcul partait avec
+   * l'état en mémoire. Le serveur relisant désormais la campagne EN BASE, une
+   * génération lancée dans la seconde qui suit une modification pourrait porter
+   * sur la version d'avant — un cas rare, muet, et impossible à reproduire à la
+   * demande. C'est exactement le genre de défaut qu'on ne débogue jamais.
+   */
   const saveCampaign = (next: PaidLeaveCampaign) => {
-    void guard(() => paidLeaveStore.save(next))
+    // `true` explicite, parce que `guard` rend `null` en cas d'échec et
+    // `undefined` en cas de succès pour un appel sans valeur : les deux sont
+    // faux, et l'appelant ne pourrait pas les distinguer.
+    const written = guard(async () => {
+      await paidLeaveStore.save(next)
+      return true
+    })
     setCampaigns((current) =>
       [next, ...current.filter((item) => item.id !== next.id)]
         .sort((left, right) => right.updatedAt.localeCompare(left.updatedAt))
     )
+    return written
   }
 
   const updateCampaign = (update: (current: PaidLeaveCampaign) => PaidLeaveCampaign) => {
@@ -225,8 +262,29 @@ export function PaidLeavePlanningView({ initialStore }: { readonly initialStore:
     setSolveStartedAt(Date.now())
     const controller = new AbortController()
     const timer = window.setTimeout(() => controller.abort(), 60_000)
+    // La campagne d'abord, le calcul ensuite : le serveur la relit en base, et
+    // partir sans attendre l'écriture ferait calculer la version d'avant. Un
+    // échec d'enregistrement arrête tout — la bannière dit déjà pourquoi, et
+    // calculer sur une version périmée rendrait un résultat que l'écran ne sait
+    // pas expliquer.
+    const written = await saveCampaign(campaign)
+    if (!written) {
+      window.clearTimeout(timer)
+      setSolveStartedAt(null)
+      setSolveMessage("La campagne n’a pas pu être enregistrée : le calcul n’a pas été lancé.")
+      return
+    }
     const response = await solvePaidLeaveCampaign(
-      buildPaidLeaveSolveRequest({ campaign, employees, sectors, timeoutSeconds: 60 }),
+      campaign.id,
+      {
+        timeoutSeconds: 60,
+        // Sans base, les données ne vivent que dans ce navigateur : le serveur
+        // n'a rien à relire, et c'est la seule situation où il accepte une
+        // demande toute faite.
+        fallbackRequest: supabaseConfigured()
+          ? undefined
+          : buildPaidLeaveSolveRequest({ campaign, employees, sectors, absences, timeoutSeconds: 60 }),
+      },
       controller.signal
     )
     window.clearTimeout(timer)
@@ -294,6 +352,7 @@ export function PaidLeavePlanningView({ initialStore }: { readonly initialStore:
         <EmptyCampaign employees={activeEmployees} sectors={activeSectors} />
       ) : (
         <CampaignWorkspace
+          absences={absences}
           storeName={initialStore?.name ?? "Magasin"}
           campaign={campaign}
           weeks={weeks}
@@ -397,6 +456,7 @@ function EmptyCampaign({ employees, sectors }: { readonly employees: readonly Em
 }
 
 function CampaignWorkspace({
+  absences,
   campaign,
   weeks,
   employees,
@@ -413,6 +473,8 @@ function CampaignWorkspace({
   readonly weeks: readonly PaidLeaveCampaignWeek[]
   readonly employees: readonly EmployeeRecord[]
   readonly sectors: readonly SectorDemandConfiguration[]
+  /** Ce qui est déjà posé ailleurs : arrêt, congé parental, formation. */
+  readonly absences: readonly AbsenceRecord[]
   readonly storeName: string
   readonly solveStartedAt: number | null
   readonly elapsedSeconds: number
@@ -455,11 +517,12 @@ function CampaignWorkspace({
           <EmployeesTab campaign={campaign} employees={employees} sectors={sectors} locked={locked} onUpdate={onUpdate} />
         </TabsContent>
         <TabsContent value="wishes">
-          <WishesTab campaign={campaign} weeks={weeks} employees={employees} sectors={sectors} locked={locked} onUpdate={onUpdate} />
+          <WishesTab campaign={campaign} weeks={weeks} employees={employees} sectors={sectors} absences={absences} locked={locked} onUpdate={onUpdate} />
         </TabsContent>
         <TabsContent value="validation">
           <ValidationTab
             storeName={storeName}
+            absences={absences}
             campaign={campaign}
             weeks={weeks}
             employees={employees}
@@ -508,10 +571,15 @@ function ConfigurationTab({ campaign, weeks, sectors, locked, onUpdate }: TabPro
         </CardContent>
       </Card>
 
+      <ClosureWeeks campaign={campaign} weeks={weeks} locked={locked} onUpdate={onUpdate} />
+
       <Card>
         <CardHeader>
           <CardTitle>Couverture minimale par secteur</CardTitle>
-          <CardDescription>Vert : minimum atteint. Orange : déficit toléré. Rouge : limite interdite.</CardDescription>
+          <CardDescription>
+            Vert : minimum atteint. Orange : déficit toléré (− heures manquantes). Rouge : limite interdite.
+            Une cellule hachurée est une semaine de fermeture ; « 3/2 » signale un dépassement d’effectif.
+          </CardDescription>
         </CardHeader>
         <CardContent className="space-y-5">
           {sectors.map((sector) => (
@@ -526,13 +594,71 @@ function ConfigurationTab({ campaign, weeks, sectors, locked, onUpdate }: TabPro
   )
 }
 
+/**
+ * La fermeture annuelle : ce que le gérant décide, et que personne n'arbitre.
+ *
+ * Une grille de semaines à cocher, et non deux champs « du … au … » : une
+ * fermeture est presque toujours d'un seul tenant, mais rien ne l'exige, et un
+ * intervalle interdirait au magasin qui ferme une semaine en août et une entre
+ * Noël et le Nouvel An de le dire.
+ *
+ * Cocher INVALIDE la proposition en cours, comme un changement de période :
+ * fermer une semaine déplace ce qui est attribuable ET le solde de chacun. Des
+ * attributions calculées avant ne veulent plus rien dire, et les garder à
+ * l'écran ferait valider un arbitrage qui n'a jamais été posé.
+ */
+function ClosureWeeks({ campaign, weeks, locked, onUpdate }: { readonly campaign: PaidLeaveCampaign; readonly weeks: readonly PaidLeaveCampaignWeek[]; readonly locked: boolean; readonly onUpdate: TabProps["onUpdate"] }) {
+  const closed = new Set(campaign.closureWeekIds ?? [])
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle>Fermeture du magasin</CardTitle>
+        <CardDescription>
+          Ces semaines ne s’arbitrent pas : tout le monde est en congé, aucune couverture n’est exigée,
+          et chaque semaine cochée se décompte du solde de chacun.
+        </CardDescription>
+      </CardHeader>
+      <CardContent className="space-y-2">
+        <div className="grid grid-cols-7 gap-1 sm:grid-cols-[repeat(13,minmax(0,1fr))] xl:grid-cols-[repeat(26,minmax(0,1fr))]">
+          {weeks.map((week) => {
+            const selected = closed.has(week.id)
+            return (
+              <Button
+                key={week.id}
+                aria-label={`Fermeture · ${week.shortLabel}`}
+                aria-pressed={selected}
+                className={cn(
+                  "h-7 min-w-0 px-0 text-xs font-semibold",
+                  selected && "border-slate-700 bg-slate-700 text-white hover:bg-slate-800"
+                )}
+                disabled={locked}
+                size="xs"
+                title={`${week.shortLabel} · ${week.rangeLabel}`}
+                variant="outline"
+                onClick={() => toggleClosure(onUpdate, week.id)}
+              >
+                {week.weekNumber}
+              </Button>
+            )
+          })}
+        </div>
+        <p className="text-xs text-muted-foreground">
+          {closed.size === 0
+            ? "Aucune fermeture : toutes les semaines s’arbitrent."
+            : `${closed.size} semaine${closed.size > 1 ? "s" : ""} de fermeture · autant de moins à poser pour chacun.`}
+        </p>
+      </CardContent>
+    </Card>
+  )
+}
+
 function CoverageRuleGrid({ campaign, weeks, sector, locked, onUpdate }: { readonly campaign: PaidLeaveCampaign; readonly weeks: readonly PaidLeaveCampaignWeek[]; readonly sector: SectorDemandConfiguration; readonly locked: boolean; readonly onUpdate: TabProps["onUpdate"] }) {
   const firstRule = campaign.coverage[sector.id]?.[weeks[0]?.id]
-  const applyAll = (minimumHours: number, toleratedDeficitHours: number) => onUpdate((current) => invalidateCampaign({
+  const applyAll = (rule: PaidLeaveCoverageRule) => onUpdate((current) => invalidateCampaign({
     ...current,
     coverage: {
       ...current.coverage,
-      [sector.id]: Object.fromEntries(weeks.map((week) => [week.id, { minimumHours, toleratedDeficitHours }])),
+      [sector.id]: Object.fromEntries(weeks.map((week) => [week.id, rule])),
     },
   }))
   return (
@@ -542,33 +668,40 @@ function CoverageRuleGrid({ campaign, weeks, sector, locked, onUpdate }: { reado
           <h3 className="font-medium">{sector.name}</h3>
           <p className="text-xs text-muted-foreground">Saisissez le nombre d’heures hebdomadaires qui doivent rester disponibles.</p>
         </div>
-        <div className="grid w-full grid-cols-2 items-end gap-2 sm:w-auto sm:grid-cols-[8rem_8rem_auto]">
+        <div className="grid w-full grid-cols-2 items-end gap-2 sm:w-auto sm:grid-cols-[8rem_8rem_7rem_auto]">
           <Field label="Minimum commun"><Input id={`minimum-${sector.id}`} disabled={locked} type="number" min={0} step={0.5} defaultValue={firstRule?.minimumHours ?? 0} /></Field>
           <Field label="Marge orange"><Input id={`margin-${sector.id}`} disabled={locked} type="number" min={0} step={0.5} defaultValue={firstRule?.toleratedDeficitHours ?? 0} /></Field>
-          <Button className="col-span-2 sm:col-span-1" disabled={locked} variant="outline" onClick={() => {
-            const minimum = numberFromInput(`minimum-${sector.id}`)
-            const margin = numberFromInput(`margin-${sector.id}`)
-            applyAll(minimum, margin)
-          }}>Appliquer partout</Button>
+          {/* Vide = aucun plafond, ce qui est le réglage d'avant ce champ. Zéro
+              est une valeur distincte : elle ferme la semaine à tout le monde. */}
+          <Field label="Max absents"><Input id={`headcount-${sector.id}`} disabled={locked} type="number" min={0} step={1} placeholder="—" defaultValue={firstRule?.maximumAbsent ?? ""} /></Field>
+          <Button className="col-span-2 sm:col-span-1" disabled={locked} variant="outline" onClick={() => applyAll({
+            minimumHours: numberFromInput(`minimum-${sector.id}`),
+            toleratedDeficitHours: numberFromInput(`margin-${sector.id}`),
+            maximumAbsent: countFromInput(`headcount-${sector.id}`),
+          })}>Appliquer partout</Button>
         </div>
       </div>
       <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6">
         {weeks.map((week) => {
-          const rule = campaign.coverage[sector.id]?.[week.id] ?? { minimumHours: 0, toleratedDeficitHours: 0 }
+          const rule: PaidLeaveCoverageRule = campaign.coverage[sector.id]?.[week.id] ?? { minimumHours: 0, toleratedDeficitHours: 0, maximumAbsent: null }
           return (
             <div key={week.id} className="min-w-0 rounded-lg border bg-muted/20 p-2">
               <div className="mb-2 min-w-0">
                 <p className="text-xs font-semibold">{week.shortLabel}</p>
                 <p className="truncate text-[10px] text-muted-foreground" title={week.rangeLabel}>{week.rangeLabel}</p>
               </div>
-              <div className="grid grid-cols-2 gap-1">
+              <div className="grid grid-cols-3 gap-1">
                 <label className="grid gap-0.5 text-[10px] text-muted-foreground">
                   Minimum
-                  <Input aria-label={`Minimum ${sector.name} ${week.shortLabel}`} disabled={locked} className="h-7 px-1.5 text-xs" type="number" min={0} step={0.5} value={rule.minimumHours} onChange={(event) => updateCoverageRule(onUpdate, sector.id, week.id, Number(event.target.value), rule.toleratedDeficitHours)} />
+                  <Input aria-label={`Minimum ${sector.name} ${week.shortLabel}`} disabled={locked} className="h-7 px-1.5 text-xs" type="number" min={0} step={0.5} value={rule.minimumHours} onChange={(event) => updateCoverageRule(onUpdate, sector.id, week.id, { ...rule, minimumHours: Number(event.target.value) })} />
                 </label>
                 <label className="grid gap-0.5 text-[10px] text-muted-foreground">
                   Marge
-                  <Input aria-label={`Tolérance ${sector.name} ${week.shortLabel}`} disabled={locked} className="h-7 px-1.5 text-xs" type="number" min={0} step={0.5} value={rule.toleratedDeficitHours} onChange={(event) => updateCoverageRule(onUpdate, sector.id, week.id, rule.minimumHours, Number(event.target.value))} />
+                  <Input aria-label={`Tolérance ${sector.name} ${week.shortLabel}`} disabled={locked} className="h-7 px-1.5 text-xs" type="number" min={0} step={0.5} value={rule.toleratedDeficitHours} onChange={(event) => updateCoverageRule(onUpdate, sector.id, week.id, { ...rule, toleratedDeficitHours: Number(event.target.value) })} />
+                </label>
+                <label className="grid gap-0.5 text-[10px] text-muted-foreground">
+                  Max
+                  <Input aria-label={`Maximum d’absents ${sector.name} ${week.shortLabel}`} disabled={locked} className="h-7 px-1.5 text-xs" type="number" min={0} step={1} placeholder="—" value={rule.maximumAbsent ?? ""} onChange={(event) => updateCoverageRule(onUpdate, sector.id, week.id, { ...rule, maximumAbsent: countOrNull(event.target.value) })} />
                 </label>
               </div>
             </div>
@@ -670,8 +803,19 @@ function EmployeesTab({ campaign, employees, sectors, locked, onUpdate }: Employ
                     />
                     Prioritaire
                   </label>
-                  <Field label="Date d’entrée"><Input disabled={locked} type="date" value={settings?.entryDate ?? ""} onChange={(event) => updateEmployeeSettings(onUpdate, employee.id, { entryDate: event.target.value })} /></Field>
+                  {/* L'ANCIENNETÉ NE DÉPARTAGE QUE LES COUPLES, et le champ ne le
+                      disait pas. Elle sert quand deux congés simultanés ne
+                      peuvent pas être tenus tous les deux ; entre deux
+                      personnes seules, c'est l'équité — qui a déjà eu son
+                      premier vœu, et combien de fois — qui tranche, et c'est
+                      un meilleur critère : il mesure ce qui s'est passé, pas
+                      une date d'embauche. */}
+                  <Field label="Date d’entrée"><Input disabled={locked} title="Sert à départager les congés simultanés quand ils ne peuvent pas tous être tenus." type="date" value={settings?.entryDate ?? ""} onChange={(event) => updateEmployeeSettings(onUpdate, employee.id, { entryDate: event.target.value })} /></Field>
                   <Field label="Vœux 1 obtenus"><Input disabled={locked} type="number" min={0} step={1} value={settings?.firstChoiceHistory ?? 0} onChange={(event) => updateEmployeeSettings(onUpdate, employee.id, { firstChoiceHistory: Math.max(0, Math.round(Number(event.target.value))) })} /></Field>
+                  {/* VIDE ET ZÉRO NE SONT PAS LA MÊME CHOSE. Vide dit « solde
+                      inconnu » et ne vérifie rien ; zéro dit « plus rien à
+                      poser » et ferme la campagne à cette personne. */}
+                  <Field label="Solde restant (semaines)"><Input disabled={locked} type="number" min={0} step={1} placeholder="non suivi" value={settings?.entitlementWeeks ?? ""} onChange={(event) => updateEmployeeSettings(onUpdate, employee.id, { entitlementWeeks: event.target.value === "" ? null : Math.max(0, Math.round(Number(event.target.value))) })} /></Field>
                   <Field label="Personne liée"><select disabled={locked} className={selectClassName} value={settings?.linkedEmployeeId ?? ""} onChange={(event) => onUpdate((current) => invalidateCampaign({ ...current, employeeSettings: linkPriorityEmployees(current.employeeSettings, employee.id, event.target.value || null) }))}><option value="">Aucune</option>{employees.filter((item) => item.id !== employee.id).map((item) => <option key={item.id} value={item.id}>{employeeName(item)}</option>)}</select></Field>
                   </div>
               )
@@ -684,11 +828,13 @@ function EmployeesTab({ campaign, employees, sectors, locked, onUpdate }: Employ
   )
 }
 
-function WishesTab({ campaign, weeks, employees, sectors, locked, onUpdate }: EmployeeTabProps & { readonly weeks: readonly PaidLeaveCampaignWeek[] }) {
+function WishesTab({ campaign, weeks, employees, sectors, absences, locked, onUpdate }: EmployeeTabProps & { readonly weeks: readonly PaidLeaveCampaignWeek[]; readonly absences: readonly AbsenceRecord[] }) {
   const weekIds = campaignWeekIds(campaign)
   return (
     <div className="space-y-3 pt-4">
       <Card size="sm"><CardHeader><CardTitle>Vœux de congés</CardTitle><CardDescription>Chaque vœu est un plan complet de la même absence : cochez le <strong>même nombre de semaines</strong> dans Vœu 1, Vœu 2 et Vœu 3. Ce nombre est celui qui sera attribué — il n’y a rien d’autre à saisir.</CardDescription></CardHeader></Card>
+
+      <WishTension campaign={campaign} employees={employees} sectors={sectors} absences={absences} />
       {groupEmployees(employees, sectors).map(({ sectorName, employees: team }) => (
         <Card key={sectorName} size="sm">
           <CardHeader><CardTitle>{sectorName}</CardTitle></CardHeader>
@@ -720,6 +866,98 @@ function WishesTab({ campaign, weeks, employees, sectors, locked, onUpdate }: Em
         </Card>
       ))}
     </div>
+  )
+}
+
+/**
+ * LA TENSION PENDANT LA SAISIE, ET NON APRÈS L'ARBITRAGE.
+ *
+ * C'est le seul levier qui augmente le nombre de premiers vœux servis SANS
+ * toucher au solveur : il ne change pas la façon d'arbitrer, il change la
+ * demande. Voir « huit personnes sur S31, trois places » pendant qu'on coche
+ * permet de le dire à la huitième ; le découvrir après le calcul ne permet
+ * plus que de lui annoncer son vœu 2.
+ *
+ * AUCUN CALCUL NEUF, ET SURTOUT AUCUNE PHRASE NEUVE. C'est exactement la
+ * couverture que l'onglet Validation affiche, sur le scénario « chacun son
+ * vœu 1 » qui y sert déjà de référence, et c'est SA phrase qui est reprise ici.
+ *
+ * La première version comptait autrement — les semaines rouges seulement, là où
+ * la Validation compte aussi les oranges, qui passent bien sous leur minimum
+ * même si la marge les absorbe. Deux écrans auraient annoncé deux nombres pour
+ * le même scénario, et le gestionnaire aurait cru à un changement entre deux
+ * onglets. C'eût été le sixième doublon de ce module, dans le composant même
+ * qui se vantait de n'en créer aucun.
+ *
+ * Les absences déjà posées sont écartées du scénario : une semaine d'arrêt ne
+ * devient pas un congé payé parce qu'on l'a souhaitée, et la compter
+ * surestimerait la tension d'autant.
+ */
+function WishTension({ campaign, employees, sectors, absences }: { readonly campaign: PaidLeaveCampaign; readonly employees: readonly EmployeeRecord[]; readonly sectors: readonly SectorDemandConfiguration[]; readonly absences: readonly AbsenceRecord[] }) {
+  const coverage = calculatePaidLeaveCoverage({
+    campaign,
+    employees,
+    sectors,
+    grants: wishOneScenario(campaign, employees, absences),
+    // AUCUN renfort placé : on veut la tension NUE, celle qu'il faudrait couvrir.
+    reinforcementAllocations: [],
+  })
+  if (sectors.length === 0) return null
+  // LA MÊME PHRASE QUE L'ONGLET VALIDATION, mot pour mot : elle porte déjà la
+  // distinction entre une semaine qui coince par les heures et une qui coince
+  // par l'effectif, et le remède qui va avec. En réécrire une ici aurait produit
+  // deux nombres pour un seul scénario.
+  const tension = describePaidLeaveTension(
+    buildPaidLeaveProjection({ campaign, employees, sectors, absences })
+  )
+
+  return (
+    <Card size="sm">
+      <CardHeader>
+        <CardTitle>Si chacun obtenait son vœu 1</CardTitle>
+        <CardDescription>
+          {tension.headline}
+          {tension.remedy ? ` ${tension.remedy}` : null}
+          {tension.critical
+            ? " Le nombre sous chaque semaine est celui des absents du rayon — c’est maintenant qu’on peut en déplacer un."
+            : null}
+        </CardDescription>
+      </CardHeader>
+      <CardContent className="space-y-3">
+        {sectors.map((sector) => (
+          <section key={sector.id}>
+            <h3 className="mb-1 text-sm font-medium">{sector.name}</h3>
+            <div className="grid grid-cols-[repeat(13,minmax(0,1fr))] gap-1 xl:grid-cols-[repeat(26,minmax(0,1fr))]">
+              {coverage.cells.filter((cell) => cell.sectorId === sector.id).map((cell) => (
+                <div
+                  key={cell.weekId}
+                  title={cell.closed
+                    ? `${shortWeek(cell.weekId)} · magasin fermé`
+                    : `${shortWeek(cell.weekId)} · ${cell.absentCount} absent${cell.absentCount > 1 ? "s" : ""} en vœu 1${cell.maximumAbsent !== null ? ` pour ${cell.maximumAbsent} autorisé${cell.maximumAbsent > 1 ? "s" : ""}` : ""}${cell.deficitHours > 0 ? ` · ${formatHours(cell.deficitHours)} manquantes` : ""}`}
+                  className={cn(
+                    "rounded border py-1 text-center text-[11px] tabular-nums",
+                    cell.state === "green" && "border-emerald-200 bg-emerald-50 text-emerald-900",
+                    cell.state === "orange" && "border-orange-200 bg-orange-50 text-orange-900",
+                    cell.state === "red" && "border-red-300 bg-red-100 font-semibold text-red-900",
+                    cell.state === "closed" && "border-dashed border-muted-foreground/40 bg-muted/40 text-muted-foreground line-through"
+                  )}
+                >
+                  <span className="block">{weekNumberOf(cell.weekId)}</span>
+                  {/* Le nombre d'absents, TOUJOURS : c'est lui qu'on regarde en
+                      saisissant, et lui seul qui dit à quel point une semaine
+                      est convoitée. Une case verte à deux absents et une case
+                      verte à zéro ne disent pas la même chose du prochain vœu
+                      qu'on s'apprête à y cocher. */}
+                  {cell.closed ? null : (
+                    <span className="block text-[9px] font-medium opacity-80">{cell.absentCount}</span>
+                  )}
+                </div>
+              ))}
+            </div>
+          </section>
+        ))}
+      </CardContent>
+    </Card>
   )
 }
 
@@ -765,18 +1003,25 @@ function WishWeekGrid({ employee, request, weeks, disabled, onToggle }: { readon
   )
 }
 
-function ValidationTab({ campaign, weeks, employees, sectors, locked, solveStartedAt, elapsedSeconds, solveMessage, storeName, onUpdate, onSave, onSolve }: EmployeeTabProps & { readonly weeks: readonly PaidLeaveCampaignWeek[]; readonly solveStartedAt: number | null; readonly elapsedSeconds: number; readonly solveMessage: string | null; readonly storeName: string; readonly onSave: (campaign: PaidLeaveCampaign) => void; readonly onSolve: () => void }) {
+function ValidationTab({ campaign, weeks, employees, sectors, absences, locked, solveStartedAt, elapsedSeconds, solveMessage, storeName, onUpdate, onSave, onSolve }: EmployeeTabProps & { readonly weeks: readonly PaidLeaveCampaignWeek[]; readonly absences: readonly AbsenceRecord[]; readonly solveStartedAt: number | null; readonly elapsedSeconds: number; readonly solveMessage: string | null; readonly storeName: string; readonly onSave: (campaign: PaidLeaveCampaign) => void; readonly onSolve: () => void }) {
   // Lu ici plutôt que reçu en propriété : six niveaux séparent cette feuille de
   // sa page, et aucune des signatures traversées ne parle d'impression.
   const printedBy = usePrintedBy()
   const [comparison, setComparison] = useState<"granted" | "wish1">("granted")
-  const grants = comparison === "granted" ? campaign.grants : wishOneScenario(campaign, employees)
+  const [document, setDocument] = useState<"sheet" | "slips">("sheet")
+  const grants = comparison === "granted" ? campaign.grants : wishOneScenario(campaign, employees, absences)
   const declaredAllocations = comparison === "granted" ? campaign.solution?.reinforcementAllocations : undefined
   const coverage = calculatePaidLeaveCoverage({ campaign, employees, sectors, grants, reinforcementAllocations: declaredAllocations })
   const weekIds = campaignWeekIds(campaign)
-  const warnings = paidLeaveGenerationWarnings({ campaign, employees, sectors, weekIds })
-  const projection = buildPaidLeaveProjection({ campaign, employees, sectors })
-  const incomplete = employees.filter((employee) => (campaign.grants[employee.id]?.length ?? 0) !== effectiveRequestedWeeks(campaign.requests[employee.id], weekIds))
+  // Calculées une fois pour tout l'onglet : les raccourcis « Accorder V1 » ne
+  // doivent pas proposer une semaine que le solveur refusera.
+  const indisponibles = absentWeeksByEmployee(absences, weeks)
+  const warnings = paidLeaveGenerationWarnings({ campaign, employees, sectors, weekIds, absences })
+  const projection = buildPaidLeaveProjection({ campaign, employees, sectors, absences })
+  // La MÊME cible que le solveur : c'était la cinquième recomposition des mêmes
+  // bornes dans ce fichier, et celle qui ouvre ou ferme le bouton « Valider ».
+  const targetOf = paidLeaveTargets(campaign)
+  const incomplete = employees.filter((employee) => (campaign.grants[employee.id]?.length ?? 0) !== targetOf(employee.id))
   const sectorNames = new Set(sectors.map((sector) => sector.name))
   const withoutPrimarySector = employees.filter(
     (employee) => !employee.sectors?.[0] || !sectorNames.has(employee.sectors[0])
@@ -792,7 +1037,7 @@ function ValidationTab({ campaign, weeks, employees, sectors, locked, solveStart
         <CardContent className="space-y-4">
           {solveStartedAt !== null ? (
             <div className="rounded-xl border bg-muted/40 p-4">
-              <div className="flex items-center gap-3"><Loader2 className="size-5 animate-spin text-primary" /><div><p className="font-medium">Recherche de la meilleure attribution…</p><p className="text-xs text-muted-foreground">Priorités communes, ancienneté, vœux, couverture et équité · {elapsedSeconds} / 60 s</p></div></div>
+              <div className="flex items-center gap-3"><Loader2 className="size-5 animate-spin text-primary" /><div><p className="font-medium">Recherche de la meilleure attribution…</p><p className="text-xs text-muted-foreground">Congés simultanés (départagés à l’ancienneté), vœux, couverture, équité · {elapsedSeconds} / 60 s</p></div></div>
               <div className="mt-3 h-1.5 overflow-hidden rounded-full bg-muted"><div className="h-full rounded-full bg-primary transition-[width]" style={{ width: `${Math.max(2, elapsedSeconds / 60 * 100)}%` }} /></div>
             </div>
           ) : (
@@ -815,10 +1060,14 @@ function ValidationTab({ campaign, weeks, employees, sectors, locked, solveStart
         </CardContent>
       </Card>
 
+      <SolutionDiff campaign={campaign} employees={employees} />
+
+      <ConcessionPrices campaign={campaign} employees={employees} />
+
       <Card>
         <CardHeader><CardTitle>Attributions par personne</CardTitle><CardDescription>Utilisez les raccourcis de vœux ou ajustez chaque semaine manuellement avant la validation.</CardDescription></CardHeader>
         <CardContent className="space-y-3">
-          {employees.map((employee) => <GrantEditor key={employee.id} campaign={campaign} employee={employee} weeks={weeks} locked={locked} onUpdate={onUpdate} />)}
+          {employees.map((employee) => <GrantEditor key={employee.id} campaign={campaign} employee={employee} weeks={weeks} unavailable={indisponibles.get(employee.id) ?? EMPTY_WEEKS} locked={locked} onUpdate={onUpdate} />)}
           {employees.length === 0 ? <EmptyLine>Aucun employé actif.</EmptyLine> : null}
         </CardContent>
       </Card>
@@ -832,26 +1081,63 @@ function ValidationTab({ campaign, weeks, employees, sectors, locked, solveStart
           d'impression n'épargnent maintenant que ce document. */}
       <Card>
         <CardHeader className="print:hidden">
-          <CardTitle>Feuille à afficher</CardTitle>
-          <CardDescription>
-            Un salarié par ligne, groupé par rayon. Dans la fenêtre d’impression, choisissez le
-            format <strong>A3</strong>, l’orientation <strong>paysage</strong>, et activez les
-            graphiques d’arrière-plan pour conserver les couleurs des rayons.
-          </CardDescription>
+          <div className="flex flex-wrap items-start justify-between gap-3">
+            <div>
+              <CardTitle>{document === "sheet" ? "Feuille à afficher" : "Billets individuels"}</CardTitle>
+              <CardDescription>
+                {document === "sheet" ? (
+                  <>
+                    Un salarié par ligne, groupé par rayon. Dans la fenêtre d’impression, choisissez le
+                    format <strong>A3</strong>, l’orientation <strong>paysage</strong>, et activez les
+                    graphiques d’arrière-plan pour conserver les couleurs des rayons.
+                  </>
+                ) : (
+                  <>
+                    Un billet par personne, deux par page, à couper et à distribuer. La feuille au mur dit
+                    ce qui a été décidé ; le billet dit <strong>pourquoi</strong>, et nomme les droits que
+                    le congé ouvre. Format <strong>A4</strong>, orientation <strong>portrait</strong>.
+                  </>
+                )}
+              </CardDescription>
+            </div>
+            {/* DEUX DOCUMENTS, UN SEUL RENDU À LA FOIS. Les règles d'impression
+                n'épargnent que `data-publication-document` : en afficher deux
+                sortirait les deux sur le papier, dans deux formats de page
+                différents. */}
+            <div className="flex rounded-lg bg-muted p-1">
+              <Button size="sm" variant={document === "sheet" ? "secondary" : "ghost"} onClick={() => setDocument("sheet")}>Feuille A3</Button>
+              <Button size="sm" variant={document === "slips" ? "secondary" : "ghost"} onClick={() => setDocument("slips")}>Billets</Button>
+            </div>
+          </div>
         </CardHeader>
         <CardContent className="overflow-x-auto bg-muted/40 p-4 print:overflow-visible print:bg-transparent print:p-0">
-          <PaidLeaveSheet
-            sheet={buildLeaveSheet({
-              campaign,
-              employees,
-              sectors,
-              storeName,
-              printedAtLabel: signPrintedLabel(
-                `Édité le ${formatDateTime(new Date().toISOString())}`,
-                printedBy
-              ),
-            })}
-          />
+          {document === "sheet" ? (
+            <PaidLeaveSheet
+              sheet={buildLeaveSheet({
+                campaign,
+                employees,
+                sectors,
+                storeName,
+                printedAtLabel: signPrintedLabel(
+                  `Édité le ${formatDateTime(new Date().toISOString())}`,
+                  printedBy
+                ),
+              })}
+            />
+          ) : (
+            <PaidLeaveSlips
+              sheet={buildLeaveSlips({
+                campaign,
+                employees,
+                sectors,
+                storeName,
+                printedAtLabel: signPrintedLabel(
+                  `Édité le ${formatDateTime(new Date().toISOString())}`,
+                  printedBy
+                ),
+              })}
+            />
+          )}
         </CardContent>
       </Card>
 
@@ -871,16 +1157,152 @@ function ValidationTab({ campaign, weeks, employees, sectors, locked, solveStart
   )
 }
 
-function GrantEditor({ campaign, employee, weeks, locked, onUpdate }: { readonly campaign: PaidLeaveCampaign; readonly employee: EmployeeRecord; readonly weeks: readonly PaidLeaveCampaignWeek[]; readonly locked: boolean; readonly onUpdate: TabProps["onUpdate"] }) {
+/** Au plus ce nombre de lignes détaillées ; au-delà, on compte. */
+const CHANGES_SHOWN = 6
+
+/**
+ * CE QUE LE DERNIER CALCUL A CHANGÉ.
+ *
+ * Le geste réel est une BOUCLE : desserrer un minimum, relancer, regarder,
+ * recommencer. À chaque tour l'écran remplaçait tout sans rien dire de ce qui
+ * avait bougé — et comparer vingt-six colonnes de mémoire n'est pas un exercice
+ * que quelqu'un réussit. La carte du dessous dit quoi essayer ; celle-ci dit si
+ * l'essai a payé.
+ *
+ * Muette après une retouche à la main, comme le prix des concessions : les deux
+ * décrivent le calcul TEL QU'IL A été rendu, et cet état n'est plus à l'écran.
+ */
+function SolutionDiff({ campaign, employees }: { readonly campaign: PaidLeaveCampaign; readonly employees: readonly EmployeeRecord[] }) {
+  if (!grantsMatchSolution(campaign)) return null
+  const diff = comparePaidLeaveSolution(campaign, employees)
+  if (!diff || diff.changed.length === 0) return null
+
+  const voeux = diff.firstChoiceAfter - diff.firstChoiceBefore
+  const semaines = diff.weeksAfter - diff.weeksBefore
+  const reste = diff.changed.length - CHANGES_SHOWN
+
+  return (
+    <Card className="print:hidden">
+      <CardHeader>
+        <CardTitle>Ce que ce calcul a changé</CardTitle>
+        <CardDescription>
+          {diff.changed.length} personne{diff.changed.length > 1 ? "s" : ""} {diff.changed.length > 1 ? "ont" : "a"} changé de semaines
+          {" · "}
+          {voeux === 0 ? "autant de premiers vœux" : `${voeux > 0 ? "+" : ""}${voeux} premier${Math.abs(voeux) > 1 ? "s" : ""} vœu${Math.abs(voeux) > 1 ? "x" : ""}`}
+          {" · "}
+          {semaines === 0 ? "autant de semaines accordées" : `${semaines > 0 ? "+" : ""}${semaines} semaine${Math.abs(semaines) > 1 ? "s" : ""} accordée${Math.abs(semaines) > 1 ? "s" : ""}`}
+        </CardDescription>
+      </CardHeader>
+      <CardContent className="space-y-1">
+        {diff.changed.slice(0, CHANGES_SHOWN).map((change) => (
+          <div key={change.employeeId} className="flex flex-wrap items-baseline gap-x-2 text-sm">
+            <span className="font-medium">{change.name}</span>
+            <span className="text-muted-foreground line-through">
+              {change.before.length > 0 ? change.before.map(shortWeek).join(", ") : "rien"}
+            </span>
+            <span className="text-muted-foreground">→</span>
+            <span>{change.after.length > 0 ? change.after.map(shortWeek).join(", ") : "rien"}</span>
+          </div>
+        ))}
+        {reste > 0 ? (
+          <p className="text-xs text-muted-foreground">et {reste} autre{reste > 1 ? "s" : ""}.</p>
+        ) : null}
+      </CardContent>
+    </Card>
+  )
+}
+
+/**
+ * Ce que chaque concession achèterait — et ce qu'elle n'achèterait pas.
+ *
+ * Le solveur rendait un VERDICT. Il ne répondait pas à la question qui vient
+ * juste après, et qui est toujours la même : « et si j'acceptais de lâcher
+ * quelque chose ? ». Faute de réponse, on desserre un minimum au hasard, on
+ * relance, on compare à l'œil, on recommence.
+ *
+ * Les quatre lignes ci-dessous sont les seuls arbitrages que le modèle
+ * s'interdit et qu'un gérant peut décider. Elles sont MESURÉES, pas estimées :
+ * chacune est une résolution complète de la hiérarchie avec cet étage desserré
+ * d'exactement une unité.
+ *
+ * UN GAIN NUL EST AFFICHÉ COMME LES AUTRES, et c'est souvent le plus utile :
+ * « renoncer à réunir un couple n'apporterait rien » ferme une question au lieu
+ * de l'ouvrir.
+ *
+ * Rien n'est montré dès qu'une attribution a été retouchée à la main : ces
+ * nombres promettent un gain PAR RAPPORT à la campagne calculée, et cette
+ * référence n'existe plus.
+ */
+const CONCESSION_LABELS: Readonly<Record<PaidLeaveConcessionLever, string>> = {
+  unserved_total: "d’accorder une semaine de congé de moins au total",
+  unserved_worst: "qu’une personne perde une semaine de plus que les autres",
+  couples: "de renoncer à réunir un couple",
+  mixed_plans: "un vœu panaché de plus",
+}
+
+function ConcessionPrices({ campaign, employees }: { readonly campaign: PaidLeaveCampaign; readonly employees: readonly EmployeeRecord[] }) {
+  const solution = campaign.solution
+  const concessions = solution?.concessions ?? []
+  if (concessions.length === 0 || !grantsMatchSolution(campaign)) return null
+
+  const base = solution?.firstChoiceEmployeeIds ?? []
+  const servis = new Set(base)
+  const nameOf = (id: string) => employeeName(employees.find((employee) => employee.id === id))
+
+  return (
+    <Card className="print:hidden">
+      <CardHeader>
+        <CardTitle>Le prix de chaque concession</CardTitle>
+        <CardDescription>
+          {base.length} personne{base.length === 1 ? "" : "s"} {base.length === 1 ? "est servie" : "sont servies"} sur tout son premier vœu.
+          Voici ce que chaque arbitrage changerait — mesuré, pas estimé.
+        </CardDescription>
+      </CardHeader>
+      <CardContent className="space-y-2">
+        {concessions.map((concession) => {
+          const gagnants = concession.employeeIds.filter((id) => !servis.has(id))
+          const gain = concession.firstChoiceServed - base.length
+          return (
+            <div key={concession.lever} className="flex flex-wrap items-baseline gap-x-2 gap-y-1 rounded-lg border p-3 text-sm">
+              <span className="text-muted-foreground">En acceptant</span>
+              <span className="font-medium">{CONCESSION_LABELS[concession.lever]}</span>
+              <span className="text-muted-foreground">→</span>
+              {gain > 0 ? (
+                <span className="font-semibold text-emerald-700 dark:text-emerald-400">
+                  +{gain} premier{gain > 1 ? "s" : ""} vœu{gain > 1 ? "x" : ""}
+                  {gagnants.length > 0 ? ` · ${gagnants.map(nameOf).join(", ")}` : ""}
+                </span>
+              ) : (
+                <span className="text-muted-foreground">rien de plus</span>
+              )}
+            </div>
+          )
+        })}
+      </CardContent>
+    </Card>
+  )
+}
+
+/** Partagé : allouer un ensemble vide par salarié à chaque rendu ne sert à rien. */
+const EMPTY_WEEKS: ReadonlySet<PaidLeaveWeekId> = new Set()
+
+function GrantEditor({ campaign, employee, weeks, unavailable, locked, onUpdate }: { readonly campaign: PaidLeaveCampaign; readonly employee: EmployeeRecord; readonly weeks: readonly PaidLeaveCampaignWeek[]; readonly unavailable: ReadonlySet<PaidLeaveWeekId>; readonly locked: boolean; readonly onUpdate: TabProps["onUpdate"] }) {
   const request = campaign.requests[employee.id]
-  const weekIds = campaignWeekIds(campaign)
-  const target = effectiveRequestedWeeks(request, weekIds)
+  // Ce qu'on peut lui accorder, solde et fermeture compris — et non ce qu'elle a
+  // demandé : sinon quelqu'un ayant reçu tout son solde resterait « incomplet »
+  // à vie. La MÊME fonction que le solveur, la validation et le compte rendu.
+  const target = paidLeaveTargets(campaign)(employee.id)
+  // Les semaines où rien ne peut être accordé : celles d'une absence déjà
+  // enregistrée, et celles où le magasin ferme. Une attribution posée sur une
+  // fermeture compterait la personne absente deux fois.
+  const closed = activeClosureWeeks(campaign)
+  const blocked = new Set([...unavailable, ...closed])
   const granted = campaign.grants[employee.id] ?? []
   return (
     <section className="rounded-lg border p-3">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div><p className="font-medium">{employeeName(employee)}</p><p className="text-xs text-muted-foreground">{granted.length} / {target} semaine{target === 1 ? "" : "s"} accordée{target === 1 ? "" : "s"}</p></div>
-        <div className="flex gap-1 print:hidden">{([1, 2, 3] as const).map((rank) => <Button key={rank} disabled={locked || target === 0} size="xs" variant="outline" onClick={() => setRankGrants(onUpdate, employee.id, request, rank, weekIds)}>Accorder V{rank}</Button>)}</div>
+        <div className="flex gap-1 print:hidden">{([1, 2, 3] as const).map((rank) => <Button key={rank} disabled={locked || target === 0} size="xs" variant="outline" onClick={() => setRankGrants(onUpdate, employee.id, request, rank, target, blocked)}>Accorder V{rank}</Button>)}</div>
       </div>
       {/* Une grille qui S'ENROULE plutôt qu'une bande qui défile : sur vingt-six
           semaines, la bande obligeait à faire défiler pour comparer juillet et
@@ -890,18 +1312,21 @@ function GrantEditor({ campaign, employee, weeks, locked, onUpdate }: { readonly
         {weeks.map((week) => {
           const checked = granted.includes(week.id)
           const rank = request ? preferenceRank(request, week.id) : null
+          const shut = closed.has(week.id)
           return (
             <button
               key={week.id}
               type="button"
-              disabled={locked || (!checked && granted.length >= target)}
+              disabled={locked || shut || (!checked && granted.length >= target)}
               aria-pressed={checked}
-              aria-label={`${week.shortLabel} · ${week.rangeLabel} · ${rank ? `vœu ${rank}` : "hors vœux"}`}
-              title={`${week.rangeLabel}${rank ? ` · vœu ${rank}` : ""}`}
+              aria-label={`${week.shortLabel} · ${week.rangeLabel} · ${shut ? "magasin fermé" : rank ? `vœu ${rank}` : "hors vœux"}`}
+              title={shut ? `${week.rangeLabel} · magasin fermé : déjà en congé` : `${week.rangeLabel}${rank ? ` · vœu ${rank}` : ""}`}
               onClick={() => toggleGrant(onUpdate, employee.id, week.id, target)}
               className={cn(
                 "min-h-9 rounded border py-1 text-[11px] font-medium leading-tight tabular-nums transition disabled:cursor-not-allowed disabled:opacity-40",
-                checked
+                shut
+                  ? "border-dashed border-muted-foreground/40 bg-muted/40 text-muted-foreground line-through"
+                  : checked
                   ? "border-primary bg-primary text-primary-foreground"
                   : rank === 1
                     ? "border-emerald-300 bg-emerald-50 text-emerald-800 hover:bg-emerald-100"
@@ -918,7 +1343,7 @@ function GrantEditor({ campaign, employee, weeks, locked, onUpdate }: { readonly
                   sans cette ligne, on ne sait plus si la personne a eu son
                   premier choix ou son troisième — la seule chose qu'on veuille
                   vraiment savoir en relisant. */}
-              {checked ? (
+              {checked && !shut ? (
                 <span className="block text-[9px] font-semibold opacity-90">
                   {rank ? `V${rank}` : "—"}
                 </span>
@@ -953,18 +1378,35 @@ function CoverageReport({ campaign, coverage, sectors, comparison, onComparison 
                 {cells.map((cell) => (
                   <div
                     key={cell.weekId}
-                    title={`${shortWeek(cell.weekId)} · ${formatHours(cell.totalHours)} présentes pour ${formatHours(cell.minimumHours)} requises${cell.reinforcementHours > 0 ? ` · dont ${formatHours(cell.reinforcementHours)} de renfort` : ""}`}
+                    title={cell.closed ? `${shortWeek(cell.weekId)} · magasin fermé : aucune couverture à tenir` : `${shortWeek(cell.weekId)} · ${formatHours(cell.totalHours)} présentes pour ${formatHours(cell.minimumHours)} requises${cell.reinforcementHours > 0 ? ` · dont ${formatHours(cell.reinforcementHours)} de renfort` : ""}${cell.maximumAbsent !== null ? ` · ${cell.absentCount} absent${cell.absentCount > 1 ? "s" : ""} pour ${cell.maximumAbsent} autorisé${cell.maximumAbsent > 1 ? "s" : ""}` : ""}`}
                     className={cn(
                       "rounded border py-1 text-center text-[11px] tabular-nums",
                       cell.state === "green" && "border-emerald-200 bg-emerald-50 text-emerald-900",
                       cell.state === "orange" && "border-orange-200 bg-orange-50 text-orange-900",
-                      cell.state === "red" && "border-red-300 bg-red-100 font-semibold text-red-900"
+                      cell.state === "red" && "border-red-300 bg-red-100 font-semibold text-red-900",
+                      // Rayée, et sans couleur de verdict : il n'y a rien à
+                      // couvrir, donc rien à réussir ni à rater.
+                      cell.state === "closed" && "border-dashed border-muted-foreground/40 bg-muted/40 text-muted-foreground line-through"
                     )}
                   >
                     <span className="block">{weekNumberOf(cell.weekId)}</span>
                     {/* Le déficit est le seul chiffre qui appelle une décision ;
                         les semaines qui vont bien n'ont rien à dire. */}
-                    {cell.deficitHours > 0 ? (
+                    {/* LE DÉPASSEMENT D'EFFECTIF D'ABORD, et il ne s'affichait pas
+                        du tout. Une cellule rouge par l'effectif porte un
+                        déficit horaire NUL : elle ne se distinguait donc d'une
+                        cellule verte que par sa couleur, et vert contre rouge
+                        est le pire couple qui soit pour une deutéranopie — 8 %
+                        des hommes. « 3/2 » se lit sans voir la couleur.
+
+                        Avant le déficit, parce qu'il est plus urgent : des
+                        heures de renfort comblent un plancher, elles ne
+                        ramènent personne sous un plafond. Une semaine qui
+                        coince par l'effectif ne se rachète pas, elle se
+                        déplace. */}
+                    {cell.closed ? null : cell.headcountBreach > 0 ? (
+                      <span className="block text-[9px] font-semibold">{cell.absentCount}/{cell.maximumAbsent ?? 0}</span>
+                    ) : cell.deficitHours > 0 ? (
                       <span className="block text-[9px] font-medium">−{Math.round(cell.deficitHours)}</span>
                     ) : cell.reinforcementHours > 0 ? (
                       <span className="block text-[9px] opacity-70">+{Math.round(cell.reinforcementHours)}</span>
@@ -990,11 +1432,18 @@ interface TabProps {
 }
 interface EmployeeTabProps extends TabProps { readonly employees: readonly EmployeeRecord[] }
 
-function updateCoverageRule(onUpdate: TabProps["onUpdate"], sectorId: string, weekId: PaidLeaveWeekId, minimumHours: number, toleratedDeficitHours: number) {
-  onUpdate((current) => invalidateCampaign({ ...current, coverage: { ...current.coverage, [sectorId]: { ...current.coverage[sectorId], [weekId]: { minimumHours: positive(minimumHours), toleratedDeficitHours: positive(toleratedDeficitHours) } } } }))
+/**
+ * La règle ENTIÈRE, et non trois nombres à la file.
+ *
+ * Les paramètres positionnels étaient tous des nombres de même type : une
+ * inversion se compilait sans un mot, et le troisième champ l'aurait rendue
+ * probable. L'appelant construit désormais la règle qu'il veut voir.
+ */
+function updateCoverageRule(onUpdate: TabProps["onUpdate"], sectorId: string, weekId: PaidLeaveWeekId, rule: PaidLeaveCoverageRule) {
+  onUpdate((current) => invalidateCampaign({ ...current, coverage: { ...current.coverage, [sectorId]: { ...current.coverage[sectorId], [weekId]: { minimumHours: positive(rule.minimumHours), toleratedDeficitHours: positive(rule.toleratedDeficitHours), maximumAbsent: rule.maximumAbsent ?? null } } } }))
 }
 
-function updateEmployeeSettings(onUpdate: TabProps["onUpdate"], employeeId: string, patch: Partial<{ priority: boolean; entryDate: string; firstChoiceHistory: number }>) {
+function updateEmployeeSettings(onUpdate: TabProps["onUpdate"], employeeId: string, patch: Partial<{ priority: boolean; entryDate: string; firstChoiceHistory: number; entitlementWeeks: number | null }>) {
   onUpdate((current) => invalidateCampaign({ ...current, employeeSettings: { ...current.employeeSettings, [employeeId]: { ...current.employeeSettings[employeeId], ...patch } } }))
 }
 
@@ -1005,10 +1454,24 @@ function toggleWish(onUpdate: TabProps["onUpdate"], employeeId: string, rank: 1 
   })
 }
 
-function setRankGrants(onUpdate: TabProps["onUpdate"], employeeId: string, request: PaidLeaveRequest | undefined, rank: 1 | 2 | 3, weekIds: ReadonlySet<PaidLeaveWeekId>) {
+/**
+ * Donner à quelqu'un son vœu N, à la main.
+ *
+ * Les semaines où il est DÉJÀ absent en sont écartées — arrêt, congé parental,
+ * ou fermeture du magasin : le solveur les refuse, et ce bouton n'a pas à
+ * fabriquer une attribution qu'un recalcul effacerait — ni, pire, une semaine
+ * comptée deux fois en paie. La personne apparaît alors incomplète, ce que
+ * l'écran signale déjà.
+ *
+ * La CIBLE arrive toute faite, et ce n'était pas le cas : cette fonction
+ * recomposait `grantableWeekCount` à partir d'un ensemble de semaines et d'un
+ * solde, c'est-à-dire une quatrième composition des mêmes bornes. Il a suffi
+ * d'en ajouter une — la fermeture — pour que ce bouton accorde une semaine de
+ * plus que le solveur. Un nombre déjà calculé ne peut pas diverger.
+ */
+function setRankGrants(onUpdate: TabProps["onUpdate"], employeeId: string, request: PaidLeaveRequest | undefined, rank: 1 | 2 | 3, target: number, unavailable: ReadonlySet<PaidLeaveWeekId>) {
   if (!request) return
-  const target = effectiveRequestedWeeks(request, weekIds)
-  const choices = request[`wish${rank}`]
+  const choices = request[`wish${rank}`].filter((weekId) => !unavailable.has(weekId))
   onUpdate((current) => ({ ...current, grants: { ...current.grants, [employeeId]: choices.slice(0, target) }, solution: null, updatedAt: new Date().toISOString() }))
 }
 
@@ -1020,6 +1483,16 @@ function toggleGrant(onUpdate: TabProps["onUpdate"], employeeId: string, weekId:
   })
 }
 
+
+function toggleClosure(onUpdate: TabProps["onUpdate"], weekId: PaidLeaveWeekId) {
+  onUpdate((current) => {
+    const closed = current.closureWeekIds ?? []
+    const next = closed.includes(weekId)
+      ? closed.filter((item) => item !== weekId)
+      : [...closed, weekId].sort()
+    return invalidateCampaign({ ...current, closureWeekIds: next })
+  })
+}
 
 function invalidateCampaign(campaign: PaidLeaveCampaign): PaidLeaveCampaign {
   return { ...campaign, grants: {}, solution: null, updatedAt: new Date().toISOString() }
@@ -1050,6 +1523,16 @@ function numberFromInput(id: string): number {
 }
 
 function positive(value: number): number { return Number.isFinite(value) ? Math.max(0, value) : 0 }
+/** Un effectif : entier, positif, et `null` quand la case est vide. */
+function countOrNull(raw: string): number | null {
+  if (raw.trim() === "") return null
+  const value = Number(raw)
+  return Number.isFinite(value) ? Math.max(0, Math.round(value)) : null
+}
+function countFromInput(id: string): number | null {
+  const element = document.getElementById(id) as HTMLInputElement | null
+  return countOrNull(element?.value ?? "")
+}
 function clampWeek(value: string): number { return Math.min(53, Math.max(1, Math.round(Number(value) || 1))) }
 function employeeName(employee: EmployeeRecord | undefined): string { return employee ? `${employee.firstName} ${employee.lastName}`.trim() : "Personne indisponible" }
 function contractHours(employee: EmployeeRecord): number { return typeof employee.weeklyMinutes === "number" ? employee.weeklyMinutes / 60 : employee.weeklyHours }

@@ -1,0 +1,19 @@
+[project]
+name = "planiteo-paid-leave-solver"
+version = "0.1.0"
+description = "Planiteo paid-leave campaign solver using SciPy/HiGHS"
+requires-python = ">=3.12,<3.14"
+dependencies = [
+  "numpy==2.3.5",
+  "scipy==1.17.0",
+]
+
+# Les mêmes versions que `experiments/planning-v3-highs`, et ce n'est PAS une
+# coïncidence à laisser au hasard : le `Dockerfile` n'installe qu'un seul
+# environnement Python, celui du solveur de planning, et la route des congés
+# lance ce script avec le même interpréteur. Une dépendance ajoutée ici sans
+# être ajoutée là-bas produirait un `ModuleNotFoundError` en production
+# seulement — la sonde `/api/health` ne teste que l'autre solveur.
+
+[tool.pytest.ini_options]
+pythonpath = ["."]

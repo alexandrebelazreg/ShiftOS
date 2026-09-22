@@ -1,8 +1,11 @@
+import type { AbsenceRecord } from "@/features/absences/types/absence-record"
 import type { EmployeeRecord } from "@/features/employees/types/employee.types"
 import { campaignWeeks } from "@/features/paid-leave/calendar/campaign-weeks"
+import { absentWeeksByEmployee } from "@/features/paid-leave/domain/already-absent"
 import {
+  attributableWeekIds,
   campaignWeekIds,
-  effectiveRequestedWeeks,
+  paidLeaveTargets,
   preferenceRank,
 } from "@/features/paid-leave/domain/campaign"
 import {
@@ -36,6 +39,15 @@ export interface PaidLeaveCriticalWeek {
   readonly weekId: PaidLeaveWeekId
   /** Ce qui manque pour atteindre le minimum, si chacun a son vœu 1. */
   readonly missingHours: number
+  /**
+   * Combien de personnes EN TROP par rapport au plafond, dans ce même scénario.
+   *
+   * Distinct des heures manquantes, et pas seulement pour la forme : des heures
+   * de renfort comblent un plancher, elles ne ramènent personne sous un
+   * plafond. Une semaine qui ne coince que par l'effectif ne se rachète pas,
+   * elle se déplace.
+   */
+  readonly exceedingAbsent: number
   /** Combien de personnes réclament cette semaine en premier vœu. */
   readonly wish1Requests: number
   /** Des heures de renfort peuvent-elles seulement atteindre cette semaine ? */
@@ -68,7 +80,21 @@ export interface PaidLeaveSatisfaction {
   readonly unservedEmployees: number
 }
 
-export interface PaidLeaveCompromise {
+/**
+ * De combien quelqu'un a RECULÉ par rapport à son premier vœu.
+ *
+ * Ce type s'appelait `PaidLeaveCompromise`, exactement comme celui de
+ * `models/paid-leave-campaign.ts` — deux formes incompatibles sous un seul nom,
+ * toutes deux exportées. Rien ne cassait tant qu'aucun fichier n'importait les
+ * deux ; le jour où l'un l'aurait fait, l'autre aurait été masqué en silence.
+ *
+ * Les deux mesurent d'ailleurs des choses différentes, et c'est ce que les noms
+ * disent maintenant. Celui du modèle est le VERDICT d'une attribution — quels
+ * rangs, mélange ou non, droit du couple tenu ou non, et la phrase à afficher —
+ * et il est ENREGISTRÉ avec la campagne. Celui-ci est une MESURE d'écart entre
+ * deux scénarios, recalculée à chaque rendu et jamais rangée.
+ */
+export interface PaidLeaveSetback {
   readonly employeeId: string
   readonly name: string
   /** Semaines demandées en premier vœu et effectivement obtenues. */
@@ -104,7 +130,7 @@ export interface PaidLeaveProjection {
   /** La semaine la plus réclamée en premier vœu. */
   readonly mostContested: { readonly weekId: PaidLeaveWeekId; readonly requests: number } | null
   /** Qui a reculé, et de combien. Les plus touchés en tête. */
-  readonly compromises: readonly PaidLeaveCompromise[]
+  readonly setbacks: readonly PaidLeaveSetback[]
   /**
    * Ceux qui n'ont JAMAIS eu leur premier vœu et ne l'ont pas non plus cette
    * fois. L'injustice d'une campagne se rattrape ; celle qui se répète, non.
@@ -140,16 +166,20 @@ export function buildPaidLeaveProjection({
   campaign,
   employees,
   sectors,
+  absences = [],
 }: {
   readonly campaign: PaidLeaveCampaign
   readonly employees: readonly EmployeeRecord[]
   readonly sectors: readonly SectorDemandConfiguration[]
+  /** Ce qui est déjà posé ailleurs, et qu'aucun scénario ne peut ignorer. */
+  readonly absences?: readonly AbsenceRecord[]
 }): PaidLeaveProjection {
   const weekIds = campaignWeekIds(campaign)
   const active = employees.filter((employee) => employee.status === "active")
 
-  // Le scénario de référence : la demande brute, sans arbitrage.
-  const wish1Grants = wishOneScenario(campaign, active)
+  // Le scénario de référence : la demande brute, sans arbitrage — mais pas sans
+  // les absences déjà posées, qu'aucun vœu ne peut recouvrir.
+  const wish1Grants = wishOneScenario(campaign, active, absences)
   const projected = calculatePaidLeaveCoverage({
     campaign,
     employees,
@@ -161,16 +191,23 @@ export function buildPaidLeaveProjection({
 
   const requestsByWeek = countWish1Requests(campaign, active, weekIds)
   const criticalWeeks: PaidLeaveCriticalWeek[] = projected.cells
-    .filter((cell) => cell.deficitHours > 0)
+    // Une semaine peut coincer par les heures, par l'effectif, ou par les deux.
+    // Ne garder que les heures laissait invisible une semaine que le solveur
+    // refuse pourtant — la cellule était rouge et la liste vide.
+    .filter((cell) => cell.deficitHours > 0 || cell.headcountBreach > 0)
     .map((cell) => ({
       sectorId: cell.sectorId,
       sectorName: cell.sectorName,
       weekId: cell.weekId,
       missingHours: cell.deficitHours,
+      exceedingAbsent: cell.headcountBreach,
       wish1Requests: requestsByWeek.get(cell.weekId) ?? 0,
       reachableByPools: campaign.reinforcementPools.some((pool) => poolReaches(pool, cell.sectorId, cell.weekId)),
     }))
-    .sort((left, right) => right.missingHours - left.missingHours || left.weekId.localeCompare(right.weekId))
+    .sort((left, right) =>
+      right.missingHours - left.missingHours
+      || right.exceedingAbsent - left.exceedingAbsent
+      || left.weekId.localeCompare(right.weekId))
 
   const reinforcementNeededHours = round(
     criticalWeeks.reduce((sum, week) => sum + week.missingHours, 0)
@@ -206,10 +243,10 @@ export function buildPaidLeaveProjection({
     ),
     pools,
     poolsFullyUsed: pools.length > 0 && pools.every((pool) => pool.remainingHours === 0),
-    satisfaction: countSatisfaction(campaign, active, weekIds),
+    satisfaction: countSatisfaction(campaign, active),
     mostContested: mostContestedWeek(requestsByWeek),
-    compromises: buildCompromises(campaign, active, wish1Grants),
-    ...splitEquity(campaign, active, weekIds),
+    setbacks: buildSetbacks(campaign, active, wish1Grants),
+    ...splitEquity(campaign, active),
     ...buildRelief({ campaign, employees, sectors, wish1Grants }),
   }
 }
@@ -241,9 +278,36 @@ export function describePaidLeaveTension(projection: PaidLeaveProjection): PaidL
     }
   }
 
-  const headline =
-    `${weeks} semaine${weeks > 1 ? "s" : ""} passerai${weeks > 1 ? "en" : ""}t sous leur minimum `
-    + `de couverture si chacun obtenait son premier vœu.`
+  // DEUX FAÇONS DE COINCER, et une seule se rachète avec du renfort.
+  //
+  // La phrase parlait de « minimum de couverture » pour toutes les semaines
+  // tendues. Depuis que le plafond d'effectif existe, une semaine peut coincer
+  // sans qu'il manque une seule heure — et proposer d'y mettre du renfort
+  // enverrait le gérant chercher un budget qui ne peut rien y faire.
+  const parEffectif = projection.criticalWeeks.filter(
+    (week) => week.exceedingAbsent > 0 && week.missingHours === 0
+  ).length
+  const parHeures = weeks - parEffectif
+
+  const headline = parHeures === 0
+    ? `${weeks} semaine${weeks > 1 ? "s" : ""} dépasserai${weeks > 1 ? "en" : ""}t le nombre `
+      + `d'absents autorisés si chacun obtenait son premier vœu.`
+    : parEffectif === 0
+      ? `${weeks} semaine${weeks > 1 ? "s" : ""} passerai${weeks > 1 ? "en" : ""}t sous leur `
+        + `minimum de couverture si chacun obtenait son premier vœu.`
+      : `${weeks} semaines coinceraient si chacun obtenait son premier vœu : `
+        + `${parHeures} sous leur minimum de couverture, ${parEffectif} par le nombre d'absents.`
+
+  // Aucune heure de renfort ne ramène quelqu'un sous un plafond d'effectif : la
+  // seule issue est de déplacer un congé.
+  if (parHeures === 0) {
+    return {
+      headline,
+      remedy: "Le renfort n'y peut rien : un plafond d'absents ne se rachète pas en heures, "
+        + "il faut déplacer un congé.",
+      critical: true,
+    }
+  }
 
   // Le remède, dans l'ordre où il se décide : d'abord l'argent s'il suffit,
   // ensuite ce qui manque, et enfin le cas où l'argent ne peut rien.
@@ -344,11 +408,11 @@ export function withRelaxedMinimums(
  * jamais par le rang seul : quelqu'un servi « en vœu 2 » sur une semaine qu'il
  * réclamait aussi en vœu 1 n'a rien perdu, et le rang le dirait pourtant.
  */
-function buildCompromises(
+function buildSetbacks(
   campaign: PaidLeaveCampaign,
   employees: readonly EmployeeRecord[],
   wish1Grants: Readonly<Record<string, readonly PaidLeaveWeekId[]>>
-): readonly PaidLeaveCompromise[] {
+): readonly PaidLeaveSetback[] {
   return employees
     .map((employee) => {
       const wanted = new Set(wish1Grants[employee.id] ?? [])
@@ -379,18 +443,18 @@ function buildCompromises(
  */
 function splitEquity(
   campaign: PaidLeaveCampaign,
-  employees: readonly EmployeeRecord[],
-  weekIds: ReadonlySet<PaidLeaveWeekId>
+  employees: readonly EmployeeRecord[]
 ): {
   readonly neverFirstChoice: readonly PaidLeaveEquityWatch[]
   readonly repeatedFirstChoice: readonly PaidLeaveEquityWatch[]
 } {
+  const targetOf = paidLeaveTargets(campaign)
   const watches = employees
-    .filter((employee) => effectiveRequestedWeeks(campaign.requests[employee.id], weekIds) > 0)
+    .filter((employee) => targetOf(employee.id) > 0)
     .map((employee) => {
       const request = campaign.requests[employee.id]
       const granted = campaign.grants[employee.id] ?? []
-      const target = effectiveRequestedWeeks(request, weekIds)
+      const target = targetOf(employee.id)
       const atRank1 =
         granted.length === target
         && granted.every((weekId) => (request ? preferenceRank(request, weekId) : null) === 1)
@@ -421,15 +485,30 @@ function splitEquity(
  */
 export function wishOneScenario(
   campaign: PaidLeaveCampaign,
-  employees: readonly EmployeeRecord[]
+  employees: readonly EmployeeRecord[],
+  absences: readonly AbsenceRecord[] = []
 ): Readonly<Record<string, readonly PaidLeaveWeekId[]>> {
-  const weekIds = campaignWeekIds(campaign)
+  // Les semaines ATTRIBUABLES, et non celles de la campagne : le magasin fermé,
+  // le scénario « chacun son vœu 1 » n'a rien à y placer, et l'y laisser compter
+  // une absence de plus gonflerait une tension sur une semaine sans équipe.
+  const weekIds = attributableWeekIds(campaign)
+  const targetOf = paidLeaveTargets(campaign)
+  // Une semaine d'arrêt ou de congé parental ne devient pas un congé payé parce
+  // qu'on l'a souhaitée. Le scénario les écartait pourtant : il annonçait des
+  // absences en double et surestimait la tension d'autant.
+  const blocked = absentWeeksByEmployee(absences, campaignWeeks(campaign.year, campaign.period))
   return Object.fromEntries(
     employees.map((employee) => {
       const request = campaign.requests[employee.id]
       if (!request) return [employee.id, []]
-      const target = effectiveRequestedWeeks(request, weekIds)
-      const wanted = [...new Set(request.wish1)].filter((weekId) => weekIds.has(weekId))
+      // Le scénario de référence ne peut pas offrir plus que le solde : un vœu
+      // n'ouvre aucun droit, et surestimer la demande brute gonflerait la
+      // tension d'autant.
+      const target = targetOf(employee.id)
+      const unavailable = blocked.get(employee.id)
+      const wanted = [...new Set(request.wish1)].filter(
+        (weekId) => weekIds.has(weekId) && !(unavailable?.has(weekId) ?? false)
+      )
       return [employee.id, wanted.slice(0, target)]
     })
   )
@@ -454,8 +533,7 @@ function countWish1Requests(
 
 function countSatisfaction(
   campaign: PaidLeaveCampaign,
-  employees: readonly EmployeeRecord[],
-  weekIds: ReadonlySet<PaidLeaveWeekId>
+  employees: readonly EmployeeRecord[]
 ): PaidLeaveSatisfaction {
   let rank1 = 0
   let rank2 = 0
@@ -463,10 +541,11 @@ function countSatisfaction(
   let manual = 0
   let unservedEmployees = 0
 
+  const targetOf = paidLeaveTargets(campaign)
   for (const employee of employees) {
     const request = campaign.requests[employee.id]
     const granted = campaign.grants[employee.id] ?? []
-    if (granted.length === 0 && effectiveRequestedWeeks(request, weekIds) > 0) {
+    if (granted.length === 0 && targetOf(employee.id) > 0) {
       unservedEmployees += 1
     }
     for (const weekId of granted) {

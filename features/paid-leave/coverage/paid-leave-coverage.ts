@@ -1,5 +1,6 @@
 import type { EmployeeRecord } from "@/features/employees/types/employee.types"
 import { campaignWeeks } from "@/features/paid-leave/calendar/campaign-weeks"
+import { activeClosureWeeks } from "@/features/paid-leave/domain/campaign"
 import type {
   PaidLeaveCampaign,
   PaidLeaveReinforcementAllocation,
@@ -8,7 +9,15 @@ import type {
 } from "@/features/paid-leave/models/paid-leave-campaign"
 import type { SectorDemandConfiguration } from "@/features/sectors"
 
-export type PaidLeaveCoverageState = "green" | "orange" | "red"
+/**
+ * `closed` n'est PAS une quatrième couleur : c'est l'absence de question.
+ *
+ * Une semaine de fermeture n'a ni minimum à tenir ni équipe pour le tenir. La
+ * peindre en vert dirait « tout va bien » là où rien n'a été vérifié ; la
+ * peindre en rouge accuserait le gérant d'un manque qu'il a décidé lui-même.
+ * C'est aussi ce que fait le solveur, qui saute purement la ligne.
+ */
+export type PaidLeaveCoverageState = "green" | "orange" | "red" | "closed"
 
 export interface PaidLeaveCoverageCell {
   readonly sectorId: string
@@ -22,6 +31,21 @@ export interface PaidLeaveCoverageCell {
   readonly minimumHours: number
   readonly toleratedDeficitHours: number
   readonly deficitHours: number
+  /** Combien de personnes du rayon sont absentes cette semaine-là. */
+  readonly absentCount: number
+  /** Le plafond réglé, ou `null` quand seules les heures décident. */
+  readonly maximumAbsent: number | null
+  /**
+   * Combien de personnes EN TROP par rapport au plafond. Zéro quand il est
+   * tenu, ou qu'il n'y en a pas.
+   *
+   * Rendu à part de `state` parce que la couleur ne dit pas la cause : une
+   * cellule rouge par manque d'heures se rattrape avec du renfort, une cellule
+   * rouge par dépassement d'effectif ne se rattrape qu'en déplaçant un congé.
+   */
+  readonly headcountBreach: number
+  /** Le magasin ferme cette semaine-là : il n'y a rien à couvrir. */
+  readonly closed: boolean
   readonly state: PaidLeaveCoverageState
 }
 
@@ -61,6 +85,7 @@ export function calculatePaidLeaveCoverage({
 }): PaidLeaveCoverageSummary {
   const activeSectors = sectors.filter((sector) => sector.status === "active")
   const weeks = campaignWeeks(campaign.year, campaign.period)
+  const closed = activeClosureWeeks(campaign)
   const employeesBySector = new Map<string, EmployeeRecord[]>()
 
   for (const employee of employees.filter((item) => item.status === "active")) {
@@ -80,16 +105,24 @@ export function calculatePaidLeaveCoverage({
           0
         )
       )
+      const absentCount = team.reduce(
+        (count, employee) => count + (grants[employee.id]?.includes(week.id) ? 1 : 0),
+        0
+      )
       const rule = campaign.coverage[sector.id]?.[week.id] ?? {
         minimumHours: 0,
         toleratedDeficitHours: 0,
+        maximumAbsent: null,
       }
       return {
         sectorId: sector.id,
         sectorName: sector.name,
         weekId: week.id,
+        closed: closed.has(week.id),
         baseContractHours,
         absentHours,
+        absentCount,
+        maximumAbsent: rule.maximumAbsent ?? null,
         presentHours: roundHours(baseContractHours - absentHours),
         reinforcementHours: 0,
         minimumHours: Math.max(0, rule.minimumHours),
@@ -132,12 +165,15 @@ interface MutableCoverageCell {
   readonly sectorId: string
   readonly sectorName: string
   readonly weekId: PaidLeaveWeekId
+  readonly closed: boolean
   readonly baseContractHours: number
   readonly absentHours: number
+  readonly absentCount: number
   readonly presentHours: number
   reinforcementHours: number
   readonly minimumHours: number
   readonly toleratedDeficitHours: number
+  readonly maximumAbsent: number | null
 }
 
 function allocateReinforcementPools(
@@ -227,12 +263,35 @@ function compareCoverageNeeds(left: MutableCoverageCell, right: MutableCoverageC
 function finalizeCell(cell: MutableCoverageCell): PaidLeaveCoverageCell {
   const totalHours = roundHours(cell.presentHours + cell.reinforcementHours)
   const deficitHours = roundHours(Math.max(0, cell.minimumHours - totalHours))
-  const state: PaidLeaveCoverageState = totalHours >= cell.minimumHours
-    ? "green"
-    : totalHours >= cell.minimumHours - cell.toleratedDeficitHours
-      ? "orange"
-      : "red"
-  return { ...cell, totalHours, deficitHours, state }
+  /**
+   * LE PLAFOND D'EFFECTIF EST UNE VIOLATION DURE, comme le plancher d'heures.
+   *
+   * Cet écran l'ignorait alors que le solveur l'applique : il affichait en vert
+   * des semaines que le calcul refusait, et le bouton de validation s'ouvrait
+   * sur une répartition impossible. Un écran qui prédit autre chose que ce qui
+   * sera calculé est pire qu'un écran qui ne prédit rien.
+   *
+   * Aucune marge ici, et c'est voulu : la tolérance est exprimée en HEURES,
+   * elle ne dit rien d'un nombre de personnes. Le plafond se tient ou ne se
+   * tient pas.
+   */
+  const headcountBreach = cell.maximumAbsent === null
+    ? 0
+    : Math.max(0, cell.absentCount - cell.maximumAbsent)
+  // La fermeture passe AVANT tout le reste, plafond compris : une semaine où
+  // personne ne travaille ne peut violer aucune règle de présence. Le solveur
+  // saute la ligne entière ; l'écran doit dire la même chose, sinon il annonce
+  // un rouge que le calcul ne verra jamais.
+  const state: PaidLeaveCoverageState = cell.closed
+    ? "closed"
+    : headcountBreach > 0
+    ? "red"
+    : totalHours >= cell.minimumHours
+      ? "green"
+      : totalHours >= cell.minimumHours - cell.toleratedDeficitHours
+        ? "orange"
+        : "red"
+  return { ...cell, totalHours, deficitHours, headcountBreach, state }
 }
 
 function contractHours(employee: EmployeeRecord): number {

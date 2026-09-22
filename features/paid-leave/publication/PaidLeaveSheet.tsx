@@ -155,10 +155,15 @@ function SectorGroup({
           {row.cells.map((cell) => (
             <td
               key={cell.weekId}
-              style={cell.granted ? paint ?? undefined : undefined}
+              style={cell.granted && !cell.closed ? paint ?? undefined : undefined}
               className={cn(
                 "h-[6mm] border border-neutral-400 align-middle",
-                cell.granted && !paint && "bg-neutral-400"
+                cell.granted && !cell.closed && !paint && "bg-neutral-400",
+                // Hachurée, jamais peinte du rayon : une fermeture n'est pas une
+                // attribution, et c'est la colonne ENTIÈRE qui la porte. Peinte
+                // comme le reste, elle ferait croire à chacun qu'il doit cette
+                // semaine à son arbitrage.
+                cell.closed && "leave-sheet-closed"
               )}
             />
           ))}

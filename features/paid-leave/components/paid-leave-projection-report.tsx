@@ -87,15 +87,25 @@ export function PaidLeaveProjectionReport({
                     <tr key={`${week.sectorId}_${week.weekId}`} className="border-b last:border-0">
                       <td className="py-2 pr-4">{week.sectorName}</td>
                       <td className="py-2 pr-4 tabular-nums">{weekLabel(week.weekId)}</td>
+                      {/* Une semaine qui ne coince que par l'effectif n'a pas
+                          d'heures manquantes : afficher « 0 h » y désignerait
+                          une cause qui n'existe pas, et enverrait chercher du
+                          renfort qui n'y peut rien. */}
                       <td className="py-2 pr-4 text-right font-medium tabular-nums text-red-700 dark:text-red-400">
-                        {formatHours(week.missingHours)}
+                        {week.missingHours > 0
+                          ? formatHours(week.missingHours)
+                          : `${week.exceedingAbsent} absent${week.exceedingAbsent > 1 ? "s" : ""} de trop`}
                       </td>
                       <td className="py-2 pr-4 text-right tabular-nums">{week.wish1Requests}</td>
                       <td className="py-2">
                         {/* La seule case qui change la décision : une semaine
                             qu'aucune enveloppe n'atteint ne se résout pas en
                             achetant des heures, il faut déplacer quelqu'un. */}
-                        {week.reachableByPools ? (
+                        {week.missingHours === 0 ? (
+                          <span className="font-medium text-amber-700 dark:text-amber-400">
+                            non — plafond d’absents
+                          </span>
+                        ) : week.reachableByPools ? (
                           <span className="text-muted-foreground">oui</span>
                         ) : (
                           <span className="font-medium text-amber-700 dark:text-amber-400">
@@ -150,11 +160,11 @@ export function PaidLeaveProjectionReport({
               </p>
             ) : null}
 
-            {projection.compromises.length > 0 ? (
+            {projection.setbacks.length > 0 ? (
               <div className="space-y-1.5">
                 <p className="font-medium">Qui a dû décaler des semaines de son premier choix</p>
                 <ul className="space-y-1">
-                  {projection.compromises.map((entry) => (
+                  {projection.setbacks.map((entry) => (
                     <li key={entry.employeeId} className="flex flex-wrap justify-between gap-x-4">
                       <span>{entry.name}</span>
                       <span className="text-muted-foreground">
