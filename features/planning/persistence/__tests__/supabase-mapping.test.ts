@@ -7,6 +7,7 @@ import {
 } from "@/features/absences/persistence/absence.supabase-repository"
 import type { AbsenceRecord } from "@/features/absences/types/absence-record"
 import {
+  PLANNING_CONFLICT_TARGET,
   toRecord as planningToRecord,
   toRow as planningToRow,
   weekKeyOf,
@@ -117,5 +118,51 @@ describe("la semaine ISO", () => {
   it("range un début janvier dans l'année de son jeudi", () => {
     // Le 1er janvier 2027 est un vendredi : sa semaine ISO reste 2026.
     expect(weekKeyOf("2027-01-01")).toBe("2026-W53")
+  })
+})
+
+/**
+ * LA COLLISION D'IDENTIFIANTS ENTRE MAGASINS.
+ *
+ * `PlanningView` fabrique l'identifiant d'une semaine ainsi :
+ * `planning_${periode.start}` — déterministe, et sans le magasin. Tant que
+ * `plannings.id` était la clé primaire globale, le deuxième magasin qui
+ * enregistrait la semaine du 24 août tombait sur la ligne du premier et ne
+ * pouvait PLUS JAMAIS enregistrer cette semaine.
+ *
+ * Invisible avec un seul magasin, découvert le jour de la mise en service du
+ * second. La clé primaire est devenue `(store_id, id)` : la collision est
+ * impossible par construction.
+ *
+ * CE QUE CE TEST PEUT PROUVER, ET CE QU'IL NE PEUT PAS. Qu'une contrainte
+ * d'unicité existe vraiment en base est un fait Postgres, qu'aucun test
+ * TypeScript n'atteint — et si elle manque, l'enregistrement échoue bruyamment
+ * au premier essai, ce qui est la bonne façon d'échouer.
+ *
+ * Ce qu'il tient, c'est l'accord entre les DEUX moitiés écrites ici : chaque
+ * colonne nommée dans la cible du conflit doit être émise par `toRow`. En
+ * ajouter une que la ligne ne porte pas ferait viser un conflit sur une valeur
+ * absente, et l'upsert insérerait au lieu de mettre à jour — en silence, cette
+ * fois.
+ */
+describe("l'identifiant d'un planning, unique dans son magasin", () => {
+  it("vise le magasin ET l'identifiant, jamais l'identifiant seul", () => {
+    expect(PLANNING_CONFLICT_TARGET.split(",")).toEqual(["store_id", "id"])
+  })
+
+  it("n'écrit aucune colonne de conflit que la ligne ne porte pas", () => {
+    const row = planningToRow(planning, "magasin-test") as Record<string, unknown>
+
+    for (const colonne of PLANNING_CONFLICT_TARGET.split(",")) {
+      expect(row).toHaveProperty(colonne)
+      expect(row[colonne]).toBeTruthy()
+    }
+  })
+
+  it("porte le magasin qu'on lui donne, et pas celui de la fiche", () => {
+    // Le magasin vient de la session vérifiée côté serveur, jamais du dossier
+    // enregistré : c'est ce qui empêche une reprise de données d'écrire chez le
+    // voisin.
+    expect(planningToRow(planning, "magasin-b").store_id).toBe("magasin-b")
   })
 })

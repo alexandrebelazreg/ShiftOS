@@ -73,3 +73,36 @@ présent.
 
 **`clip` casse les accents** sous Windows — 14 893 caractères pour un fichier de
 12 900. Utiliser `Set-Clipboard` via PowerShell, comme dans la procédure.
+
+## Un planning est unique dans son magasin, pas dans le monde
+
+`plannings.id` a été la clé primaire GLOBALE de la table jusqu'à la migration
+0008. L'application, elle, fabrique cet identifiant ainsi :
+`planning_${periode.start}` — déterministe, lisible, et **sans le magasin**.
+
+Les deux ensemble donnent une collision certaine : le deuxième magasin qui
+enregistre la semaine du 24 août vise `planning_2026-08-24`, c'est-à-dire la
+ligne du premier. L'`upsert` tente alors une mise à jour qu'aucune ligne visible
+ne satisfait, ou une insertion en violation de clé ; dans les deux cas ce
+magasin ne peut PLUS JAMAIS enregistrer cette semaine.
+
+Le défaut est invisible avec un seul magasin et se découvre le jour de la mise
+en service du second — au pire moment possible, et sur une table qu'il est alors
+pénible de migrer.
+
+**La clé primaire est donc `(store_id, id)`.** La collision devient impossible
+par CONSTRUCTION, et non par une convention de nommage qu'il faudrait penser à
+appliquer. L'identifiant reste celui de l'application, parce qu'il figure dans
+les adresses (`?planningId=`) et qu'une semaine rouverte par un lien enregistré
+doit rester la même.
+
+Les autres tables étaient déjà saines : `employees` et `sectors` portent un
+identifiant aléatoire, `absences` un uuid de Postgres, `permanences` et
+`paid_leave_campaigns` une unicité sur `(store_id, clé)`.
+
+**Les deux moitiés ne valent qu'ensemble.** PostgREST exige que la cible d'un
+`onConflict` corresponde à une contrainte d'unicité réelle : la migration sans le
+code, ou le code sans la migration, fait échouer tout enregistrement de planning.
+L'échec est explicite et immédiat — c'est la bonne façon de se tromper. Il reste
+donc une courte fenêtre entre les deux déploiements, pendant laquelle enregistrer
+un planning échoue : à faire hors des heures d'ouverture.

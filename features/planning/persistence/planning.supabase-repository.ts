@@ -88,16 +88,54 @@ export function toRow(record: PlanningRecord, storeId: string) {
   }
 }
 
+/**
+ * LA CIBLE DU CONFLIT, ET POURQUOI ELLE PORTE DEUX COLONNES.
+ *
+ * `PlanningView` fabrique l'identifiant d'une semaine ainsi :
+ * `planning_${periode.start}` — déterministe, et SANS le magasin. Tant que
+ * `plannings.id` était la clé primaire globale de la table, le deuxième magasin
+ * qui enregistrait la semaine du 24 août tombait sur la ligne du premier :
+ * l'`upsert` tentait une mise à jour qu'aucune ligne visible ne satisfaisait, ou
+ * une insertion en violation de clé. Dans les deux cas, ce magasin ne pouvait
+ * PLUS JAMAIS enregistrer cette semaine.
+ *
+ * Invisible avec un seul magasin, et découvert le jour de la mise en service du
+ * second — c'est-à-dire au pire moment possible.
+ *
+ * La clé primaire est donc devenue `(store_id, id)` (migration 0008). La
+ * collision est impossible PAR CONSTRUCTION, et non par une convention de
+ * nommage qu'il faudrait se rappeler d'appliquer.
+ *
+ * CETTE CONSTANTE ET LA MIGRATION NE VALENT QU'ENSEMBLE. PostgREST exige que la
+ * cible du conflit corresponde à une contrainte d'unicité réelle : déployer
+ * l'une sans l'autre fait échouer tout enregistrement de planning, avec un
+ * message explicite. C'est la bonne façon d'échouer — la mauvaise aurait été
+ * d'écraser la semaine du voisin en silence.
+ */
+export const PLANNING_CONFLICT_TARGET = "store_id,id"
+
 export function createSupabasePlanningRepository(client: SupabaseClient): PlanningRepository {
   return {
     async save(record) {
       const storeId = await requireStoreId(client)
       const row = toRow(record, storeId)
 
-      const { error } = await client.from("plannings").upsert(row, { onConflict: "id" })
+      const { error } = await client
+        .from("plannings")
+        .upsert(row, { onConflict: PLANNING_CONFLICT_TARGET })
       if (error) throw new Error(error.message)
     },
 
+    // POURQUOI CEUX-CI NE FILTRENT PAS SUR LE MAGASIN, alors que la clé vient de
+    // devenir composite — c'est la première question qu'on se pose en relisant.
+    //
+    // Les politiques de cloisonnement ajoutent `store_id = …` à chaque requète :
+    // une seule ligne est donc visible pour un identifiant donné, et le répéter
+    // ici n'ajouterait aucune garantie, seulement un second endroit où l'oublier.
+    //
+    // `maybeSingle` devient même un garde-fou : si deux lignes remontaient un
+    // jour — politique mal réécrite, ou clé de service utilisée par erreur — il
+    // lèverait au lieu d'en choisir une au hasard.
     async get(id) {
       const { data, error } = await client.from("plannings").select("*").eq("id", id).maybeSingle()
       if (error) throw new Error(error.message)
