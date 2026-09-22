@@ -68,6 +68,7 @@ export function createPaidLeaveCampaign({
     ),
     reinforcementPools: [],
     closureWeekIds: [],
+    forbiddenWeekIds: [],
     grants: {},
     solution: null,
     validatedSnapshot: null,
@@ -135,8 +136,23 @@ export function activeClosureWeeks(
 }
 
 /**
+ * Les semaines où le gérant interdit tout congé, filtrées par la période.
+ *
+ * L'exact opposé d'une fermeture : celle-ci met tout le monde en congé, celle-là
+ * met tout le monde au travail. Leur seul point commun est de n'être pas
+ * attribuables — tout le reste les sépare, à commencer par le solde, qu'une
+ * fermeture consomme et qu'une interdiction laisse intact.
+ */
+export function activeForbiddenWeeks(
+  campaign: PaidLeaveCampaign
+): ReadonlySet<PaidLeaveWeekId> {
+  const weeks = campaignWeekIds(campaign)
+  return new Set((campaign.forbiddenWeekIds ?? []).filter((weekId) => weeks.has(weekId)))
+}
+
+/**
  * Les semaines que la campagne peut encore ATTRIBUER — la période moins la
- * fermeture.
+ * fermeture et moins les interdictions.
  *
  * DEUX ENSEMBLES, ET LA DIFFÉRENCE EST TOUT LE SUJET. « Dans la campagne » et
  * « attribuable » ne veulent pas dire la même chose dès qu'une fermeture existe :
@@ -154,7 +170,12 @@ export function attributableWeekIds(
   campaign: PaidLeaveCampaign
 ): ReadonlySet<PaidLeaveWeekId> {
   const closed = activeClosureWeeks(campaign)
-  return new Set([...campaignWeekIds(campaign)].filter((weekId) => !closed.has(weekId)))
+  const forbidden = activeForbiddenWeeks(campaign)
+  return new Set(
+    [...campaignWeekIds(campaign)].filter(
+      (weekId) => !closed.has(weekId) && !forbidden.has(weekId)
+    )
+  )
 }
 
 /**

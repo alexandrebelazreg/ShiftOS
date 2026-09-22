@@ -26,6 +26,7 @@ import {
   CardTitle,
 } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
+import { CollapsibleSection } from "@/components/ui/collapsible-section"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { absenceService } from "@/features/absences/services/absence.service"
 import { supabaseConfigured } from "@/features/auth/supabase/config"
@@ -55,6 +56,7 @@ import { buildLeaveSlips } from "@/features/paid-leave/publication/leave-slips"
 import { PaidLeaveSlips } from "@/features/paid-leave/publication/PaidLeaveSlips"
 import {
   activeClosureWeeks,
+  activeForbiddenWeeks,
   campaignWeekIds,
   grantsMatchSolution,
   createPaidLeaveCampaign,
@@ -573,6 +575,8 @@ function ConfigurationTab({ campaign, weeks, sectors, locked, onUpdate }: TabPro
 
       <ClosureWeeks campaign={campaign} weeks={weeks} locked={locked} onUpdate={onUpdate} />
 
+      <ForbiddenWeeks campaign={campaign} weeks={weeks} locked={locked} onUpdate={onUpdate} />
+
       <Card>
         <CardHeader>
           <CardTitle>Couverture minimale par secteur</CardTitle>
@@ -582,8 +586,19 @@ function ConfigurationTab({ campaign, weeks, sectors, locked, onUpdate }: TabPro
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-5">
+          {/* FERMÉ AU DÉPART, et c'est le réglage qui compte. Trois secteurs
+              dépliés font soixante-dix-huit cartes de semaine : la page devient
+              un mur, et la seule chose qu'on y cherche — le secteur qu'on veut
+              régler — est la plus difficile à trouver. Le résumé rappelle ce qui
+              est réglé à l'intérieur, pour qu'on puisse le laisser fermé. */}
           {sectors.map((sector) => (
-            <CoverageRuleGrid key={sector.id} campaign={campaign} weeks={weeks} sector={sector} locked={locked} onUpdate={onUpdate} />
+            <CollapsibleSection
+              key={sector.id}
+              title={sector.name}
+              summary={coverageSummary(campaign, sector, weeks)}
+            >
+              <CoverageRuleGrid campaign={campaign} weeks={weeks} sector={sector} locked={locked} onUpdate={onUpdate} />
+            </CollapsibleSection>
           ))}
           {sectors.length === 0 ? <EmptyLine>Configurez au moins un secteur actif dans Planiteo.</EmptyLine> : null}
         </CardContent>
@@ -607,6 +622,27 @@ function ConfigurationTab({ campaign, weeks, sectors, locked, onUpdate }: TabPro
  * attributions calculées avant ne veulent plus rien dire, et les garder à
  * l'écran ferait valider un arbitrage qui n'a jamais été posé.
  */
+/**
+ * POURQUOI LES BANDES DE SEMAINES NE FIXENT PLUS LEUR NOMBRE DE COLONNES.
+ *
+ * Elles étaient calées à vingt-six — le compte d'une campagne d'été, S18 à S43.
+ * Une campagne d'HIVER en compte vingt-SEPT dès que l'année ISO en porte
+ * cinquante-trois : 2026 va de S44 à S53, puis de S1 à S17. La vingt-septième
+ * semaine tombait donc seule sur une seconde rangée, sous les vingt-six autres.
+ * Et une période personnalisée en compte ce qu'on veut, jusqu'à cinquante-deux.
+ *
+ * `grid-flow-col` avec `auto-cols-fr` renverse la décision : les colonnes ne
+ * sont plus DÉCLARÉES, elles sont CRÉÉES à mesure, et se partagent la largeur à
+ * égalité. Une rangée unique, quel que soit le nombre — il n'y a plus de compte
+ * à tenir à jour, donc plus de compte à se tromper.
+ *
+ * `grid-cols-none` d'abord, sans quoi les treize colonnes déclarées au palier
+ * précédent continueraient de gouverner et les semaines se rempliraient EN
+ * COLONNES dans une grille de treize.
+ *
+ * Les petits écrans gardent leur repli à sept puis treize : vingt-sept boutons
+ * sur une rangée de téléphone ne se cliquent pas.
+ */
 function ClosureWeeks({ campaign, weeks, locked, onUpdate }: { readonly campaign: PaidLeaveCampaign; readonly weeks: readonly PaidLeaveCampaignWeek[]; readonly locked: boolean; readonly onUpdate: TabProps["onUpdate"] }) {
   const closed = new Set(campaign.closureWeekIds ?? [])
   return (
@@ -619,7 +655,7 @@ function ClosureWeeks({ campaign, weeks, locked, onUpdate }: { readonly campaign
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-2">
-        <div className="grid grid-cols-7 gap-1 sm:grid-cols-[repeat(13,minmax(0,1fr))] xl:grid-cols-[repeat(26,minmax(0,1fr))]">
+        <div className="grid grid-cols-7 gap-1 sm:grid-cols-[repeat(13,minmax(0,1fr))] xl:grid-cols-none xl:grid-flow-col xl:auto-cols-fr">
           {weeks.map((week) => {
             const selected = closed.has(week.id)
             return (
@@ -652,6 +688,78 @@ function ClosureWeeks({ campaign, weeks, locked, onUpdate }: { readonly campaign
   )
 }
 
+/**
+ * LES SEMAINES INTERDITES — l'exact opposé d'une fermeture.
+ *
+ * La fermeture met tout le monde en congé ; l'interdiction met tout le monde au
+ * travail. Fin décembre, les soldes, la rentrée : les moments où le magasin a
+ * besoin de son équipe entière, et où aucun arbitrage n'a à être rendu.
+ *
+ * Les deux grilles se ressemblent à dessein — même geste, mêmes semaines — mais
+ * la couleur les sépare, et les conséquences les opposent : une fermeture
+ * décompte du solde de chacun, une interdiction ne décompte rien. Cochées toutes
+ * les deux sur la même semaine, c'est la fermeture qui l'emporte pour le solde,
+ * et ni l'une ni l'autre n'est attribuable — le résultat est cohérent, mais la
+ * saisie est douteuse, et l'écran le dit.
+ */
+function ForbiddenWeeks({ campaign, weeks, locked, onUpdate }: { readonly campaign: PaidLeaveCampaign; readonly weeks: readonly PaidLeaveCampaignWeek[]; readonly locked: boolean; readonly onUpdate: TabProps["onUpdate"] }) {
+  const forbidden = new Set(campaign.forbiddenWeekIds ?? [])
+  const closed = new Set(campaign.closureWeekIds ?? [])
+  const doubles = [...forbidden].filter((weekId) => closed.has(weekId)).length
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle>Semaines interdites</CardTitle>
+        <CardDescription>
+          L’inverse d’une fermeture : aucun congé ne sera accordé ces semaines-là, et le solde de chacun
+          reste intact. Pour les fêtes, les soldes, la rentrée — les moments où l’équipe doit être au complet.
+        </CardDescription>
+      </CardHeader>
+      <CardContent className="space-y-2">
+        <div className="grid grid-cols-7 gap-1 sm:grid-cols-[repeat(13,minmax(0,1fr))] xl:grid-cols-none xl:grid-flow-col xl:auto-cols-fr">
+          {weeks.map((week) => {
+            const selected = forbidden.has(week.id)
+            const aussiFermee = selected && closed.has(week.id)
+            return (
+              <Button
+                key={week.id}
+                aria-label={`Interdiction · ${week.shortLabel}`}
+                aria-pressed={selected}
+                className={cn(
+                  "h-7 min-w-0 px-0 text-xs font-semibold",
+                  selected && "border-red-700 bg-red-600 text-white hover:bg-red-700",
+                  aussiFermee && "border-amber-500 bg-amber-500 text-amber-950 hover:bg-amber-600"
+                )}
+                disabled={locked}
+                size="xs"
+                title={aussiFermee
+                  ? `${week.shortLabel} · fermée ET interdite — saisie à revoir`
+                  : `${week.shortLabel} · ${week.rangeLabel}`}
+                variant="outline"
+                onClick={() => toggleForbidden(onUpdate, week.id)}
+              >
+                {week.weekNumber}
+              </Button>
+            )
+          })}
+        </div>
+        <p className="text-xs text-muted-foreground">
+          {forbidden.size === 0
+            ? "Aucune interdiction : toutes les semaines ouvertes s’arbitrent."
+            : `${forbidden.size} semaine${forbidden.size > 1 ? "s" : ""} interdite${forbidden.size > 1 ? "s" : ""} · les vœux qui y tombent ne seront pas servis.`}
+        </p>
+        {doubles > 0 ? (
+          <p className="text-xs font-medium text-amber-700 dark:text-amber-400">
+            {doubles} semaine{doubles > 1 ? "s sont" : " est"} à la fois fermée{doubles > 1 ? "s" : ""} et interdite{doubles > 1 ? "s" : ""} (en orange).
+            La fermeture l’emporte : tout le monde y sera en congé, et le solde en sera décompté.
+          </p>
+        ) : null}
+      </CardContent>
+    </Card>
+  )
+}
+
 function CoverageRuleGrid({ campaign, weeks, sector, locked, onUpdate }: { readonly campaign: PaidLeaveCampaign; readonly weeks: readonly PaidLeaveCampaignWeek[]; readonly sector: SectorDemandConfiguration; readonly locked: boolean; readonly onUpdate: TabProps["onUpdate"] }) {
   const firstRule = campaign.coverage[sector.id]?.[weeks[0]?.id]
   const applyAll = (rule: PaidLeaveCoverageRule) => onUpdate((current) => invalidateCampaign({
@@ -665,7 +773,6 @@ function CoverageRuleGrid({ campaign, weeks, sector, locked, onUpdate }: { reado
     <section className="space-y-3">
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
-          <h3 className="font-medium">{sector.name}</h3>
           <p className="text-xs text-muted-foreground">Saisissez le nombre d’heures hebdomadaires qui doivent rester disponibles.</p>
         </div>
         <div className="grid w-full grid-cols-2 items-end gap-2 sm:w-auto sm:grid-cols-[8rem_8rem_7rem_auto]">
@@ -681,7 +788,12 @@ function CoverageRuleGrid({ campaign, weeks, sector, locked, onUpdate }: { reado
           })}>Appliquer partout</Button>
         </div>
       </div>
-      <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6">
+      {/* QUATRE CARTES PAR RANGÉE AU LIEU DE SIX. À six, chaque carte tombe sous
+          les cent trente pixels : la case « Minimum » n'affichait plus son
+          nombre en entier dès trois chiffres — et un plancher de couverture
+          dépasse cent heures dès qu'un rayon compte quatre personnes, donc le
+          cas normal était tronqué, pas le cas rare. */}
+      <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
         {weeks.map((week) => {
           const rule: PaidLeaveCoverageRule = campaign.coverage[sector.id]?.[week.id] ?? { minimumHours: 0, toleratedDeficitHours: 0, maximumAbsent: null }
           return (
@@ -690,7 +802,9 @@ function CoverageRuleGrid({ campaign, weeks, sector, locked, onUpdate }: { reado
                 <p className="text-xs font-semibold">{week.shortLabel}</p>
                 <p className="truncate text-[10px] text-muted-foreground" title={week.rangeLabel}>{week.rangeLabel}</p>
               </div>
-              <div className="grid grid-cols-3 gap-1">
+              {/* Le minimum reçoit la part la plus large : c'est le seul des
+                  trois qui porte régulièrement trois chiffres et une décimale. */}
+              <div className="grid grid-cols-[minmax(0,1.4fr)_minmax(0,1.2fr)_minmax(0,0.9fr)] gap-1">
                 <label className="grid gap-0.5 text-[10px] text-muted-foreground">
                   Minimum
                   <Input aria-label={`Minimum ${sector.name} ${week.shortLabel}`} disabled={locked} className="h-7 px-1.5 text-xs" type="number" min={0} step={0.5} value={rule.minimumHours} onChange={(event) => updateCoverageRule(onUpdate, sector.id, week.id, { ...rule, minimumHours: Number(event.target.value) })} />
@@ -784,8 +898,14 @@ function EmployeesTab({ campaign, employees, sectors, locked, onUpdate }: Employ
               const settings = campaign.employeeSettings[employee.id]
               const linkedName = employeeName(employees.find((item) => item.id === settings?.linkedEmployeeId))
               return (
-                <div key={employee.id} className="grid gap-2 rounded-lg border p-2 sm:grid-cols-2 xl:grid-cols-[minmax(11rem,1.2fr)_auto_9.5rem_7.5rem_minmax(10rem,1fr)] xl:items-end">
-                  <div className="min-w-0 sm:col-span-2 xl:col-span-1">
+                /* DE DEUX COLONNES À QUATRE avant le grand écran. Cinq champs
+                   sur deux colonnes font quatre rangées par personne : une
+                   équipe de vingt déroulait quatre-vingts rangées, et l'on
+                   perdait de vue qui l'on réglait. Les champs sont courts — une
+                   date, deux compteurs — et tiennent largement à quatre de
+                   front dès la tablette. */
+                <div key={employee.id} className="grid gap-1.5 rounded-lg border p-2 sm:grid-cols-2 md:grid-cols-4 xl:grid-cols-[minmax(10rem,1.1fr)_auto_8.5rem_6.5rem_6.5rem_minmax(9rem,1fr)] xl:items-end">
+                  <div className="min-w-0 sm:col-span-2 md:col-span-4 xl:col-span-1">
                     <div className="flex flex-wrap items-center gap-1.5">
                       <p className="truncate font-medium">{employeeName(employee)}</p>
                       {settings?.linkedEmployeeId ? <Badge variant="outline"><Link2 /> {linkedName}</Badge> : null}
@@ -810,13 +930,13 @@ function EmployeesTab({ campaign, employees, sectors, locked, onUpdate }: Employ
                       premier vœu, et combien de fois — qui tranche, et c'est
                       un meilleur critère : il mesure ce qui s'est passé, pas
                       une date d'embauche. */}
-                  <Field label="Date d’entrée"><Input disabled={locked} title="Sert à départager les congés simultanés quand ils ne peuvent pas tous être tenus." type="date" value={settings?.entryDate ?? ""} onChange={(event) => updateEmployeeSettings(onUpdate, employee.id, { entryDate: event.target.value })} /></Field>
-                  <Field label="Vœux 1 obtenus"><Input disabled={locked} type="number" min={0} step={1} value={settings?.firstChoiceHistory ?? 0} onChange={(event) => updateEmployeeSettings(onUpdate, employee.id, { firstChoiceHistory: Math.max(0, Math.round(Number(event.target.value))) })} /></Field>
+                  <Field label="Date d’entrée"><Input className="h-8" disabled={locked} title="Sert à départager les congés simultanés quand ils ne peuvent pas tous être tenus." type="date" value={settings?.entryDate ?? ""} onChange={(event) => updateEmployeeSettings(onUpdate, employee.id, { entryDate: event.target.value })} /></Field>
+                  <Field label="Vœux 1 obtenus"><Input className="h-8" disabled={locked} type="number" min={0} step={1} value={settings?.firstChoiceHistory ?? 0} onChange={(event) => updateEmployeeSettings(onUpdate, employee.id, { firstChoiceHistory: Math.max(0, Math.round(Number(event.target.value))) })} /></Field>
                   {/* VIDE ET ZÉRO NE SONT PAS LA MÊME CHOSE. Vide dit « solde
                       inconnu » et ne vérifie rien ; zéro dit « plus rien à
                       poser » et ferme la campagne à cette personne. */}
-                  <Field label="Solde restant (semaines)"><Input disabled={locked} type="number" min={0} step={1} placeholder="non suivi" value={settings?.entitlementWeeks ?? ""} onChange={(event) => updateEmployeeSettings(onUpdate, employee.id, { entitlementWeeks: event.target.value === "" ? null : Math.max(0, Math.round(Number(event.target.value))) })} /></Field>
-                  <Field label="Personne liée"><select disabled={locked} className={selectClassName} value={settings?.linkedEmployeeId ?? ""} onChange={(event) => onUpdate((current) => invalidateCampaign({ ...current, employeeSettings: linkPriorityEmployees(current.employeeSettings, employee.id, event.target.value || null) }))}><option value="">Aucune</option>{employees.filter((item) => item.id !== employee.id).map((item) => <option key={item.id} value={item.id}>{employeeName(item)}</option>)}</select></Field>
+                  <Field label="Solde restant (semaines)"><Input className="h-8" disabled={locked} type="number" min={0} step={1} placeholder="non suivi" value={settings?.entitlementWeeks ?? ""} onChange={(event) => updateEmployeeSettings(onUpdate, employee.id, { entitlementWeeks: event.target.value === "" ? null : Math.max(0, Math.round(Number(event.target.value))) })} /></Field>
+                  <Field label="Personne liée"><select disabled={locked} className={cn(selectClassName, "h-8")} value={settings?.linkedEmployeeId ?? ""} onChange={(event) => onUpdate((current) => invalidateCampaign({ ...current, employeeSettings: linkPriorityEmployees(current.employeeSettings, employee.id, event.target.value || null) }))}><option value="">Aucune</option>{employees.filter((item) => item.id !== employee.id).map((item) => <option key={item.id} value={item.id}>{employeeName(item)}</option>)}</select></Field>
                   </div>
               )
             })}
@@ -830,11 +950,11 @@ function EmployeesTab({ campaign, employees, sectors, locked, onUpdate }: Employ
 
 function WishesTab({ campaign, weeks, employees, sectors, absences, locked, onUpdate }: EmployeeTabProps & { readonly weeks: readonly PaidLeaveCampaignWeek[]; readonly absences: readonly AbsenceRecord[] }) {
   const weekIds = campaignWeekIds(campaign)
+  const interdites = activeForbiddenWeeks(campaign)
   return (
     <div className="space-y-3 pt-4">
       <Card size="sm"><CardHeader><CardTitle>Vœux de congés</CardTitle><CardDescription>Chaque vœu est un plan complet de la même absence : cochez le <strong>même nombre de semaines</strong> dans Vœu 1, Vœu 2 et Vœu 3. Ce nombre est celui qui sera attribué — il n’y a rien d’autre à saisir.</CardDescription></CardHeader></Card>
 
-      <WishTension campaign={campaign} employees={employees} sectors={sectors} absences={absences} />
       {groupEmployees(employees, sectors).map(({ sectorName, employees: team }) => (
         <Card key={sectorName} size="sm">
           <CardHeader><CardTitle>{sectorName}</CardTitle></CardHeader>
@@ -858,13 +978,19 @@ function WishesTab({ campaign, weeks, employees, sectors, absences, locked, onUp
                       {disagrees ? ` · vœux inégaux (${sizes.filter((size) => size > 0).join(" / ")})` : null}
                     </p>
                   </div>
-                  <WishWeekGrid employee={employee} request={request} weeks={weeks} disabled={locked} onToggle={(rank, weekId) => toggleWish(onUpdate, employee.id, rank, weekId)} />
+                          <WishWeekGrid employee={employee} request={request} weeks={weeks} forbidden={interdites} disabled={locked} onToggle={(rank, weekId) => toggleWish(onUpdate, employee.id, rank, weekId)} />
                 </section>
               )
             })}
           </CardContent>
         </Card>
       ))}
+
+      {/* À LA FIN, et non en tête. On vient ici pour SAISIR ; la tension se
+          consulte après avoir coché, quand la question devient « est-ce que ça
+          passe ? ». En tête, elle repoussait les grilles sous la ligne de
+          flottaison et se lisait avant d'avoir le moindre sens. */}
+      <WishTension campaign={campaign} employees={employees} sectors={sectors} absences={absences} />
     </div>
   )
 }
@@ -927,7 +1053,7 @@ function WishTension({ campaign, employees, sectors, absences }: { readonly camp
         {sectors.map((sector) => (
           <section key={sector.id}>
             <h3 className="mb-1 text-sm font-medium">{sector.name}</h3>
-            <div className="grid grid-cols-[repeat(13,minmax(0,1fr))] gap-1 xl:grid-cols-[repeat(26,minmax(0,1fr))]">
+            <div className="grid grid-cols-[repeat(13,minmax(0,1fr))] gap-1 xl:grid-cols-none xl:grid-flow-col xl:auto-cols-fr">
               {coverage.cells.filter((cell) => cell.sectorId === sector.id).map((cell) => (
                 <div
                   key={cell.weekId}
@@ -961,7 +1087,7 @@ function WishTension({ campaign, employees, sectors, absences }: { readonly camp
   )
 }
 
-function WishWeekGrid({ employee, request, weeks, disabled, onToggle }: { readonly employee: EmployeeRecord; readonly request: PaidLeaveRequest | undefined; readonly weeks: readonly PaidLeaveCampaignWeek[]; readonly disabled: boolean; readonly onToggle: (rank: 1 | 2 | 3, weekId: PaidLeaveWeekId) => void }) {
+function WishWeekGrid({ employee, request, weeks, forbidden, disabled, onToggle }: { readonly employee: EmployeeRecord; readonly request: PaidLeaveRequest | undefined; readonly weeks: readonly PaidLeaveCampaignWeek[]; readonly forbidden: ReadonlySet<PaidLeaveWeekId>; readonly disabled: boolean; readonly onToggle: (rank: 1 | 2 | 3, weekId: PaidLeaveWeekId) => void }) {
   return (
     <div className="space-y-1.5">
       {([1, 2, 3] as const).map((rank) => (
@@ -972,23 +1098,30 @@ function WishWeekGrid({ employee, request, weeks, disabled, onToggle }: { readon
             rank === 2 && "bg-amber-100 text-amber-900",
             rank === 3 && "bg-sky-100 text-sky-800"
           )}>Vœu {rank}</p>
-          <div className="grid grid-cols-7 gap-1 sm:grid-cols-[repeat(13,minmax(0,1fr))] xl:grid-cols-[repeat(26,minmax(0,1fr))]">
+          <div className="grid grid-cols-7 gap-1 sm:grid-cols-[repeat(13,minmax(0,1fr))] xl:grid-cols-none xl:grid-flow-col xl:auto-cols-fr">
             {weeks.map((week) => {
               const selected = request?.[`wish${rank}`].includes(week.id) ?? false
+              // INTERDITE : on n'y coche rien de neuf. Un vœu sur une semaine que
+              // personne n'obtiendra est un vœu mort, et le laisser saisir
+              // fabrique la déception qu'on cherche à éviter. Un vœu DÉJÀ posé
+              // reste visible et décochable — l'effacer d'autorité ferait
+              // disparaître une saisie sans que personne l'ait décidé.
+              const interdite = forbidden.has(week.id)
               return (
                 <Button
                   key={week.id}
-                  aria-label={`${employeeName(employee)} · ${week.shortLabel} · vœu ${rank}`}
+                  aria-label={`${employeeName(employee)} · ${week.shortLabel} · ${interdite ? "semaine interdite" : `vœu ${rank}`}`}
                   aria-pressed={selected}
+                  title={interdite ? `${week.shortLabel} · semaine interdite` : `${week.shortLabel} · ${week.rangeLabel}`}
                   className={cn(
                     "h-7 min-w-0 px-0 text-xs font-semibold",
+                    interdite && "border-dashed border-muted-foreground/40 bg-muted/40 text-muted-foreground line-through",
                     selected && rank === 1 && "border-emerald-700 bg-emerald-600 text-white hover:bg-emerald-700",
                     selected && rank === 2 && "border-amber-700 bg-amber-500 text-amber-950 hover:bg-amber-600",
                     selected && rank === 3 && "border-sky-700 bg-sky-600 text-white hover:bg-sky-700"
                   )}
-                  disabled={disabled}
+                  disabled={disabled || (interdite && !selected)}
                   size="xs"
-                  title={`${week.shortLabel} · ${week.rangeLabel}`}
                   variant="outline"
                   onClick={() => onToggle(rank, week.id)}
                 >
@@ -1061,8 +1194,6 @@ function ValidationTab({ campaign, weeks, employees, sectors, absences, locked, 
       </Card>
 
       <SolutionDiff campaign={campaign} employees={employees} />
-
-      <ConcessionPrices campaign={campaign} employees={employees} />
 
       <Card>
         <CardHeader><CardTitle>Attributions par personne</CardTitle><CardDescription>Utilisez les raccourcis de vœux ou ajustez chaque semaine manuellement avant la validation.</CardDescription></CardHeader>
@@ -1140,6 +1271,13 @@ function ValidationTab({ campaign, weeks, employees, sectors, absences, locked, 
           )}
         </CardContent>
       </Card>
+
+      {/* APRÈS la feuille, AVANT le bouton de validation. C'est la dernière
+          question qu'on se pose — « est-ce que je peux faire mieux ? » — et elle
+          vient une fois qu'on a vu le résultat, pas avant. La placer en tête
+          proposait des arbitrages sur une attribution qu'on n'avait pas encore
+          lue. */}
+      <ConcessionPrices campaign={campaign} employees={employees} />
 
       <Card className="print:hidden">
         <CardContent className="flex flex-wrap items-center justify-between gap-4">
@@ -1296,7 +1434,8 @@ function GrantEditor({ campaign, employee, weeks, unavailable, locked, onUpdate 
   // enregistrée, et celles où le magasin ferme. Une attribution posée sur une
   // fermeture compterait la personne absente deux fois.
   const closed = activeClosureWeeks(campaign)
-  const blocked = new Set([...unavailable, ...closed])
+  const forbidden = activeForbiddenWeeks(campaign)
+  const blocked = new Set([...unavailable, ...closed, ...forbidden])
   const granted = campaign.grants[employee.id] ?? []
   return (
     <section className="rounded-lg border p-3">
@@ -1308,19 +1447,23 @@ function GrantEditor({ campaign, employee, weeks, unavailable, locked, onUpdate 
           semaines, la bande obligeait à faire défiler pour comparer juillet et
           août, c'est-à-dire exactement les deux semaines qu'on veut comparer.
           Le rang tient dans la couleur, l'horaire complet dans l'infobulle. */}
-      <div className="mt-3 grid grid-cols-[repeat(13,minmax(0,1fr))] gap-1 xl:grid-cols-[repeat(26,minmax(0,1fr))]">
+      <div className="mt-3 grid grid-cols-[repeat(13,minmax(0,1fr))] gap-1 xl:grid-cols-none xl:grid-flow-col xl:auto-cols-fr">
         {weeks.map((week) => {
           const checked = granted.includes(week.id)
           const rank = request ? preferenceRank(request, week.id) : null
-          const shut = closed.has(week.id)
+          const shut = closed.has(week.id) || forbidden.has(week.id)
           return (
             <button
               key={week.id}
               type="button"
               disabled={locked || shut || (!checked && granted.length >= target)}
               aria-pressed={checked}
-              aria-label={`${week.shortLabel} · ${week.rangeLabel} · ${shut ? "magasin fermé" : rank ? `vœu ${rank}` : "hors vœux"}`}
-              title={shut ? `${week.rangeLabel} · magasin fermé : déjà en congé` : `${week.rangeLabel}${rank ? ` · vœu ${rank}` : ""}`}
+              aria-label={`${week.shortLabel} · ${week.rangeLabel} · ${closed.has(week.id) ? "magasin fermé" : forbidden.has(week.id) ? "semaine interdite" : rank ? `vœu ${rank}` : "hors vœux"}`}
+              title={closed.has(week.id)
+                ? `${week.rangeLabel} · magasin fermé : déjà en congé`
+                : forbidden.has(week.id)
+                  ? `${week.rangeLabel} · semaine interdite : aucun congé ne peut y être accordé`
+                  : `${week.rangeLabel}${rank ? ` · vœu ${rank}` : ""}`}
               onClick={() => toggleGrant(onUpdate, employee.id, week.id, target)}
               className={cn(
                 "min-h-9 rounded border py-1 text-[11px] font-medium leading-tight tabular-nums transition disabled:cursor-not-allowed disabled:opacity-40",
@@ -1374,7 +1517,7 @@ function CoverageReport({ campaign, coverage, sectors, comparison, onComparison 
                   tenir sous les yeux, sinon on ne voit jamais le creux d'août
                   et la tension de juillet en même temps. Le détail horaire
                   passe dans l'infobulle. */}
-              <div className="grid grid-cols-[repeat(13,minmax(0,1fr))] gap-1 xl:grid-cols-[repeat(26,minmax(0,1fr))]">
+              <div className="grid grid-cols-[repeat(13,minmax(0,1fr))] gap-1 xl:grid-cols-none xl:grid-flow-col xl:auto-cols-fr">
                 {cells.map((cell) => (
                   <div
                     key={cell.weekId}
@@ -1491,6 +1634,45 @@ function toggleClosure(onUpdate: TabProps["onUpdate"], weekId: PaidLeaveWeekId) 
       ? closed.filter((item) => item !== weekId)
       : [...closed, weekId].sort()
     return invalidateCampaign({ ...current, closureWeekIds: next })
+  })
+}
+
+/**
+ * Ce qu'un secteur replié dit encore de lui-même.
+ *
+ * Un pli qui ne résume rien oblige à tout déplier pour vérifier qu'on n'a rien
+ * oublié — et l'on finit par tout laisser ouvert. Deux nombres suffisent : ce
+ * que le secteur exige le plus souvent, et le fait qu'une semaine y échappe.
+ */
+function coverageSummary(
+  campaign: PaidLeaveCampaign,
+  sector: SectorDemandConfiguration,
+  weeks: readonly PaidLeaveCampaignWeek[]
+): readonly string[] {
+  const rules = weeks.map((week) => campaign.coverage[sector.id]?.[week.id])
+  const minimums = new Set(rules.map((rule) => rule?.minimumHours ?? 0))
+  const plafonds = new Set(rules.map((rule) => rule?.maximumAbsent ?? null))
+  const commun = [...minimums][0] ?? 0
+
+  return [
+    minimums.size === 1
+      ? `minimum ${formatHours(commun)}`
+      : `minimum variable (${formatHours(Math.min(...minimums))} à ${formatHours(Math.max(...minimums))})`,
+    plafonds.size === 1 && [...plafonds][0] === null
+      ? "aucun plafond d’absents"
+      : plafonds.size === 1
+        ? `${[...plafonds][0]} absent${([...plafonds][0] ?? 0) > 1 ? "s" : ""} au plus`
+        : "plafonds variables",
+  ]
+}
+
+function toggleForbidden(onUpdate: TabProps["onUpdate"], weekId: PaidLeaveWeekId) {
+  onUpdate((current) => {
+    const forbidden = current.forbiddenWeekIds ?? []
+    const next = forbidden.includes(weekId)
+      ? forbidden.filter((item) => item !== weekId)
+      : [...forbidden, weekId].sort()
+    return invalidateCampaign({ ...current, forbiddenWeekIds: next })
   })
 }
 

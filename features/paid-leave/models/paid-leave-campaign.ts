@@ -231,6 +231,29 @@ export interface PaidLeaveCampaign {
    * « aucune fermeture », ce qui est exactement le comportement d'avant.
    */
   readonly closureWeekIds?: readonly PaidLeaveWeekId[]
+  /**
+   * Les semaines où AUCUN congé ne peut être accordé — l'exact opposé d'une
+   * fermeture, et il ne faut surtout pas les confondre.
+   *
+   * La fermeture met TOUT LE MONDE en congé : elle décompte du solde, et le
+   * magasin n'a personne à couvrir. Une semaine interdite met tout le monde AU
+   * TRAVAIL : elle ne décompte rien, et la couverture s'y calcule comme
+   * n'importe quelle autre semaine. C'est la fin décembre, les soldes, la
+   * rentrée — les moments où le magasin a besoin de tout son monde.
+   *
+   * Ni l'une ni l'autre n'est attribuable, et c'est leur seul point commun.
+   *
+   * CE QU'ELLE FAIT À LA CIBLE, et pourquoi ce n'est pas un oubli : elle la
+   * RÉDUIT. Un vœu de trois semaines dont une est interdite ne peut en obtenir
+   * que deux, et la personne n'est pas « incomplète » pour autant — c'est le
+   * gérant qui a fermé cette semaine, le lui reprocher à chaque écran serait lui
+   * redemander une décision qu'il a prise. C'est ce qui la distingue d'une
+   * absence déjà posée, qui est un accident et doit rester un manque annoncé.
+   *
+   * Absent — la valeur de toutes les campagnes écrites avant ce champ — vaut
+   * « aucune interdiction ».
+   */
+  readonly forbiddenWeekIds?: readonly PaidLeaveWeekId[]
   readonly grants: Readonly<Record<string, readonly PaidLeaveWeekId[]>>
   readonly solution: PaidLeaveSolution | null
   readonly validatedSnapshot: PaidLeaveValidatedSnapshot | null

@@ -4,6 +4,7 @@ import { campaignWeeks } from "@/features/paid-leave/calendar/campaign-weeks"
 import { absentWeeksByEmployee } from "@/features/paid-leave/domain/already-absent"
 import {
   activeClosureWeeks,
+  activeForbiddenWeeks,
   attributableWeekIds,
   effectiveRequestedWeeks,
   grantIsEntirelyFirstChoice,
@@ -35,6 +36,7 @@ export interface PaidLeaveGenerationWarning {
   readonly kind:
     | "sector"
     | "orphaned-wishes"
+    | "forbidden-wishes"
     | "uneven-wishes"
     | "no-wishes"
     | "already-absent"
@@ -102,6 +104,32 @@ export function paidLeaveGenerationWarnings(
       message:
         `${listNames(withOrphans)} ${plural(withOrphans.length, "a", "ont")} des vœux hors de la période de la campagne : ` +
         `ces semaines ne peuvent pas être attribuées.`,
+    })
+  }
+
+  // DES VŒUX SUR UNE SEMAINE INTERDITE.
+  //
+  // Voisin des vœux hors période, et distinct : ces semaines sont bien dans la
+  // campagne, c'est le gérant qui les a fermées à tout congé. La cible s'en
+  // trouve réduite — la personne ne sera donc PAS annoncée incomplète, ce qui
+  // est voulu : on ne reproche pas à quelqu'un une décision qu'on a prise
+  // soi-même. Mais il faut dire que ces vœux-là ne serviront à rien, sans quoi
+  // la personne paraîtrait simplement moins bien servie que les autres.
+  const interdites = activeForbiddenWeeks(input.campaign)
+  const surSemainesInterdites = interdites.size === 0 ? [] : active.filter((employee) => {
+    const demande = input.campaign.requests[employee.id]
+    if (!demande) return false
+    return [...demande.wish1, ...demande.wish2, ...demande.wish3].some((weekId) =>
+      interdites.has(weekId)
+    )
+  })
+  if (surSemainesInterdites.length > 0) {
+    warnings.push({
+      kind: "forbidden-wishes",
+      message:
+        `${listNames(surSemainesInterdites)} ${plural(surSemainesInterdites.length, "a", "ont")} des vœux sur `
+        + `une semaine interdite : ces semaines ne seront attribuées à personne, et `
+        + `${plural(surSemainesInterdites.length, "sa demande est réduite", "leurs demandes sont réduites")} d'autant.`,
     })
   }
 
