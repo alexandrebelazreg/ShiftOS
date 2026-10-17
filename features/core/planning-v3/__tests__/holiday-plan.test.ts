@@ -81,12 +81,22 @@ describe("un férié chômé ferme la journée", () => {
     expect(onMonday.every((day) => day.maximumMinutes === 0)).toBe(true)
   })
 
-  it("laisse les autres journées de la semaine intactes", () => {
+  it("laisse les horaires des autres journées intacts", () => {
     const untouched = problemOf()
     for (const day of problem.days) {
       if (day.date === MONDAY) continue
-      expect(day).toEqual(untouched.days.find((other) => other.date === day.date))
+      const ordinary = untouched.days.find((other) => other.date === day.date)!
+      expect({ ...day, budgetMinutes: 0 }).toEqual({ ...ordinary, budgetMinutes: 0 })
     }
+  })
+
+  it("reporte la part du jour chômé sur les autres, au lieu de la perdre", () => {
+    // La perdre laissait la semaine plus courte que les contrats : en budgets
+    // journaliers stricts — le Drive —, aucune répartition ne tenait plus et
+    // toute semaine contenant un férié chômé était refusée.
+    const total = (days: readonly { budgetMinutes: number }[]) =>
+      days.reduce((sum, day) => sum + day.budgetMinutes, 0)
+    expect(total(problem.days)).toBe(total(problemOf().days))
   })
 })
 
@@ -134,7 +144,9 @@ describe("un férié ouvert n’admet que les volontaires", () => {
   it("ignore des horaires exceptionnels incohérents plutôt que de vider la journée", () => {
     // Fermeture avant ouverture : le réglage ne tient pas debout, la journée
     // garde son horaire ordinaire au lieu de devenir impossible.
-    const broken = problemOf([entry({ opensAtMinutes: 900, closesAtMinutes: 480 })])
+    // Un volontaire, sans quoi la journée fermerait faute de monde et le test
+    // ne dirait plus rien des horaires.
+    const broken = problemOf([entry({ opensAtMinutes: 900, closesAtMinutes: 480, volunteerIds: ["dylan"] })])
     const monday = broken.days.find((day) => day.date === MONDAY)
     const ordinary = problemOf().days.find((day) => day.date === MONDAY)
 

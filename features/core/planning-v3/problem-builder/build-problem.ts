@@ -7,6 +7,7 @@ import type { PlanningGenerationInput } from "@/features/core/planning-generator
 import type { SectorPresenceFloor } from "@/features/core/planning-generator/types/business-pipeline"
 
 import { computeDailyBudgets } from "@/features/core/planning-v3/problem-builder/daily-budget"
+import { settleHolidayDays } from "@/features/core/planning-v3/problem-builder/holiday-staffing"
 import {
   PLANNING_OBJECTIVES_V3,
   PLANNING_MULTI_SECTOR_OBJECTIVES_V3,
@@ -322,6 +323,8 @@ export function buildPlanningProblemV3(
   )
 
   const days: PlanningDayV3[] = []
+  /** La part ordinaire de chaque férié, avant qu'il ne la touche — voir `settleHolidayDays`. */
+  const holidayShare = new Map<string, { share: number; chome: boolean }>()
   for (const date of dates) {
     const weekDay = weekDayOf(date)
     const storeHours = input.store.openingHours.find((item) => item.day === weekDay)
@@ -400,6 +403,9 @@ export function buildPlanningProblemV3(
       && holidayEntry.closesAtMinutes > holidayEntry.opensAtMinutes
         ? holidayEntry
         : null
+    if (holidayEntry !== undefined && !closed) {
+      holidayShare.set(date, { share: budgetMinutes, chome: holidayClosed === true })
+    }
 
     days.push({
       date,
@@ -540,6 +546,21 @@ export function buildPlanningProblemV3(
     }
   }
 
+  // ── Ce que chaque férié peut réellement porter ───────────────────────────
+  //
+  // Après les disponibilités, parce que c'est elles qui disent combien de
+  // volontaires restent : un rayon sans aucun volontaire se ferme, un rayon à
+  // deux volontaires ne reçoit que ce que deux personnes tiennent, et le reste
+  // de sa part va aux autres jours. Sans férié, rien ne change.
+  const holidayStaffing = settleHolidayDays(
+    days,
+    employeeDays,
+    holidayShare,
+    new Map(employees.map((employee) => [String(employee.id), employee.contractMinutes])),
+    step
+  )
+  days.splice(0, days.length, ...holidayStaffing.days)
+
   // ── Demand ────────────────────────────────────────────────────────────────
   const dateSet = new Set<IsoDate>(dates)
   const dayByDate = new Map<string, PlanningDayV3>(days.map((day) => [day.date, day]))
@@ -548,6 +569,8 @@ export function buildPlanningProblemV3(
   for (const requirement of input.demand.requirements) {
     if (sectorRequirements.size > 0 && !sectorRequirements.has(String(requirement.id))) continue
     if (!dateSet.has(requirement.window.date)) continue
+    // Un rayon fermé faute de volontaire n'a rien à couvrir ce jour-là.
+    if (holidayStaffing.closedDates.has(requirement.window.date)) continue
     const startMinutes = minutesOfDay(requirement.window.start)
     const endMinutes = minutesOfDay(requirement.window.end)
     if (startMinutes === null || endMinutes === null) {
@@ -592,7 +615,17 @@ export function buildPlanningProblemV3(
       // not zero: a slot with no floor is one no schedule can be REFUSED over,
       // while a declared zero would be a deliberate statement that nobody needs
       // to be there.
-      ...(floor === null ? {} : { hardMinimumEmployees: floor }),
+      // Un plancher dur ne peut pas réclamer, un férié, plus de monde qu'il n'y
+      // a de volontaires : ce serait refuser la semaine pour une absence que
+      // le magasin a lui-même décidée.
+      ...(floor === null
+        ? {}
+        : {
+            hardMinimumEmployees: Math.min(
+              floor,
+              holidayStaffing.availableByDate.get(requirement.window.date) ?? floor
+            ),
+          }),
       maximumEmployees: requirement.maxEmployees ?? null,
     })
   }
