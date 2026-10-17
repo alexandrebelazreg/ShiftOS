@@ -196,6 +196,7 @@ describe("l'aménagement dans le planning", () => {
     const prepared = preparePlanningGeneration({
       // Aucune semaine publiée : ces tests ne portent pas sur l'équité.
       savedPlannings: [],
+      absences: [],
       store: storeConfig(),
       employees,
       sectors: [smallSector()],

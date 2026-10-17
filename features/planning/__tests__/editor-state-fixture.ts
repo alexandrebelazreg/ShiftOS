@@ -42,6 +42,7 @@ export function editorStateFixture(options: {
   const prepared = preparePlanningGeneration({
     // Aucune semaine publiée : ces tests ne portent pas sur l'équité.
     savedPlannings: [],
+    absences: [],
     store: options.store,
     employees: options.employees,
     scope: options.scope,

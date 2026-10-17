@@ -145,6 +145,7 @@ describe("rééquilibrage — sur un planning où il agit vraiment", () => {
         sectors: [sector],
         scope: SMALL_SECTOR_SCOPE,
         savedPlannings: [],
+        absences: [],
       })
       expect(prepared.status).toBe("ready")
       if (prepared.status !== "ready") return

@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 
 import { useEmployees } from "@/features/employees/hooks/useEmployees"
+import { absenceService } from "@/features/absences/services/absence.service"
 import type { StoreConfig } from "@/features/store/schemas/store.schema"
 import {
   preparePlanningGeneration,
@@ -478,6 +479,11 @@ export function PlanningView({
     // comme les fériés, pour qu'une semaine publiée juste avant compte déjà.
     const savedPlannings = await planningStore.records()
 
+    // Les absences, relues elles aussi au moment de générer. L'écran n'en lisait
+    // aucune : un congé posé après une première génération ne retirait personne,
+    // et « Régénérer » replanifiait le salarié pendant ses vacances.
+    const absences = await absenceService.list()
+
     const prepared = preparePlanningGeneration({
       store: initialStore,
       employees: generationScope.employees,
@@ -485,6 +491,7 @@ export function PlanningView({
       scope,
       savedPlannings,
       holidayPlan,
+      absences,
     })
     if (prepared.status === "error") {
       setV3({

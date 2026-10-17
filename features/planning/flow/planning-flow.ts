@@ -35,6 +35,12 @@ import { buildDemandInput } from "@/features/planning/flow/demand-builder"
 import { buildClosingHistory } from "@/features/planning/closing-history/build-closing-history"
 import type { PlanningRecord } from "@/features/planning/persistence/planning-record"
 import { eligibleEmployees } from "@/features/planning/flow/generation-scope"
+import {
+  planningAbsences,
+  snapToStep,
+  weeklyTargetAfterAbsences,
+} from "@/features/planning/flow/absence-target"
+import type { AbsenceRecord } from "@/features/absences/types/absence-record"
 
 function brand<T>(value: string): T {
   return value as unknown as T
@@ -75,6 +81,16 @@ export interface PlanningFlowRequest {
    * les objectifs, ni le problème construit.
    */
   readonly holidayPlan?: readonly HolidayPlanEntry[]
+  /**
+   * Les absences enregistrées, toutes périodes et tous salariés confondus.
+   *
+   * OBLIGATOIRE, pour la même raison que `savedPlannings` : le champ existait
+   * dans le pont depuis le début et personne ne le remplissait. Un salarié en
+   * congé était replanifié, et rien ne le signalait — une semaine sans absence
+   * ressemble exactement à une semaine dont on a oublié les absences. Le
+   * tableau vide est la façon de dire « personne n'est absent ».
+   */
+  readonly absences: readonly AbsenceRecord[]
 }
 
 /**
@@ -159,6 +175,11 @@ export function preparePlanningGeneration(
       },
       employees: planningEmployees,
       demand,
+      absences: planningAbsences(
+        request.absences,
+        new Set(planningEmployees.map((employee) => employee.id)),
+        request.scope.period
+      ),
       scope: request.scope,
     }
 
@@ -183,12 +204,27 @@ export function preparePlanningGeneration(
         entry.date >= request.scope.period.start && entry.date <= request.scope.period.end
     )
 
+    // Lus avant les contrats : l'objectif de chacun se ramène sur le pas de la
+    // grille, et c'est ce réglage qui le donne.
+    const settings = storeConfigurationService.toGenerationSettings(configuration, {
+      planningId: brand<PlanningId>(request.scope.planningId),
+      period: request.scope.period as DateRange,
+      now: request.scope.now,
+    })
+    const step =
+      settings.timeIncrementMinutes ?? bridged.value.store.planningSettings.granularity ?? 15
+    const holidayDates = new Set<string>(holidayPlan.map((entry) => entry.date))
+    const isOpen = (date: IsoDate): boolean => {
+      const day = request.store.openingHours.find((hours) => hours.day === weekDayOf(date))
+      return day !== undefined && !day.closed
+    }
+
     const coreInput = {
       ...bridged.value,
       contracts: bridged.value.contracts.map((contract) => {
         const employee = planningEmployees.find((item) => item.id === contract.employeeId)
         const contractMinutes = employee?.weeklyMinutes ?? Math.round(contract.weeklyHours * 60)
-        const weeklyMinutes = weeklyTargetAfterHolidays(
+        const afterHolidays = weeklyTargetAfterHolidays(
           contractMinutes,
           holidayPlan.map((entry) =>
             holidayImpact({
@@ -207,6 +243,22 @@ export function preparePlanningGeneration(
             })
           )
         )
+        // Puis les absences, et l'ensemble ramené sur la grille une seule fois,
+        // à la fin : arrondir chaque déduction séparément cumulerait les écarts.
+        const afterAbsences = weeklyTargetAfterAbsences({
+          contractMinutes,
+          targetMinutes: afterHolidays,
+          workingDays: contract.workingDays,
+          fixedDaysOff: employee?.fixedDaysOff ?? [],
+          period: request.scope.period,
+          isOpen,
+          holidayDates,
+          absences: (bridgeInput.absences ?? []).filter(
+            (absence) => absence.employeeId === String(contract.employeeId)
+          ),
+        })
+        const weeklyMinutes =
+          afterAbsences === contractMinutes ? contractMinutes : snapToStep(afterAbsences, step)
         return { ...contract, weeklyMinutes, weeklyHours: weeklyMinutes / 60 }
       }),
     }
@@ -220,11 +272,6 @@ export function preparePlanningGeneration(
 
     // Configure the engines from the store configuration.
     const registry = storeConfigurationService.toConstraintRegistry(configuration)
-    const settings = storeConfigurationService.toGenerationSettings(configuration, {
-      planningId: brand<PlanningId>(request.scope.planningId),
-      period: request.scope.period as DateRange,
-      now: request.scope.now,
-    })
 
     const generationInput: PlanningGenerationInput = {
       store: planningCoreInput.store,
