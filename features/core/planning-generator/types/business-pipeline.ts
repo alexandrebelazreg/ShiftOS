@@ -83,9 +83,20 @@ export interface SectorPlanningRules {
   readonly minimumPresence?: readonly SectorPresenceFloor[]
 }
 
+/** Une heure souhaitée : commencer (ou finir) avant ou après tant de minutes. */
+export interface TimePreference {
+  readonly side: "before" | "after"
+  /** Minutes depuis minuit. */
+  readonly minutes: number
+}
+
 export interface EmployeePlanningPreference {
   readonly employeeId: EmployeeId
   readonly prefersClosing: boolean
+  /** Absent : n'a rien dit, comme `false`. */
+  readonly prefersOpening?: boolean
+  readonly preferredStart?: TimePreference
+  readonly preferredEnd?: TimePreference
   /** Identifiants des rayons, dans l'ordre de priorité de la fiche salarié. */
   readonly sectorIds?: readonly string[]
 }

@@ -16,6 +16,7 @@ import {
   EMPLOYEE_SCHEDULE_TYPES,
   SUNDAY_COMMITMENTS,
   SUNDAY_COMPENSATIONS,
+  TIME_PREFERENCE_SIDES,
   type SundayCommitment,
   type SundayCompensation,
 } from "@/features/employees/types/employee.types"
@@ -39,6 +40,12 @@ const optionalCount = z.preprocess(
  * "00:00". Any value that survives is a well-formed "HH:mm" on the canonical
  * step, so nothing downstream has to re-check the format.
  */
+const optionalPreferenceSide = z
+  .union([z.literal(""), z.enum(TIME_PREFERENCE_SIDES)])
+  .nullable()
+  .default(null)
+  .transform((value) => (value === "" ? null : value))
+
 const optionalTimeOfDay = z.preprocess(
   (value) => (typeof value === "string" && value.trim() === "" ? null : value),
   z
@@ -173,8 +180,28 @@ export const employeeSchema = z.object({
   // Préférences
   preferOpening: z.boolean(),
   preferClosing: z.boolean(),
+  // `""` côté formulaire, `null` une fois validé : aucune préférence. Défaut
+  // partout, pour qu'une fiche antérieure continue à se relire.
+  preferredStartSide: optionalPreferenceSide,
+  preferredStartTime: optionalTimeOfDay.default(null),
+  preferredEndSide: optionalPreferenceSide,
+  preferredEndTime: optionalTimeOfDay.default(null),
   notes: z.string().trim(),
 }).superRefine((value, context) => {
+  // Une préférence horaire a besoin de ses deux moitiés : « avant » sans heure
+  // ne dit rien, une heure sans sens non plus — et le moteur ne saurait
+  // laquelle des deux lectures appliquer.
+  for (const [side, time, label] of [
+    ["preferredStartSide", "preferredStartTime", "début"],
+    ["preferredEndSide", "preferredEndTime", "fin"],
+  ] as const) {
+    if (value[side] !== null && value[time] === null) {
+      context.addIssue({ code: "custom", path: [time], message: `Indiquez l’heure de ${label} souhaitée` })
+    }
+    if (value[side] === null && value[time] !== null) {
+      context.addIssue({ code: "custom", path: [side], message: "Choisissez avant ou après" })
+    }
+  }
   if (value.contractConfirmationRequired && !value.legacyContractMinutes) {
     context.addIssue({ code: "custom", path: ["legacyContractMinutes"], message: "Confirmez explicitement 36 h 30 ou 36 h 45" })
   }
@@ -413,7 +440,16 @@ export type EmployeeDraft = Omit<
   | "maxSundaysPerMonth"
   | "sundayCompensation"
   | "arrangement"
+  | "preferredStartSide"
+  | "preferredStartTime"
+  | "preferredEndSide"
+  | "preferredEndTime"
 > & {
+  /** Idem : un brouillon écrit avant les préférences horaires reste valide. */
+  preferredStartSide?: "before" | "after" | null
+  preferredStartTime?: string | null
+  preferredEndSide?: "before" | "after" | null
+  preferredEndTime?: string | null
   weeklyMinutes?: number | null
   /** Optional for callers and persisted drafts created before this preference existed. */
   scheduleType?: "variable" | "fixed"

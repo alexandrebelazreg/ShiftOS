@@ -87,6 +87,10 @@ export function createEmptyEmployeeFormValues(): EmployeeFormValues {
 
     preferOpening: false,
     preferClosing: false,
+    preferredStartSide: "",
+    preferredStartTime: "",
+    preferredEndSide: "",
+    preferredEndTime: "",
     notes: "",
   }
 }
@@ -180,6 +184,10 @@ export function employeeToFormValues(employee: EmployeeRecord): EmployeeFormValu
 
     preferOpening: employee.preferOpening,
     preferClosing: employee.preferClosing,
+    preferredStartSide: employee.preferredStartSide ?? "",
+    preferredStartTime: employee.preferredStartTime ?? "",
+    preferredEndSide: employee.preferredEndSide ?? "",
+    preferredEndTime: employee.preferredEndTime ?? "",
     notes: employee.notes,
   }
 }

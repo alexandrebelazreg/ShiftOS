@@ -267,8 +267,12 @@ export function buildPlanningProblemV3(
       // someone's cap above the sector default meant to raise it.
       maximumOpenings: bucket?.maxOpenings ?? sector.maximumOpeningsPerWeek ?? null,
       maximumClosings: bucket?.maxClosings ?? sector.maximumClosingsPerWeek ?? null,
-      prefersOpening: false,
+      // Le champ existait et valait toujours `false` : cocher « préfère les
+      // ouvertures » sur la fiche ne changeait rien. Il suit maintenant la fiche.
+      prefersOpening: preference?.prefersOpening ?? false,
       prefersClosing: preference?.prefersClosing ?? false,
+      ...(preference?.preferredStart ? { preferredStart: { ...preference.preferredStart } } : {}),
+      ...(preference?.preferredEnd ? { preferredEnd: { ...preference.preferredEnd } } : {}),
     })
   }
 

@@ -59,6 +59,7 @@ _SCIPY_INFEASIBLE = 2
 from shiftos_highs.quality import (
     Quality, DARK_COUNTER_WEIGHT, OPENING_PRIORITY_MINUTES,
     OPENING_DARK_MULTIPLIER, opening_priority_cells,
+    has_time_preferences, time_preference_miss,
 )
 
 # Compatibility export; multi-sector no longer creates slot-count binaries.
@@ -502,6 +503,31 @@ def place(
             + shift.sector_preference_penalty * preference_weight
             + shift.index * 1e-12
         )
+
+    # Les heures souhaitées, en mono — la zone les lit dans `quality`.
+    #
+    # Un SOUHAIT : la somme de tous les écarts de la semaine, au pire, coûte un
+    # quart d'un seul intervalle manquant. Aucune minute de couverture ne
+    # s'échange donc jamais contre un horaire plus agréable ; entre deux
+    # semaines également couvertes, c'est la plus proche des souhaits qui gagne.
+    #
+    # Gardé par `has_time_preferences` : sans souhait, l'objectif est celui
+    # d'avant, coefficient pour coefficient, et le Drive ne bouge pas.
+    if not quality and has_time_preferences(problem):
+        worked_cells = sum(
+            1
+            for row in allocation.minutes
+            for minutes in row
+            if minutes > 0
+        )
+        # Deux souhaits par journée, chacun plafonné à un.
+        unit = (float(step) / 4.0) / float(max(1, 2 * worked_cells))
+        for shift in shifts:
+            miss = time_preference_miss(
+                employees[shift.employee_index], shift.first_start, shift.last_end
+            )
+            if miss:
+                objective[shift.index] += miss * unit
 
     if quality:
         for shift in shifts:

@@ -47,6 +47,12 @@ export type PlanningObjectiveV3 =
   | "sector-switches"
   | "sector-preference"
 
+/** « Avant » ou « après » une heure, en minutes depuis minuit. */
+export interface PlanningTimePreferenceV3 {
+  readonly side: "before" | "after"
+  readonly minutes: number
+}
+
 /** One employee, with the exact contract and capability facts V3 reasons about. */
 export interface PlanningEmployeeV3 {
   readonly id: EmployeeId
@@ -68,6 +74,13 @@ export interface PlanningEmployeeV3 {
   readonly maximumClosings: number | null
   readonly prefersOpening: boolean
   readonly prefersClosing: boolean
+  /**
+   * Heures souhaitées — des SOUHAITS, que le placement suit après la
+   * couverture et jamais à sa place. Absentes : rien n'est souhaité, et le
+   * problème est octet pour octet celui d'avant leur introduction.
+   */
+  readonly preferredStart?: PlanningTimePreferenceV3
+  readonly preferredEnd?: PlanningTimePreferenceV3
   /** Rayons autorisés, du plus prioritaire au moins prioritaire. */
   readonly allowedSectorIds?: readonly string[]
 }

@@ -10,6 +10,7 @@ import { advancedConstraintsSummary, ADVANCED_CONSTRAINTS_OPEN_BY_DEFAULT } from
 import { CollapsibleSection } from "@/components/ui/collapsible-section"
 import { Input } from "@/components/ui/input"
 import { SwitchField } from "@/features/employees/components/SwitchField"
+import { PreferencesSection } from "@/features/employees/components/tabs/PreferencesSection"
 import { TimeRuleToggle } from "@/features/employees/components/TimeRuleToggle"
 
 /** `<input type="time">` steps in SECONDS. */
@@ -245,6 +246,8 @@ export function ContraintesTab() {
           />
         </div>
       </CollapsibleSection>
+
+      <PreferencesSection />
     </div>
   )
 }

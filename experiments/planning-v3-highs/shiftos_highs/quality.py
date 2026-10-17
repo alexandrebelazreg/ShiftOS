@@ -50,6 +50,38 @@ class FairnessTerm:
         return self.weight * (count * count + 2 * self.history * count) / self.denominator
 
 
+#: Au-delà de cet écart, rater une heure souhaitée ne coûte pas davantage. Sans
+#: plafond, un souhait impossible à tenir pèserait d'autant plus qu'il est loin,
+#: et tirerait toute la journée vers lui au lieu de la laisser se placer.
+TIME_PREFERENCE_HORIZON_MINUTES = 240
+
+
+def time_preference_miss(employee: dict, first_start: int, last_end: int) -> float:
+    """De combien une journée rate les heures que le salarié souhaite, de 0 à 2.
+
+    Une unité par souhait — début, fin —, proportionnelle aux minutes d'écart et
+    plafonnée à `TIME_PREFERENCE_HORIZON_MINUTES`. Zéro pour qui n'a rien
+    souhaité : c'est ce qui laisse les problèmes existants inchangés.
+
+    « Avant 9 h » est tenu par un début à 9 h pile, « après 17 h » par une fin à
+    17 h pile : la borne dite est atteignable, comme dans la phrase du gérant.
+    """
+    miss = 0.0
+    for key, minute in (("preferredStart", first_start), ("preferredEnd", last_end)):
+        wish = employee.get(key)
+        if not wish:
+            continue
+        target = int(wish["minutes"])
+        off = minute - target if wish["side"] == "before" else target - minute
+        if off > 0:
+            miss += min(off, TIME_PREFERENCE_HORIZON_MINUTES) / TIME_PREFERENCE_HORIZON_MINUTES
+    return miss
+
+
+def has_time_preferences(problem: dict) -> bool:
+    return any(e.get("preferredStart") or e.get("preferredEnd") for e in problem["employees"])
+
+
 def opening_priority_cells(problem: dict) -> set[tuple[str, str, int]]:
     step = int(problem["timeStepMinutes"])
     return {
@@ -100,8 +132,9 @@ class Quality:
                     max(h.get("opportunities", 0) for h in history) + share, .25, 2 * len(problem["days"])))
             if employee.get("canOpen"):
                 self.fairness.append(FairnessTerm(eid, None, "opening", 0, share, 1, 2 * len(problem["days"])))
-        # Every worked day costs at most: 2 roles x 3 history units, two
-        # preferences, one switch, one split and one baseline change, plus rank.
+        # Every worked day costs at most: 2 roles x 3 history units, two role
+        # preferences, two hour preferences, one switch, one split and one
+        # baseline change, plus rank — well inside the 32 counted below.
         rank_bound = sum(max(0, len(e.get("allowedSectorIds") or []) - 1) * e["contractMinutes"]
                          / self.step for e in self.employees.values())
         self.scale = (self.step / 4) / max(1, rank_bound + 32 * len(self.employees) * len(problem["days"])
@@ -128,6 +161,12 @@ class Quality:
                 closed.add(sid)
         cost += int(bool(employee.get("prefersOpening")) and not opened)
         cost += int(bool(employee.get("prefersClosing")) and not closed)
+        if segments:
+            cost += time_preference_miss(
+                employee,
+                min(int(s["startMinutes"]) for s in segments),
+                max(int(s["endMinutes"]) for s in segments),
+            )
         baseline = self.baseline.get((employee_id, day))
         if self.baseline:
             cost += int(baseline is None or baseline["segments"] != segments or

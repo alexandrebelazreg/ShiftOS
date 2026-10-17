@@ -22,6 +22,10 @@ import type {
 export const EMPLOYEE_SCHEDULE_TYPES = ["variable", "fixed"] as const
 export type EmployeeScheduleType = (typeof EMPLOYEE_SCHEDULE_TYPES)[number]
 
+/** « Avant » ou « après » une heure — le sens d'une préférence horaire. */
+export const TIME_PREFERENCE_SIDES = ["before", "after"] as const
+export type TimePreferenceSide = (typeof TIME_PREFERENCE_SIDES)[number]
+
 /**
  * Comment ce salarié en vient à travailler le dimanche.
  *
@@ -248,6 +252,18 @@ export interface EmployeeRecord {
   // Préférences (optional)
   preferOpening: boolean
   preferClosing: boolean
+  /**
+   * Une heure de début souhaitée — avant ou après — et une heure de fin.
+   *
+   * SOUHAITÉE, jamais imposée : le moteur s'en approche quand la couverture
+   * le permet, et ne laisse jamais un trou pour la tenir. C'est ce qui la
+   * sépare des bornes de l'onglet Contraintes (`earliestStartTime`…), qui
+   * sont des règles. Absentes de toute fiche antérieure : aucune préférence.
+   */
+  preferredStartSide?: TimePreferenceSide | null
+  preferredStartTime?: string | null
+  preferredEndSide?: TimePreferenceSide | null
+  preferredEndTime?: string | null
   notes: string
 
   // Historique (metadata)
@@ -333,5 +349,11 @@ export interface EmployeeFormValues {
   // Préférences
   preferOpening: boolean
   preferClosing: boolean
+  /** `""` = pas de préférence. */
+  preferredStartSide: "" | TimePreferenceSide
+  /** "HH:mm" ou "". */
+  preferredStartTime: string
+  preferredEndSide: "" | TimePreferenceSide
+  preferredEndTime: string
   notes: string
 }

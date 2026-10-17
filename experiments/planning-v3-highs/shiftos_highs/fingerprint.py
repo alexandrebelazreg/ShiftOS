@@ -57,6 +57,10 @@ def fingerprint_problem(problem: dict[str, Any]) -> str:
     for employee in sorted(problem["employees"], key=lambda item: str(item["id"])):
         if employee.get("prefersOpening") or employee.get("prefersClosing"):
             parts.append(f'P|{employee["id"]}|{int(bool(employee.get("prefersOpening")))}{int(bool(employee.get("prefersClosing")))}')
+        if employee.get("preferredStart") or employee.get("preferredEnd"):
+            def pref(value):
+                return f'{value["side"]}{value["minutes"]}' if value else "-"
+            parts.append(f'T|{employee["id"]}|{pref(employee.get("preferredStart"))}|{pref(employee.get("preferredEnd"))}')
     for day in sorted(problem["days"], key=lambda item: item["date"]):
         parts.append(
             "D|{}|{}|{}|{}|{}{}".format(

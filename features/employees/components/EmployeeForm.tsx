@@ -67,6 +67,10 @@ const FIELD_TABS: Record<string, TabValue> = {
   endTimeIsExact: "contraintes",
   openingDays: "contraintes",
   closingDays: "contraintes",
+  preferredStartSide: "contraintes",
+  preferredStartTime: "contraintes",
+  preferredEndSide: "contraintes",
+  preferredEndTime: "contraintes",
 
   permanence: "permanence",
   permanenceCanOpen: "permanence",

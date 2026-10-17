@@ -22,7 +22,7 @@ import type { SectorDemandConfiguration } from "@/features/sectors"
 import { effectiveMinimumShiftDuration, effectiveWeeklyDistribution } from "@/features/sectors"
 import { holidayImpact, weeklyTargetAfterHolidays } from "@/features/planning/holidays/model/holiday-plan"
 import { isSunday } from "@/features/planning/holidays/model/holiday-schedule"
-import { weekDayOf } from "@/features/core/shared"
+import { timeToMinutes, weekDayOf } from "@/features/core/shared"
 import type { EmployeeId } from "@/features/core/models"
 
 import type { FlowError } from "@/features/planning/flow/flow-errors"
@@ -299,6 +299,8 @@ export function preparePlanningGeneration(
         employeePreferences: planningEmployees.map((employee) => ({
           employeeId: brand<EmployeeId>(employee.id),
           prefersClosing: employee.preferClosing,
+          ...(employee.preferOpening ? { prefersOpening: true } : {}),
+          ...timePreferences(employee),
           sectorIds: (employee.sectors ?? []).flatMap((name) => {
             const sector = request.sectors?.find((entry) => entry.name === name)
             return sector ? [sector.id] : []
@@ -400,6 +402,24 @@ export function preparePlanningGeneration(
  * le second tableau de la documentation interroge pour décider entre un repos
  * hebdomadaire et des heures fériées.
  */
+/**
+ * Les heures souhaitées de la fiche, en minutes. Une moitié manquante — un sens
+ * sans heure, une heure illisible — ne produit rien plutôt qu'un souhait deviné.
+ */
+function timePreferences(employee: EmployeeRecord) {
+  const read = (side?: "before" | "after" | null, time?: string | null) => {
+    if (!side || !time) return undefined
+    const minutes = timeToMinutes(time)
+    return minutes === null ? undefined : { side, minutes }
+  }
+  const start = read(employee.preferredStartSide, employee.preferredStartTime)
+  const end = read(employee.preferredEndSide, employee.preferredEndTime)
+  return {
+    ...(start ? { preferredStart: start } : {}),
+    ...(end ? { preferredEnd: end } : {}),
+  }
+}
+
 function storeOpensSundays(store: StoreConfig): boolean {
   const sunday = store.openingHours.find((hours) => hours.day === "sunday")
   return sunday !== undefined && !sunday.closed

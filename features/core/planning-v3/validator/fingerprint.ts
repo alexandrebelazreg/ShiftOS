@@ -54,6 +54,10 @@ export function fingerprintProblem(problem: PlanningProblemV3): string {
   }
   for (const employee of [...problem.employees].sort(byId)) {
     if (employee.prefersOpening || employee.prefersClosing) parts.push(`P|${employee.id}|${employee.prefersOpening ? 1 : 0}${employee.prefersClosing ? 1 : 0}`)
+    if (employee.preferredStart || employee.preferredEnd) {
+      const pref = (value?: { side: string; minutes: number }) => (value ? `${value.side}${value.minutes}` : "-")
+      parts.push(`T|${employee.id}|${pref(employee.preferredStart)}|${pref(employee.preferredEnd)}`)
+    }
   }
   for (const day of [...problem.days].sort((left, right) => left.date.localeCompare(right.date))) {
     parts.push(

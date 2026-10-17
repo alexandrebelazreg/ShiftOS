@@ -433,6 +433,34 @@ def score_skeleton(
                     continue
                 fragility += 4 if later.opener_margin <= 0 else 2 if later.opener_margin == 1 else 1
 
+    # Les souhaits d'ouvrir ou de fermer, juste APRÈS la couverture déjà perdue
+    # et AVANT les mesures de prudence (`waste`, `fragility`) et l'équilibre des
+    # rôles. Placés après la prudence, ils ne départageaient jamais rien sur le
+    # Drive : toute semaine qui donne une fermeture à un volontaire y coûte un
+    # peu de marge, et la marge gagnait toujours. Ce qui protège la couverture
+    # RÉELLE n'est pas ce classement mais le placement, qui mesure le vrai
+    # déficit de chaque squelette retenu et garde le meilleur : un souhait
+    # l'emporte sur une marge, jamais sur un créneau découvert. Une journée où quelqu'un qui préfère ouvrir pouvait
+    # ouvrir et n'ouvre pas compte un ; celle où on le fait fermer aussi.
+    # Personne n'a rien souhaité : zéro partout, et le classement est celui
+    # d'avant.
+    wishes = 0
+    for entry in roles:
+        day = week.by_index(entry.day_index)
+        if day is None:
+            continue
+        for index, employee in enumerate(employees):
+            if employee.get("prefersOpening"):
+                if index in day.opener_pool and index not in entry.openers:
+                    wishes += 1
+                if index in entry.closers:
+                    wishes += 1
+            if employee.get("prefersClosing"):
+                if index in day.closer_pool and index not in entry.closers:
+                    wishes += 1
+                if index in entry.openers:
+                    wishes += 1
+
     openings: dict[int, int] = {}
     closings: dict[int, int] = {}
     for entry in roles:
@@ -469,6 +497,7 @@ def score_skeleton(
         doomed_slots,
         doomed_minutes,
         sector_role_penalty,
+        wishes,
         waste,
         fragility,
         spread,
@@ -572,6 +601,21 @@ def _families() -> list[Family]:
     ]
 
 
+def _passes(employees: list[dict[str, Any]]) -> list[tuple[Any, ...]]:
+    """Les familles d'origine, puis — si quelqu'un a un souhait — les mêmes, volontaires d'abord.
+
+    Une passe EN PLUS, jamais à la place : les candidats d'avant restent tous
+    énumérés, et le score, qui classe la couverture avant les souhaits, ne peut
+    donc jamais retenir une semaine moins bien couverte qu'avant pour faire
+    plaisir à quelqu'un. Remplacer l'ordre des familles l'a fait : sur le Drive,
+    le meilleur squelette disparaissait de la liste.
+    """
+    passes = [(*family, False) for family in _families()]
+    if any(e.get("prefersOpening") or e.get("prefersClosing") for e in employees):
+        passes += [(f"{name}+souhaits", *rest, True) for name, *rest in _families()]
+    return passes
+
+
 def _walk(
     week: WeekFacts,
     employees: list[dict[str, Any]],
@@ -581,6 +625,7 @@ def _walk(
     limit: int,
     loads: tuple[list[Fraction], list[Fraction]] | None = None,
     deadline: float | None = None,
+    wishes_first: bool = False,
 ) -> list[tuple[DayRoles, ...]]:
     openings_used = [0] * len(employees)
     closings_used = [0] * len(employees)
@@ -639,6 +684,23 @@ def _walk(
             return
 
         day = order[position]
+
+        def wish(index: int, role: str) -> int:
+            """-1 pour qui souhaite ce rôle, +1 pour qui souhaite l'autre.
+
+            Interrogés en premier, les volontaires entrent dans les quelques
+            combinaisons que `limit` laisse énumérer ; sans cela le score
+            saurait les préférer mais ne les verrait jamais. Zéro hors de la
+            passe `wishes_first` : les familles d'origine énumèrent exactement
+            ce qu'elles énuméraient.
+            """
+            if not wishes_first:
+                return 0
+            employee = employees[index]
+            wants = "prefersOpening" if role == "open" else "prefersClosing"
+            other = "prefersClosing" if role == "open" else "prefersOpening"
+            return -1 if employee.get(wants) else 1 if employee.get(other) else 0
+
         # Closing fairness enters HERE and nowhere else: it reorders who is
         # asked first, never how many are asked. Coverage, deficit and every
         # hard rule are decided by the sizes below, which this cannot touch —
@@ -651,21 +713,25 @@ def _walk(
         # declares.
         if loads is None:
             closers_sorted = sorted(
-                day.closer_pool, key=lambda i: (closer_key(week, i), closings_used[i], i)
+                day.closer_pool,
+                key=lambda i: (wish(i, "close"), closer_key(week, i), closings_used[i], i),
             )
         else:
             general, saturday = loads
             is_saturday = _is_saturday(day.date)
 
-            def fairness_key(index: int) -> tuple[Fraction, Fraction, float, int, int]:
+            def fairness_key(index: int) -> tuple[int, Fraction, Fraction, float, int, int]:
                 lead = (saturday[index] if is_saturday else general[index]) + Fraction(closings_used[index], max(1, min(5, len(employees[index]["workingDays"]))))
                 second = general[index] if is_saturday else saturday[index]
-                return (lead, second, closer_key(week, index), closings_used[index], index)
+                return (wish(index, "close"), lead, second, closer_key(week, index), closings_used[index], index)
 
             closers_sorted = sorted(day.closer_pool, key=fairness_key)
         closers_sorted = interleave_primary_sectors(closers_sorted)
         openers_sorted = interleave_primary_sectors(
-            sorted(day.opener_pool, key=lambda i: (opener_key(week, i), openings_used[i], i))
+            sorted(
+                day.opener_pool,
+                key=lambda i: (wish(i, "open"), opener_key(week, i), openings_used[i], i),
+            )
         )
         opener_target = min(day.opening_demand, len(openers_sorted))
 
@@ -771,7 +837,7 @@ def generate_skeletons_from_capacity(
     loads = closing_loads(problem)
 
     by_signature: dict[str, Skeleton] = {}
-    for name, order_of, opener_key, closer_key in _families():
+    for name, order_of, opener_key, closer_key, wishes_first in _passes(employees):
         if deadline is not None and time.perf_counter() >= deadline:
             break
         for roles in _walk(
@@ -783,6 +849,7 @@ def generate_skeletons_from_capacity(
             per_family,
             loads,
             deadline,
+            wishes_first,
         ):
             score = score_skeleton(problem, model, presence, demand, week, roles, loads)
             skeleton = Skeleton(roles=roles, family=name, score=score)
@@ -828,7 +895,7 @@ def generate_skeletons(
     loads = closing_loads(problem)
 
     by_signature: dict[str, Skeleton] = {}
-    for name, order_of, opener_key, closer_key in _families():
+    for name, order_of, opener_key, closer_key, wishes_first in _passes(employees):
         if deadline is not None and time.perf_counter() >= deadline:
             break
         for roles in _walk(
@@ -840,6 +907,7 @@ def generate_skeletons(
             per_family,
             loads,
             deadline,
+            wishes_first,
         ):
             score = score_skeleton(problem, model, allocation, demand, week, roles, loads)
             skeleton = Skeleton(roles=roles, family=name, score=score)
