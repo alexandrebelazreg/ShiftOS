@@ -63,13 +63,18 @@ def fingerprint_problem(problem: dict[str, Any]) -> str:
             parts.append(f'T|{employee["id"]}|{pref(employee.get("preferredStart"))}|{pref(employee.get("preferredEnd"))}')
     for day in sorted(problem["days"], key=lambda item: item["date"]):
         parts.append(
-            "D|{}|{}|{}|{}|{}{}".format(
+            "D|{}|{}|{}|{}|{}{}{}".format(
                 day["date"],
                 1 if day["closed"] else 0,
                 day["opensAtMinutes"] if day["opensAtMinutes"] is not None else "-",
                 day["closesAtMinutes"] if day["closesAtMinutes"] is not None else "-",
                 day["budgetMinutes"],
                 f'|{day["budgetMode"]}' if "budgetMode" in day else "",
+                (
+                    f'|R{day.get("minimumOpenings", "-")}.{day.get("exactClosings", "-")}'
+                    if "minimumOpenings" in day or "exactClosings" in day
+                    else ""
+                ),
             )
         )
     # Per-person, per-day availability. The field both sides were blind to for

@@ -1,4 +1,9 @@
-import type { PlanningDayV3, PlanningEmployeeDayV3 } from "@/features/core/planning-v3/types/problem"
+import type {
+  PlanningDayV3,
+  PlanningEmployeeDayV3,
+  PlanningEmployeeV3,
+  PlanningRulesV3,
+} from "@/features/core/planning-v3/types/problem"
 
 /**
  * Ce qu'un férié laisse réellement à placer, rayon par rayon.
@@ -17,6 +22,9 @@ import type { PlanningDayV3, PlanningEmployeeDayV3 } from "@/features/core/plann
  *   remplir les autres ;
  * - sans aucun volontaire disponible, le rayon est FERMÉ ce jour-là ;
  * - un férié chômé ne reçoit rien, comme avant ;
+ * - quand il reste moins de volontaires que de rôles distincts, l'ouverture
+ *   passe d'abord : un volontaire seul ouvre, et personne n'est exigé à la
+ *   fermeture — la règle « un ouvreur, un fermeur » supposait deux personnes ;
  * - ce que la journée ne peut pas porter passe aux autres jours ouverts, au
  *   prorata de leur part. Le total de la semaine ne change pas : il est déjà
  *   celui des contrats, fériés déduits.
@@ -24,6 +32,33 @@ import type { PlanningDayV3, PlanningEmployeeDayV3 } from "@/features/core/plann
  * Sans férié, rien ne se passe et le problème est celui d'avant.
  */
 type Mutable<T> = { -readonly [K in keyof T]: T[K] }
+
+/**
+ * Le plus de minutes qu'UNE personne peut travailler UN jour — la copie exacte
+ * de `_daily_ceiling` (`shiftos_highs/demand.py`), qui décide côté moteur.
+ *
+ * Une copie, et elle doit le rester : la journée fériée se dimensionnait sur le
+ * seul plafond du jour, en ignorant la durée maximale d'un créneau et la traite
+ * continue. Le moteur, lui, les compte — il annonçait alors « le budget impose
+ * 9 h, les 2 salariés disponibles peuvent fournir au maximum 8 h 15 » et
+ * refusait la semaine. Modifier l'une sans l'autre recrée exactement ce refus.
+ */
+export function dailyCeilingMinutes(
+  employee: Pick<PlanningEmployeeV3, "maximumDailyMinutes" | "canSplitShift">,
+  entry: Pick<PlanningEmployeeDayV3, "maximumMinutes" | "earliestStartMinutes" | "latestEndMinutes">,
+  rules: Pick<
+    PlanningRulesV3,
+    "maximumShiftMinutes" | "maximumContinuousMinutes" | "splitShiftAllowed" | "maximumSplitsPerDay" | "minimumSplitMinutes"
+  >
+): number {
+  const window = entry.latestEndMinutes - entry.earliestStartMinutes
+  const base = Math.min(employee.maximumDailyMinutes, entry.maximumMinutes, rules.maximumShiftMinutes, window)
+  const continuous = rules.maximumContinuousMinutes
+  if (continuous === null || continuous === undefined) return Math.max(0, base)
+  const maySplit = rules.splitShiftAllowed && employee.canSplitShift && (rules.maximumSplitsPerDay ?? 1) >= 1
+  if (!maySplit) return Math.max(0, Math.min(base, continuous))
+  return Math.max(0, Math.min(base, 2 * continuous, window - (rules.minimumSplitMinutes ?? 0)))
+}
 
 export interface HolidayStaffing {
   readonly days: PlanningDayV3[]
@@ -38,9 +73,12 @@ export function settleHolidayDays(
   employeeDays: readonly PlanningEmployeeDayV3[],
   /** Par date fériée : la part ordinaire du jour, avant que le férié ne la touche. */
   holidayShare: ReadonlyMap<string, { readonly share: number; readonly chome: boolean }>,
-  contractByEmployee: ReadonlyMap<string, number>,
+  employees: readonly PlanningEmployeeV3[],
+  rules: PlanningRulesV3,
   step: number
 ): HolidayStaffing {
+  const employeeById = new Map(employees.map((employee) => [String(employee.id), employee]))
+  const roles = { openings: rules.minimumOpeningsPerDay, closings: rules.exactClosingsPerDay }
   const closedDates = new Set<string>()
   const availableByDate = new Map<string, number>()
   if (holidayShare.size === 0) return { days: [...days], closedDates, availableByDate }
@@ -55,20 +93,41 @@ export function settleHolidayDays(
     availableByDate.set(day.date, present.length)
     if (holiday.chome) {
       // Déjà fermée et à zéro ; seule sa part, perdue jusqu'ici, change de jour.
+      // « chômé » vaut aussi, en zone, pour une journée que tous les rayons ont
+      // fermée faute de volontaire : sa part doit, de même, changer de jour.
       excess += holiday.share
+      day.budgetMinutes = 0
       continue
     }
     if (day.closed) continue
 
-    const capacity = present.reduce((sum, entry) => sum + entry.maximumMinutes, 0)
-    const ordinary = present.reduce((sum, entry) => {
+    // Les bornes que le moteur applique à chaque personne présente, au pas :
+    // son plafond réel et, si sa journée est obligatoire, son minimum.
+    let capacity = 0
+    let floor = 0
+    let ordinary = 0
+    for (const entry of present) {
       const id = String(entry.employeeId)
+      const employee = employeeById.get(id)
+      if (employee === undefined) continue
+      const ceiling = Math.floor(dailyCeilingMinutes(employee, entry, rules) / step) * step
+      capacity += ceiling
+      if (entry.mandatory) {
+        const minimum = Math.ceil(Math.max(employee.minimumDailyMinutes, rules.minimumShiftMinutes) / step) * step
+        floor += Math.min(minimum, ceiling)
+      }
       const worked = employeeDays.filter((other) => String(other.employeeId) === id && other.available).length
-      return sum + Math.min(entry.maximumMinutes, (contractByEmployee.get(id) ?? 0) / Math.max(1, worked))
-    }, 0)
-    const allowed = Math.round(Math.min(holiday.share, ordinary, capacity) / step) * step
+      ordinary += Math.min(ceiling, employee.contractMinutes / Math.max(1, worked))
+    }
+    const wanted = Math.round(Math.min(holiday.share, ordinary) / step) * step
+    const allowed = Math.min(capacity, Math.max(floor, wanted))
     excess += day.budgetMinutes - allowed
     day.budgetMinutes = allowed
+    if (present.length > 0 && present.length < roles.openings + roles.closings) {
+      const openings = Math.min(roles.openings, present.length)
+      day.minimumOpenings = openings
+      day.exactClosings = Math.max(0, Math.min(roles.closings, present.length - openings))
+    }
     if (present.length === 0) {
       day.closed = true
       day.opensAtMinutes = null

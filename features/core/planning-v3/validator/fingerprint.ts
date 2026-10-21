@@ -61,7 +61,7 @@ export function fingerprintProblem(problem: PlanningProblemV3): string {
   }
   for (const day of [...problem.days].sort((left, right) => left.date.localeCompare(right.date))) {
     parts.push(
-      `D|${day.date}|${day.closed ? 1 : 0}|${day.opensAtMinutes ?? "-"}|${day.closesAtMinutes ?? "-"}|${day.budgetMinutes}${day.budgetMode === undefined ? "" : `|${day.budgetMode}`}`
+      `D|${day.date}|${day.closed ? 1 : 0}|${day.opensAtMinutes ?? "-"}|${day.closesAtMinutes ?? "-"}|${day.budgetMinutes}${day.budgetMode === undefined ? "" : `|${day.budgetMode}`}${day.minimumOpenings === undefined && day.exactClosings === undefined ? "" : `|R${day.minimumOpenings ?? "-"}.${day.exactClosings ?? "-"}`}`
     )
   }
   // Per-person, per-day availability — the field this function was blind to for

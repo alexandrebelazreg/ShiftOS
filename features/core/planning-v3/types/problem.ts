@@ -163,6 +163,28 @@ export interface PlanningDayV3 {
   readonly budgetMinutes: number
   /** Absent means `exact`, for compatibility with persisted V3 problems. */
   readonly budgetMode?: "exact" | "target"
+  /**
+   * Les rôles de CE jour, quand ils s'écartent de la règle de la semaine
+   * (`rules.minimumOpeningsPerDay`, `rules.exactClosingsPerDay`).
+   *
+   * Posés seulement un férié qui laisse moins de volontaires que de rôles
+   * distincts : un volontaire seul ne peut pas ouvrir ET fermer. Absents,
+   * la règle de la semaine s'applique — et le problème est celui d'avant.
+   * Tout lecteur des rôles passe par `dayRolesOf`.
+   */
+  readonly minimumOpenings?: number
+  readonly exactClosings?: number
+}
+
+/** Les rôles exigés un jour donné : ceux du jour s'il en porte, sinon la règle. */
+export function dayRolesOf(
+  day: Pick<PlanningDayV3, "minimumOpenings" | "exactClosings">,
+  rules: Pick<PlanningRulesV3, "minimumOpeningsPerDay" | "exactClosingsPerDay">
+): { readonly openings: number; readonly closings: number } {
+  return {
+    openings: day.minimumOpenings ?? rules.minimumOpeningsPerDay,
+    closings: day.exactClosings ?? rules.exactClosingsPerDay,
+  }
 }
 
 /**

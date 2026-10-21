@@ -4,6 +4,8 @@ from collections import defaultdict
 from datetime import date as Date
 from typing import Any
 
+from .day_roles import day_roles
+
 
 def _days_between(left: str, right: str) -> int:
     return (Date.fromisoformat(right) - Date.fromisoformat(left)).days
@@ -244,9 +246,11 @@ def evaluate(problem: dict[str, Any], assignments: list[dict[str, Any]]) -> dict
                 closers_for_day += 1
                 if not employee["canClose"]:
                     violations.append(f"cannot-close:{employee_id}:{day['date']}")
-        if openers < rules["minimumOpeningsPerDay"]:
+        # Les rôles du JOUR d'abord — voir `day_roles`.
+        minimum_openings, exact_closings = day_roles(problem, day)
+        if openers < minimum_openings:
             violations.append(f"opening-count:{day['date']}:{openers}")
-        if closers_for_day < rules["exactClosingsPerDay"]:
+        if closers_for_day < exact_closings:
             violations.append(f"closing-count:{day['date']}:{closers_for_day}")
 
     # Les jours où quelqu'un DOIT ouvrir ou fermer, vérifiés contre les bornes

@@ -2,10 +2,11 @@ import type { IsoDate, WeekDay } from "@/features/core/models"
 import { auditMultiSectorQuality } from "./multi-sector-quality"
 import { coverageDeficitMinutes, minimumConcurrentPresence } from "@/features/core/shared"
 
-import type {
-  PlanningDayV3,
-  PlanningEmployeeV3,
-  PlanningProblemV3,
+import {
+  dayRolesOf,
+  type PlanningDayV3,
+  type PlanningEmployeeV3,
+  type PlanningProblemV3,
 } from "@/features/core/planning-v3/types/problem"
 import type {
   PlanningSegmentV3,
@@ -400,11 +401,15 @@ export function validatePlanningSolutionV3(
         }
       }
     }
-    if (openers.length < problem.rules.minimumOpeningsPerDay) {
-      add("opening-count", "blocking", `Le ${day.date} compte ${openers.length} ouverture(s) pour ${problem.rules.minimumOpeningsPerDay} attendue(s) au minimum.`, { date: day.date, expected: problem.rules.minimumOpeningsPerDay, actual: openers.length })
+    // Les rôles du JOUR d'abord : un férié à un seul volontaire n'exige pas
+    // de fermeur, et le refuser ici rejetterait ce que le moteur a eu raison
+    // de produire.
+    const roles = dayRolesOf(day, problem.rules)
+    if (openers.length < roles.openings) {
+      add("opening-count", "blocking", `Le ${day.date} compte ${openers.length} ouverture(s) pour ${roles.openings} attendue(s) au minimum.`, { date: day.date, expected: roles.openings, actual: openers.length })
     }
-    if (closers.length < problem.rules.exactClosingsPerDay) {
-      add("closing-count", "blocking", `Le ${day.date} compte ${closers.length} fermeture(s) pour ${problem.rules.exactClosingsPerDay} attendue(s) au minimum.`, { date: day.date, expected: problem.rules.exactClosingsPerDay, actual: closers.length })
+    if (closers.length < roles.closings) {
+      add("closing-count", "blocking", `Le ${day.date} compte ${closers.length} fermeture(s) pour ${roles.closings} attendue(s) au minimum.`, { date: day.date, expected: roles.closings, actual: closers.length })
     }
   }
 

@@ -51,6 +51,7 @@ import numpy as np
 from scipy.optimize import Bounds, LinearConstraint, milp
 from scipy.sparse import coo_matrix
 
+from shiftos_highs.day_roles import day_roles
 from shiftos_highs.demand import _daily_ceiling
 from shiftos_highs.sequence import streak_windows
 
@@ -1107,13 +1108,13 @@ def score_allocation(
                 can_close += 1
 
         peak_short += max(0, peak_target - reach_peak)
-        opening_demand = int(rules["minimumOpeningsPerDay"])
+        opening_demand, closing_demand = day_roles(problem, day)
         if day_demand is not None:
             for interval in day_demand.intervals:
                 if interval.start == opens_at:
                     opening_demand = max(opening_demand, interval.adapted_target)
         boundary_short += max(0, opening_demand - can_open)
-        boundary_short += max(0, int(rules["exactClosingsPerDay"]) - can_close)
+        boundary_short += max(0, closing_demand - can_close)
 
     for employee_index, employee in enumerate(employees):
         worked = [m for m in allocation.minutes[employee_index] if m > 0]

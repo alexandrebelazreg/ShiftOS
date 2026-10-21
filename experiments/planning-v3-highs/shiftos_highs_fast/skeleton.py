@@ -41,6 +41,7 @@ from fractions import Fraction
 from itertools import combinations
 from typing import Any, Callable, Iterator
 
+from shiftos_highs.day_roles import day_roles
 from shiftos_highs.demand import DemandModel
 
 from .allocation import Allocation, AllocationModel
@@ -183,8 +184,7 @@ def analyse_week(
             ):
                 closers.append(employee_index)
 
-        opening_demand = int(rules["minimumOpeningsPerDay"])
-        closing_demand = int(rules["exactClosingsPerDay"])
+        opening_demand, closing_demand = day_roles(problem, day)
         if sector_days:
             opening_demand = sum(
                 int(own_day["minimumOpenings"])

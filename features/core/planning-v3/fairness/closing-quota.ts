@@ -5,7 +5,7 @@ import {
   weeklyClosingShare,
   type ClosingLoad,
 } from "@/features/core/planning-v3/fairness/closing-load"
-import type { PlanningProblemV3 } from "@/features/core/planning-v3/types/problem"
+import { dayRolesOf, type PlanningProblemV3 } from "@/features/core/planning-v3/types/problem"
 
 /**
  * Le plafond de fermetures que l'ÉQUITÉ impose pour cette semaine-là.
@@ -120,7 +120,10 @@ export function planClosingQuotas(problem: PlanningProblemV3): ClosingQuotaPlan 
   }
 
   const openDays = problem.days.filter((day) => !day.closed && day.closesAtMinutes !== null)
-  const needed = openDays.length * Math.max(0, problem.rules.exactClosingsPerDay)
+  const needed = openDays.reduce(
+    (sum, day) => sum + Math.max(0, dayRolesOf(day, problem.rules).closings),
+    0
+  )
   if (needed <= 0) {
     return declined(`aucune fermeture à répartir (${openDays.length} jours ouverts, ${problem.rules.exactClosingsPerDay} par jour)`)
   }

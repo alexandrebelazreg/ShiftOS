@@ -16,6 +16,7 @@ from .coverage_model import (
     deficit_minutes_objective,
     under_covered_slots_objective,
 )
+from .day_roles import day_roles
 from .demand import build_demand_model
 from .evaluate import evaluate
 from .fingerprint import fingerprint_problem, fingerprint_solution
@@ -132,7 +133,7 @@ def _structural_rows(
                 for index in by_date[day["date"]]
                 if candidates[index].first_start == day["opensAtMinutes"]
             },
-            rules["minimumOpeningsPerDay"],
+            day_roles(problem, day)[0],
             np.inf,
         )
         rows.add(
@@ -141,7 +142,7 @@ def _structural_rows(
                 for index in by_date[day["date"]]
                 if candidates[index].last_end == day["closesAtMinutes"]
             },
-            rules["exactClosingsPerDay"],
+            day_roles(problem, day)[1],
             np.inf,
         )
 

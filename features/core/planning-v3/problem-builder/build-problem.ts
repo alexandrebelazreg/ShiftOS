@@ -9,6 +9,7 @@ import type { SectorPresenceFloor } from "@/features/core/planning-generator/typ
 import { computeDailyBudgets } from "@/features/core/planning-v3/problem-builder/daily-budget"
 import { settleHolidayDays } from "@/features/core/planning-v3/problem-builder/holiday-staffing"
 import {
+  dayRolesOf,
   PLANNING_OBJECTIVES_V3,
   PLANNING_MULTI_SECTOR_OBJECTIVES_V3,
   PLANNING_PROBLEM_V3_VERSION,
@@ -552,13 +553,60 @@ export function buildPlanningProblemV3(
   // volontaires restent : un rayon sans aucun volontaire se ferme, un rayon à
   // deux volontaires ne reçoit que ce que deux personnes tiennent, et le reste
   // de sa part va aux autres jours. Sans férié, rien ne change.
-  const holidayStaffing = settleHolidayDays(
-    days,
-    employeeDays,
-    holidayShare,
-    new Map(employees.map((employee) => [String(employee.id), employee.contractMinutes])),
-    step
-  )
+  // Every advanced rule now has a home in the sector configuration. Each is read
+  // with `??` and falls back to what the store — or, failing that, this builder —
+  // used to supply, so a caller that predates the « Contraintes avancées » block
+  // still poses exactly the problem it used to.
+  const rules: PlanningRulesV3 = {
+    minimumShiftMinutes: sector.minimumShiftDuration,
+    // ── La JOURNÉE, pauses comprises ──────────────────────────────────────
+    //
+    // Le rayon plafonne la journée ; le magasin garde son mot, mais avec le
+    // champ qui parle de la JOURNÉE. `maxShiftDuration` parle d'une traite et
+    // n'a rien à faire ici : l'employer revenait à interdire les journées de
+    // 10 h coupées à un magasin qui écrit « 8 h d'affilée, 10 h avec coupure ».
+    //
+    // Il reste le repli pour une configuration qui ne dit rien de la journée —
+    // c'est le comportement historique, et il ne change donc rien pour elle.
+    maximumShiftMinutes: Math.min(
+      sector.maximumDailyDuration ?? Number.POSITIVE_INFINITY,
+      input.store.planningSettings.maxDailyDuration
+        ?? input.store.planningSettings.maxShiftDuration
+        ?? input.settings.maximumDailyMinutes
+        ?? Number.POSITIVE_INFINITY
+    ),
+    minimumRestMinutes: sector.minimumRestMinutes ?? input.settings.minimumRestMinutes ?? 0,
+    // No configuration field exists for this rule yet, so the value is derived
+    // and tagged as such rather than left silently null.
+    maximumConsecutiveWorkedDays: defaultMaximumConsecutiveWorkedDays(days),
+    maximumConsecutiveWorkedDaysSource: "derived-fallback",
+    splitShiftAllowed: sector.splitShiftAllowed,
+    maximumSplitMinutes: sector.maximumSplitDuration,
+    // The sector states the minimum gap; the store's split policy remains the
+    // fallback for configurations written before the sector carried one.
+    minimumSplitMinutes:
+      sector.minimumSplitDuration ?? input.store.splitShiftPolicy?.minSplitDuration ?? null,
+    // ── LA TRAITE, pauses exclues ─────────────────────────────────────────
+    //
+    // Le plafond du magasin arrive ICI, où il a toujours eu son sens. Il ne
+    // s'ajoute que quand la configuration distingue les deux durées : sans
+    // `maxDailyDuration`, elle n'a jamais exprimé qu'un seul plafond et le
+    // déplacer relâcherait sa journée en douce.
+    maximumContinuousMinutes: minimumOf([
+      sector.maximumContinuousDuration,
+      input.store.planningSettings.maxDailyDuration == null
+        ? undefined
+        : input.store.planningSettings.maxShiftDuration,
+    ]),
+    maximumSplitsPerDay: sector.maximumSplitsPerDay ?? null,
+    minimumOpeningsPerDay: sector.minimumOpeningsPerDay ?? 1,
+    exactClosingsPerDay: sector.requiredClosingsPerDay ?? 1,
+    // Carried, never enforced. `null` when the sector declares no policy, so a
+    // caller written before the block still poses a problem with no opinion on
+    // fairness rather than one that silently opted out.
+    closingFairness: sector.closingFairness ?? null,
+  }
+  const holidayStaffing = settleHolidayDays(days, employeeDays, holidayShare, employees, rules, step)
   days.splice(0, days.length, ...holidayStaffing.days)
 
   // ── Demand ────────────────────────────────────────────────────────────────
@@ -615,17 +663,14 @@ export function buildPlanningProblemV3(
       // not zero: a slot with no floor is one no schedule can be REFUSED over,
       // while a declared zero would be a deliberate statement that nobody needs
       // to be there.
-      // Un plancher dur ne peut pas réclamer, un férié, plus de monde qu'il n'y
-      // a de volontaires : ce serait refuser la semaine pour une absence que
-      // le magasin a lui-même décidée.
-      ...(floor === null
+      // Pas de plancher dur un férié. Le magasin a choisi d'ouvrir avec ses
+      // seuls volontaires : plafonner le plancher à leur nombre ne suffisait
+      // pas, un volontaire seul ne tient pas 9 h → 18 h d'affilée, et la
+      // semaine était refusée pour une absence que le magasin a lui-même
+      // décidée. Le besoin reste posé ; il cesse seulement d'être une condition.
+      ...(floor === null || holidayStaffing.availableByDate.has(requirement.window.date)
         ? {}
-        : {
-            hardMinimumEmployees: Math.min(
-              floor,
-              holidayStaffing.availableByDate.get(requirement.window.date) ?? floor
-            ),
-          }),
+        : { hardMinimumEmployees: floor }),
       maximumEmployees: requirement.maxEmployees ?? null,
     })
   }
@@ -652,59 +697,6 @@ export function buildPlanningProblemV3(
     })
   }
 
-  // Every advanced rule now has a home in the sector configuration. Each is read
-  // with `??` and falls back to what the store — or, failing that, this builder —
-  // used to supply, so a caller that predates the « Contraintes avancées » block
-  // still poses exactly the problem it used to.
-  const rules: PlanningRulesV3 = {
-    minimumShiftMinutes: sector.minimumShiftDuration,
-    // ── La JOURNÉE, pauses comprises ──────────────────────────────────────
-    //
-    // Le rayon plafonne la journée ; le magasin garde son mot, mais avec le
-    // champ qui parle de la JOURNÉE. `maxShiftDuration` parle d'une traite et
-    // n'a rien à faire ici : l'employer revenait à interdire les journées de
-    // 10 h coupées à un magasin qui écrit « 8 h d'affilée, 10 h avec coupure ».
-    //
-    // Il reste le repli pour une configuration qui ne dit rien de la journée —
-    // c'est le comportement historique, et il ne change donc rien pour elle.
-    maximumShiftMinutes: Math.min(
-      sector.maximumDailyDuration ?? Number.POSITIVE_INFINITY,
-      input.store.planningSettings.maxDailyDuration
-        ?? input.store.planningSettings.maxShiftDuration
-        ?? input.settings.maximumDailyMinutes
-        ?? Number.POSITIVE_INFINITY
-    ),
-    minimumRestMinutes: sector.minimumRestMinutes ?? input.settings.minimumRestMinutes ?? 0,
-    // No configuration field exists for this rule yet, so the value is derived
-    // and tagged as such rather than left silently null.
-    maximumConsecutiveWorkedDays: defaultMaximumConsecutiveWorkedDays(days),
-    maximumConsecutiveWorkedDaysSource: "derived-fallback",
-    splitShiftAllowed: sector.splitShiftAllowed,
-    maximumSplitMinutes: sector.maximumSplitDuration,
-    // The sector states the minimum gap; the store's split policy remains the
-    // fallback for configurations written before the sector carried one.
-    minimumSplitMinutes:
-      sector.minimumSplitDuration ?? input.store.splitShiftPolicy?.minSplitDuration ?? null,
-    // ── LA TRAITE, pauses exclues ─────────────────────────────────────────
-    //
-    // Le plafond du magasin arrive ICI, où il a toujours eu son sens. Il ne
-    // s'ajoute que quand la configuration distingue les deux durées : sans
-    // `maxDailyDuration`, elle n'a jamais exprimé qu'un seul plafond et le
-    // déplacer relâcherait sa journée en douce.
-    maximumContinuousMinutes: minimumOf([
-      sector.maximumContinuousDuration,
-      input.store.planningSettings.maxDailyDuration == null
-        ? undefined
-        : input.store.planningSettings.maxShiftDuration,
-    ]),
-    maximumSplitsPerDay: sector.maximumSplitsPerDay ?? null,
-    minimumOpeningsPerDay: sector.minimumOpeningsPerDay ?? 1,
-    exactClosingsPerDay: sector.requiredClosingsPerDay ?? 1,
-    // Carried, never enforced. `null` when the sector declares no policy, so a
-    // caller written before the block still poses a problem with no opinion on
-    // fairness rather than one that silently opted out.
-    closingFairness: sector.closingFairness ?? null,
-  }
   // `Number.isFinite` and not `<= 0`: intersecting the sector's cap with the
   // store's uses infinity for "not stated", so a problem where NEITHER states a
   // ceiling comes out infinite rather than zero, and must still be refused.
@@ -885,8 +877,10 @@ function buildMultiSectorProblemV3(
       closed: day.closed,
       opensAtMinutes: day.opensAtMinutes,
       closesAtMinutes: day.closesAtMinutes,
-      minimumOpenings: problem.rules.minimumOpeningsPerDay,
-      exactClosings: problem.rules.exactClosingsPerDay,
+      // Ceux du JOUR quand le rayon en porte — un férié à un volontaire —,
+      // sinon la règle de la semaine.
+      minimumOpenings: dayRolesOf(day, problem.rules).openings,
+      exactClosings: dayRolesOf(day, problem.rules).closings,
       latestCloseMinutes: latestCloseFor(input, day),
     })),
   }))
@@ -1109,6 +1103,24 @@ function buildMultiSectorProblemV3(
     closingFairness: null,
   }
 
+  // ── Les fériés, au niveau de la ZONE ────────────────────────────────────
+  //
+  // Chaque rayon a déjà réglé son férié dans son sous-problème, mais le budget
+  // du jour est recalculé ci-dessus pour toute la zone, à partir du besoin des
+  // comptoirs — et ce calcul ignorait les volontaires. Le 11/11/2026 : « le
+  // budget impose 9 h, les 2 salariés disponibles peuvent fournir au maximum
+  // 8 h 15 », et la semaine était refusée. Même règle qu'en mono : la journée
+  // reçoit au plus ce que ses volontaires tiennent, une journée fermée rend sa
+  // part, et le reste va aux autres jours.
+  const holidayDates = new Set((input.holidayPlan ?? []).map((entry) => String(entry.date)))
+  const zoneHolidayShare = new Map<string, { share: number; chome: boolean }>()
+  for (const day of days) {
+    if (!holidayDates.has(day.date)) continue
+    const share = budgetByDay.get(day.weekDay) ?? 0
+    if (share > 0) zoneHolidayShare.set(day.date, { share, chome: day.closed })
+  }
+  const zoneHolidays = settleHolidayDays(days, employeeDays, zoneHolidayShare, employees, rules, step)
+
   const commonRuleConflict = commonMultiSectorRuleConflict(parts, rules)
   if (commonRuleConflict !== null) {
     return {
@@ -1132,7 +1144,7 @@ function buildMultiSectorProblemV3(
       period: { start: input.settings.period.start, end: input.settings.period.end },
       timeStepMinutes: step,
       employees,
-      days,
+      days: zoneHolidays.days,
       employeeDays,
       demandSlots: parts.flatMap(({ sector, problem }) => problem.demandSlots.map((slot) => ({ ...slot, sectorId: sector.id }))),
       rules,

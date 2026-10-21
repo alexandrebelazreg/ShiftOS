@@ -2,8 +2,8 @@ import { describe, expect, it } from "vitest"
 
 import type { HolidayPlanEntry, IsoDate } from "@/features/core/models"
 import { buildPlanningProblemV3 } from "@/features/core/planning-v3/problem-builder"
-import { settleHolidayDays } from "@/features/core/planning-v3/problem-builder/holiday-staffing"
-import type { PlanningDayV3, PlanningEmployeeDayV3 } from "@/features/core/planning-v3/types/problem"
+import { dailyCeilingMinutes, settleHolidayDays } from "@/features/core/planning-v3/problem-builder/holiday-staffing"
+import { dayRolesOf, type PlanningDayV3, type PlanningEmployeeDayV3 } from "@/features/core/planning-v3/types/problem"
 import type { EmployeeRecord } from "@/features/employees/types/employee.types"
 import {
   employee,
@@ -90,6 +90,36 @@ describe("un férié sans volontaire dans un rayon", () => {
   })
 })
 
+describe("un férié à un seul volontaire", () => {
+  // Un volontaire ne peut pas ouvrir ET fermer : la règle « un ouvreur, un
+  // fermeur distincts » rendait la semaine impossible. L'ouverture passe
+  // d'abord, la fermeture n'est plus exigée ce jour-là.
+  const problem = problemFor({ employees: team("Test", "e"), sectors: [exact()], holidayPlan: [worked(["e1"])] })
+  const day = problem.days.find((entry) => entry.date === HOLIDAY)!
+
+  it("garde l'ouverture et n'exige plus de fermeur ce jour-là", () => {
+    expect(dayRolesOf(day, problem.rules)).toEqual({ openings: 1, closings: 0 })
+  })
+
+  it("ne touche pas aux rôles des autres jours", () => {
+    for (const other of problem.days.filter((entry) => entry.date !== HOLIDAY)) {
+      expect("minimumOpenings" in other).toBe(false)
+      expect("exactClosings" in other).toBe(false)
+    }
+  })
+
+  it("garde les deux rôles quand deux volontaires peuvent les tenir", () => {
+    const two = problemFor({ employees: team("Test", "e"), sectors: [exact()], holidayPlan: [worked(["e1", "e2"])] })
+    const holiday = two.days.find((entry) => entry.date === HOLIDAY)!
+    expect("minimumOpenings" in holiday).toBe(false)
+    expect(dayRolesOf(holiday, two.rules)).toEqual({ openings: 1, closings: 1 })
+  })
+
+  it("ne pose aucun plancher dur un férié", () => {
+    expect(problem.demandSlots.filter((slot) => slot.date === HOLIDAY && slot.hardMinimumEmployees !== undefined)).toEqual([])
+  })
+})
+
 describe("en zone, le rayon sans volontaire ferme seul", () => {
   it("ferme le rayon B et laisse ouvert le rayon A, qui a ses volontaires", () => {
     const a = { ...smallSector(), id: "a", name: "A", marketZone: true }
@@ -107,7 +137,44 @@ describe("en zone, le rayon sans volontaire ferme seul", () => {
   })
 })
 
+describe("le férié ne demande jamais plus que ce que le moteur juge faisable", () => {
+  // Le message reçu le 11/11/2026 : « le budget impose 9 h de travail, mais
+  // les 2 salariés disponibles peuvent fournir au maximum 8 h 15 ». En zone,
+  // le budget du jour se recalcule pour toute la zone à partir du besoin des
+  // comptoirs, et ce calcul ignorait les volontaires : le férié gardait sa part
+  // ordinaire de six personnes pour deux présentes.
+  const zone = () => {
+    const a = { ...smallSector(), id: "a", name: "A", marketZone: true, weeklyDistributionEnabled: true }
+    const b = { ...smallSector(), id: "b", name: "B", marketZone: true, weeklyDistributionEnabled: true }
+    return problemFor({
+      employees: [...team("A", "a"), ...team("B", "b")],
+      sectors: [a, b],
+      holidayPlan: [worked(["a1", "b1"])],
+    })
+  }
+
+  it("plafonne la journée fériée de la zone à la capacité réelle des volontaires", () => {
+    const problem = zone()
+    const day = problem.days.find((entry) => entry.date === HOLIDAY)!
+    const present = problem.employeeDays.filter((entry) => entry.date === HOLIDAY && entry.available)
+    const ceilings = present.reduce((sum, entry) => {
+      const employee = problem.employees.find((other) => other.id === entry.employeeId)!
+      return sum + dailyCeilingMinutes(employee, entry, problem.rules)
+    }, 0)
+    expect(present).toHaveLength(2)
+    expect(day.budgetMinutes).toBeGreaterThan(0)
+    expect(day.budgetMinutes).toBeLessThanOrEqual(ceilings)
+  })
+
+  it("garde le volume de la zone égal aux contrats", () => {
+    const problem = zone()
+    expect(total(problem.days)).toBe(problem.employees.reduce((sum, entry) => sum + entry.contractMinutes, 0))
+  })
+})
+
 describe("settleHolidayDays", () => {
+  const RULES = problemFor({ employees: team("Test", "e"), sectors: [exact()] }).rules
+
   const day = (date: string, budget: number): PlanningDayV3 => ({
     date: date as IsoDate, weekDay: "monday", weekKey: "2026-W28", closed: false,
     opensAtMinutes: 540, closesAtMinutes: 1020, budgetMinutes: budget,
@@ -115,13 +182,13 @@ describe("settleHolidayDays", () => {
 
   it("répartit au plus fort reste : des jours égaux restent égaux", () => {
     const days = [day("d1", 450), day("d2", 450), day("d3", 450), day("h", 450)]
-    const settled = settleHolidayDays(days, [] as PlanningEmployeeDayV3[], new Map([["h", { share: 450, chome: false }]]), new Map(), 15)
+    const settled = settleHolidayDays(days, [] as PlanningEmployeeDayV3[], new Map([["h", { share: 450, chome: false }]]), [], RULES, 15)
     expect(settled.days.map((entry) => entry.budgetMinutes)).toEqual([600, 600, 600, 0])
     expect(settled.closedDates.has("h")).toBe(true)
   })
 
   it("ne fait rien sans férié", () => {
     const days = [day("d1", 600)]
-    expect(settleHolidayDays(days, [], new Map(), new Map(), 15).days).toEqual(days)
+    expect(settleHolidayDays(days, [], new Map(), [], RULES, 15).days).toEqual(days)
   })
 })
