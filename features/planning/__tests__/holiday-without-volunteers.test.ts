@@ -212,3 +212,23 @@ describe("dailyCeilingMinutes, copie de _daily_ceiling", () => {
     expect(dailyCeilingMinutes({ ...splitter, canSplitShift: false }, entry(360, 1200), rules)).toBe(480)
   })
 })
+
+describe("la S46 : deux volontaires sur un férié court", () => {
+  // Le 11/11/2026, ouvert de 8 h 30 à 13 h (270 min). Deux volontaires à
+  // 270 min chacun devaient tous deux ouvrir ET fermer — ce que la règle d'un
+  // ouvreur et d'un fermeur distincts interdit. Chacun compte donc au plus
+  // l'amplitude moins un pas.
+  const short = (volunteers: readonly string[]): HolidayPlanEntry => ({
+    date: HOLIDAY, opening: "travaille", volunteerIds: [...volunteers], opensAtMinutes: 510, closesAtMinutes: 780,
+  })
+
+  it("laisse à chacun de quoi ne pas tenir les deux bouts", () => {
+    const team36 = [1, 2, 3, 4].map((n) =>
+      employee(`e${n}`, { weeklyHours: 33, weeklyMinutes: 1_980, sectors: ["Test"] } as Partial<EmployeeRecord>)
+    )
+    const problem = problemFor({ employees: team36, sectors: [exact()], holidayPlan: [short(["e1", "e2"])] })
+    const day = problem.days.find((entry) => entry.date === HOLIDAY)!
+    expect(day.budgetMinutes).toBeLessThanOrEqual(2 * (270 - 15))
+    expect(day.budgetMinutes).toBeGreaterThanOrEqual(2 * 240)
+  })
+})

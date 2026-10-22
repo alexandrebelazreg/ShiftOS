@@ -116,7 +116,16 @@ export function settleHolidayDays(
       const id = String(entry.employeeId)
       const employee = employeeById.get(id)
       if (employee === undefined) continue
-      const ceiling = Math.floor(dailyCeilingMinutes(employee, entry, rules) / step) * step
+      // Quand la journée a un ouvreur ou un fermeur, personne n'en tient les
+      // DEUX bouts : l'ouvreur part avant la fermeture, le fermeur arrive après
+      // l'ouverture. Compter l'amplitude entière le 11/11 (8 h 30 → 13 h) donnait
+      // 2 × 270 min à deux volontaires, chacun devait ouvrir ET fermer, et le
+      // moteur ne trouvait plus aucun planning. Un pas de moins suffit.
+      const span = day.opensAtMinutes !== null && day.closesAtMinutes !== null
+        ? day.closesAtMinutes - day.opensAtMinutes
+        : Number.POSITIVE_INFINITY
+      const roleBound = rules.minimumOpeningsPerDay + rules.exactClosingsPerDay > 0 ? span - step : Number.POSITIVE_INFINITY
+      const ceiling = Math.floor(Math.min(dailyCeilingMinutes(employee, entry, rules), roleBound) / step) * step
       capacity += ceiling
       if (entry.mandatory) {
         const minimum = Math.ceil(Math.max(employee.minimumDailyMinutes, rules.minimumShiftMinutes) / step) * step
