@@ -70,6 +70,30 @@ export interface PaidLeaveCoverageSummary {
  * Reinforcement pools are spread only where a deficit exists and are never
  * consumed merely because they are available.
  */
+/**
+ * Les heures de contrat de chaque rayon, par semaine : la somme des contrats des
+ * salariés ACTIFS dont c'est le PREMIER rayon. Cinq salariés à 30 h qui ont le
+ * Drive en premier font 150 h de Drive.
+ *
+ * Le même nombre sert deux lectures — la couverture de chaque semaine, et la
+ * valeur que l'écran de configuration propose comme minimum commun —, et c'est
+ * pourquoi il n'est calculé qu'ici : si l'écran comptait autrement que le
+ * tableau, le minimum proposé ne correspondrait à aucune ligne du tableau.
+ */
+export function sectorContractHours(
+  employees: readonly EmployeeRecord[],
+  sectors: readonly SectorDemandConfiguration[]
+): ReadonlyMap<string, number> {
+  const activeSectors = sectors.filter((sector) => sector.status === "active")
+  const hours = new Map<string, number>(activeSectors.map((sector) => [sector.id, 0]))
+  for (const employee of employees.filter((item) => item.status === "active")) {
+    const sector = activeSectors.find((item) => item.name === employee.sectors?.[0])
+    if (!sector) continue
+    hours.set(sector.id, (hours.get(sector.id) ?? 0) + contractHours(employee))
+  }
+  return new Map([...hours].map(([id, value]) => [id, roundHours(value)]))
+}
+
 export function calculatePaidLeaveCoverage({
   campaign,
   employees,
@@ -95,9 +119,10 @@ export function calculatePaidLeaveCoverage({
     employeesBySector.set(sector.id, [...(employeesBySector.get(sector.id) ?? []), employee])
   }
 
+  const contractHoursBySector = sectorContractHours(employees, sectors)
   const drafts: MutableCoverageCell[] = activeSectors.flatMap((sector) => {
     const team = employeesBySector.get(sector.id) ?? []
-    const baseContractHours = roundHours(team.reduce((sum, employee) => sum + contractHours(employee), 0))
+    const baseContractHours = contractHoursBySector.get(sector.id) ?? 0
     return weeks.map((week) => {
       const absentHours = roundHours(
         team.reduce(

@@ -42,6 +42,7 @@ import {
 import {
   calculatePaidLeaveCoverage,
   type PaidLeaveCoverageSummary,
+  sectorContractHours,
 } from "@/features/paid-leave/coverage/paid-leave-coverage"
 import {
   buildPaidLeaveProjection,
@@ -513,7 +514,7 @@ function CampaignWorkspace({
           <TabsTrigger value="validation">4. Validation</TabsTrigger>
         </TabsList>
         <TabsContent value="configuration">
-          <ConfigurationTab campaign={campaign} weeks={weeks} sectors={sectors} locked={locked} onUpdate={onUpdate} />
+          <ConfigurationTab campaign={campaign} weeks={weeks} employees={employees} sectors={sectors} locked={locked} onUpdate={onUpdate} />
         </TabsContent>
         <TabsContent value="employees">
           <EmployeesTab campaign={campaign} employees={employees} sectors={sectors} locked={locked} onUpdate={onUpdate} />
@@ -543,7 +544,8 @@ function CampaignWorkspace({
   )
 }
 
-function ConfigurationTab({ campaign, weeks, sectors, locked, onUpdate }: TabProps & { readonly weeks: readonly PaidLeaveCampaignWeek[] }) {
+function ConfigurationTab({ campaign, weeks, employees, sectors, locked, onUpdate }: TabProps & { readonly weeks: readonly PaidLeaveCampaignWeek[]; readonly employees: readonly EmployeeRecord[] }) {
+  const contractHoursBySector = sectorContractHours(employees, sectors)
   const updatePeriod = (period: PaidLeavePeriod) => onUpdate((current) => invalidateCampaign({ ...current, period }))
   return (
     <div className="space-y-5 pt-4">
@@ -597,7 +599,7 @@ function ConfigurationTab({ campaign, weeks, sectors, locked, onUpdate }: TabPro
               title={sector.name}
               summary={coverageSummary(campaign, sector, weeks)}
             >
-              <CoverageRuleGrid campaign={campaign} weeks={weeks} sector={sector} locked={locked} onUpdate={onUpdate} />
+              <CoverageRuleGrid campaign={campaign} weeks={weeks} sector={sector} contractHours={contractHoursBySector.get(sector.id) ?? 0} locked={locked} onUpdate={onUpdate} />
             </CollapsibleSection>
           ))}
           {sectors.length === 0 ? <EmptyLine>Configurez au moins un secteur actif dans Planiteo.</EmptyLine> : null}
@@ -760,8 +762,13 @@ function ForbiddenWeeks({ campaign, weeks, locked, onUpdate }: { readonly campai
   )
 }
 
-function CoverageRuleGrid({ campaign, weeks, sector, locked, onUpdate }: { readonly campaign: PaidLeaveCampaign; readonly weeks: readonly PaidLeaveCampaignWeek[]; readonly sector: SectorDemandConfiguration; readonly locked: boolean; readonly onUpdate: TabProps["onUpdate"] }) {
+function CoverageRuleGrid({ campaign, weeks, sector, contractHours, locked, onUpdate }: { readonly campaign: PaidLeaveCampaign; readonly weeks: readonly PaidLeaveCampaignWeek[]; readonly sector: SectorDemandConfiguration; readonly contractHours: number; readonly locked: boolean; readonly onUpdate: TabProps["onUpdate"] }) {
   const firstRule = campaign.coverage[sector.id]?.[weeks[0]?.id]
+  // La case propose les heures de contrat du rayon tant que rien n'a été réglé.
+  // Proposer, pas appliquer : elle ne touche aux semaines qu'au clic sur
+  // « Appliquer partout ». Un minimum déjà saisi garde la main — l'écraser à
+  // chaque visite effacerait le réglage du gérant.
+  const proposedMinimum = firstRule?.minimumHours ? firstRule.minimumHours : contractHours
   const applyAll = (rule: PaidLeaveCoverageRule) => onUpdate((current) => invalidateCampaign({
     ...current,
     coverage: {
@@ -774,9 +781,14 @@ function CoverageRuleGrid({ campaign, weeks, sector, locked, onUpdate }: { reado
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
           <p className="text-xs text-muted-foreground">Saisissez le nombre d’heures hebdomadaires qui doivent rester disponibles.</p>
+          <p className="text-xs text-muted-foreground">
+            Contrats du rayon : <span className="font-medium text-foreground">{formatHours(contractHours)}</span> par semaine, salariés dont c’est le premier rayon.
+          </p>
         </div>
         <div className="grid w-full grid-cols-2 items-end gap-2 sm:w-auto sm:grid-cols-[8rem_8rem_7rem_auto]">
-          <Field label="Minimum commun"><Input id={`minimum-${sector.id}`} disabled={locked} type="number" min={0} step={0.5} defaultValue={firstRule?.minimumHours ?? 0} /></Field>
+          {/* La clé suit la valeur proposée : les salariés arrivent après le
+              premier rendu, et une case non contrôlée garderait son zéro. */}
+          <Field label="Minimum commun"><Input key={`minimum-${sector.id}-${proposedMinimum}`} id={`minimum-${sector.id}`} disabled={locked} type="number" min={0} step={0.5} defaultValue={proposedMinimum} /></Field>
           <Field label="Marge orange"><Input id={`margin-${sector.id}`} disabled={locked} type="number" min={0} step={0.5} defaultValue={firstRule?.toleratedDeficitHours ?? 0} /></Field>
           {/* Vide = aucun plafond, ce qui est le réglage d'avant ce champ. Zéro
               est une valeur distincte : elle ferme la semaine à tout le monde. */}

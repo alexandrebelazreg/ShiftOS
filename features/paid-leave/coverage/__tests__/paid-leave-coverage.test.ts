@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest"
 
-import { calculatePaidLeaveCoverage } from "@/features/paid-leave/coverage/paid-leave-coverage"
+import { calculatePaidLeaveCoverage, sectorContractHours } from "@/features/paid-leave/coverage/paid-leave-coverage"
 import type { EmployeeRecord } from "@/features/employees/types/employee.types"
 import type { PaidLeaveCampaign } from "@/features/paid-leave/models/paid-leave-campaign"
 import type { SectorDemandConfiguration } from "@/features/sectors"
@@ -77,5 +77,37 @@ describe("couverture des congés payés", () => {
       totalHours: 60,
       state: "green",
     })
+  })
+})
+
+describe("les heures de contrat de chaque rayon", () => {
+  // Ce que la configuration propose comme minimum commun : cinq salariés à
+  // 30 h qui ont le Drive en premier rayon font 150 h.
+  const drive = sector("drive", "Drive")
+  const caisse = sector("caisse", "Caisse")
+
+  it("additionne les contrats des salariés dont c'est le premier rayon", () => {
+    const team = ["a", "b", "c", "d", "e"].map((id) => employee(id, "Drive", 30))
+    expect(sectorContractHours(team, [drive, caisse]).get("drive")).toBe(150)
+    expect(sectorContractHours(team, [drive, caisse]).get("caisse")).toBe(0)
+  })
+
+  it("ne compte ni un second rayon, ni un salarié inactif", () => {
+    const helper = { ...employee("f", "Caisse", 35), sectors: ["Caisse", "Drive"] } as EmployeeRecord
+    const gone = { ...employee("g", "Drive", 30), status: "inactive" } as EmployeeRecord
+    expect(sectorContractHours([employee("a", "Drive", 30), helper, gone], [drive, caisse]).get("drive")).toBe(30)
+  })
+
+  it("lit le contrat en minutes quand il est connu", () => {
+    const precise = { ...employee("a", "Drive", 36.5), weeklyMinutes: 2_205 } as EmployeeRecord
+    expect(sectorContractHours([precise], [drive]).get("drive")).toBe(36.75)
+  })
+
+  it("donne au tableau de couverture le même total", () => {
+    const team = ["a", "b"].map((id) => employee(id, "Drive", 30))
+    const summary = calculatePaidLeaveCoverage({ campaign: campaign(), sectors: [drive, caisse], employees: team })
+    expect(summary.cells.find((cell) => cell.sectorId === "drive")?.baseContractHours).toBe(
+      sectorContractHours(team, [drive, caisse]).get("drive")
+    )
   })
 })
