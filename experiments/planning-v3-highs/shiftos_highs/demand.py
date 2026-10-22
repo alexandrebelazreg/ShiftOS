@@ -268,7 +268,14 @@ def _daily_ceiling(employee: dict[str, Any], entry: dict[str, Any], rules: dict[
     split_caps = [base, 2 * continuous]
     if window is not None:
         split_caps.append(window - minimum_gap)
-    return max(0, min(split_caps))
+    # Le DROIT de couper n'oblige pas à couper. Une journée d'un seul tenant
+    # reste permise, et sur une amplitude courte c'est elle qui va le plus
+    # loin : le 11/11/2026, ouvert de 8 h 30 à 13 h, une personne autorisée à
+    # couper plafonnait à 270 − 45 = 225 min, sous son minimum de 240, et la
+    # semaine entière était déclarée impossible — alors que 270 min sans pause
+    # étaient légales. Sur une amplitude ordinaire, la journée coupée va
+    # toujours au moins aussi loin, et rien ne change.
+    return max(0, min(base, continuous), min(split_caps))
 
 
 def budget_minutes(problem: dict[str, Any], date: str) -> int | None:

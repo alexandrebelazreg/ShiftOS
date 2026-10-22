@@ -57,7 +57,13 @@ export function dailyCeilingMinutes(
   if (continuous === null || continuous === undefined) return Math.max(0, base)
   const maySplit = rules.splitShiftAllowed && employee.canSplitShift && (rules.maximumSplitsPerDay ?? 1) >= 1
   if (!maySplit) return Math.max(0, Math.min(base, continuous))
-  return Math.max(0, Math.min(base, 2 * continuous, window - (rules.minimumSplitMinutes ?? 0)))
+  // Le droit de couper n'oblige pas à couper : la journée d'un seul tenant
+  // reste permise, et c'est elle qui va le plus loin sur une amplitude courte.
+  return Math.max(
+    0,
+    Math.min(base, continuous),
+    Math.min(base, 2 * continuous, window - (rules.minimumSplitMinutes ?? 0))
+  )
 }
 
 export interface HolidayStaffing {

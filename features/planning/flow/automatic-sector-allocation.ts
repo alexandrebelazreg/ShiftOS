@@ -89,7 +89,12 @@ function maximumForDay(
       maximum = Math.min(maximum, continuous)
     } else {
       const minimumGap = sector.shiftRules.minimumSplitDuration ?? 0
-      maximum = Math.min(maximum, 2 * continuous, windowMinutes - minimumGap)
+      // Le droit de couper n'oblige pas à couper : sur une amplitude courte, la
+      // journée d'un seul tenant va plus loin que la journée coupée.
+      maximum = Math.max(
+        Math.min(maximum, continuous),
+        Math.min(maximum, 2 * continuous, windowMinutes - minimumGap)
+      )
     }
   }
   return Math.max(0, Math.floor(maximum / step) * step)

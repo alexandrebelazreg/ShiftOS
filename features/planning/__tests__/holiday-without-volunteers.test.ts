@@ -192,3 +192,23 @@ describe("settleHolidayDays", () => {
     expect(settleHolidayDays(days, [], new Map(), [], RULES, 15).days).toEqual(days)
   })
 })
+
+describe("dailyCeilingMinutes, copie de _daily_ceiling", () => {
+  // Les mêmes cas que tests/test_split_ceiling.py côté moteur : si l'une des
+  // deux copies bouge seule, l'un des deux fichiers le dira.
+  const rules = {
+    maximumShiftMinutes: 600, maximumContinuousMinutes: 480,
+    splitShiftAllowed: true, maximumSplitsPerDay: 1, minimumSplitMinutes: 45,
+  }
+  const entry = (start: number, end: number) => ({ earliestStartMinutes: start, latestEndMinutes: end, maximumMinutes: end - start })
+  const splitter = { maximumDailyMinutes: 600, canSplitShift: true }
+
+  it("garde à une journée courte son plafond sans coupure", () => {
+    expect(dailyCeilingMinutes(splitter, entry(510, 780), rules)).toBe(270)
+  })
+
+  it("compte toujours la coupure sur une journée ordinaire", () => {
+    expect(dailyCeilingMinutes(splitter, entry(360, 1200), rules)).toBe(600)
+    expect(dailyCeilingMinutes({ ...splitter, canSplitShift: false }, entry(360, 1200), rules)).toBe(480)
+  })
+})
