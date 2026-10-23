@@ -76,6 +76,15 @@ export interface SectorPlanningRules {
   readonly workEveryNonFixedRestDay?: boolean
   readonly hours?: readonly { readonly day: WeekDay; readonly closed: boolean; readonly opensAt: string; readonly closesAt: string }[]
   /**
+   * Les horaires du rayon les jours fériés qu'il règle, par date. Prioritaires
+   * sur les horaires de férié du magasin ; absents, ceux-ci s'appliquent.
+   */
+  readonly holidayHours?: Readonly<Record<string, {
+    readonly closed: boolean
+    readonly opensAtMinutes: number | null
+    readonly closesAtMinutes: number | null
+  }>>
+  /**
    * Unbreakable presence floors. Absent means the sector declares none, which
    * is NOT the same as declaring zero — a sector without floors simply has no
    * coverage its schedules may be refused over.

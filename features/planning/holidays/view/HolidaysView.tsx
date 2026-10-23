@@ -15,6 +15,9 @@ import { buildHolidayVolunteerMatrix } from "@/features/planning/holidays/model/
 import { buildHolidayYear } from "@/features/planning/holidays/model/holiday-year-view-model"
 import { HolidayVolunteerMatrix } from "@/features/planning/holidays/ui/HolidayVolunteerMatrix"
 import { HolidayYearTable } from "@/features/planning/holidays/ui/HolidayYearTable"
+import { HolidaySectorTable } from "@/features/planning/holidays/ui/HolidaySectorTable"
+import { sectorStore } from "@/features/sectors/sector.store"
+import type { SectorDemandConfiguration } from "@/features/sectors"
 import type { StoreConfig } from "@/features/store/schemas/store.schema"
 
 /**
@@ -34,12 +37,16 @@ export function HolidaysView({ initialStore }: { readonly initialStore: StoreCon
   const [stored, setStored] = useState<StoredHolidays | null>(null)
   const { failure, guard } = useSaveFailure()
   const [year, setYear] = useState(() => new Date().getFullYear())
+  const [sectors, setSectors] = useState<readonly SectorDemandConfiguration[]>([])
 
   useEffect(() => {
     if (typeof window === "undefined") return
     let active = true
     void holidayStore.read().then((stored) => {
       if (active) setStored(stored)
+    })
+    void sectorStore.list().then((list) => {
+      if (active) setSectors(list.filter((sector) => sector.status === "active"))
     })
     return () => {
       active = false
@@ -150,6 +157,42 @@ export function HolidaysView({ initialStore }: { readonly initialStore: StoreCon
         onChangeOpening={(date, opening) => patchDay(date, { opening })}
         onChangeHours={(date, opensAt, closesAt) => patchDay(date, { opensAt, closesAt })}
       />
+
+      {/* Les rayons ont leurs propres horaires un jour férié : un Drive qui
+          ouvre à 6 h ne commence pas à 8 h 30 parce que le magasin le fait. */}
+      <section className="space-y-2">
+        <div className="flex flex-wrap items-baseline justify-between gap-2">
+          <h2 className="font-heading text-base font-medium">
+            Secteurs
+            <span className="ml-2 text-sm font-normal text-muted-foreground">
+              sur les fériés ouverts
+            </span>
+          </h2>
+          <p className="text-sm text-muted-foreground">
+            Chaque secteur suit son jour férié type, réglé dans ses paramètres. Cliquez une case pour ajuster un férié précis.
+          </p>
+        </div>
+        <HolidaySectorTable
+          sectors={sectors}
+          rows={holidayYear.days
+            .filter((day) => day.acceptsVolunteers)
+            .map((day) => ({
+              date: day.date,
+              name: day.name,
+              dateLabel: day.dateLabel,
+              opening: day.opening,
+              opensAt: day.opensAt,
+              closesAt: day.closesAt,
+              ...(stored[day.date]?.sectors ? { sectorDays: stored[day.date]!.sectors! } : {}),
+            }))}
+          onChange={(date, sectorId, sectorDay) => {
+            const current = { ...(stored[date]?.sectors ?? {}) }
+            if (sectorDay === null) delete current[sectorId]
+            else current[sectorId] = sectorDay
+            patchDay(date, { sectors: current })
+          }}
+        />
+      </section>
 
       {/* LES VOLONTAIRES SE COCHENT ICI, ET NULLE PART AILLEURS.
           Ils vivaient dans onze listes dépliables, une par férié : on pouvait

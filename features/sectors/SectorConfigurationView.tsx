@@ -9,6 +9,8 @@ import type { StoreConfig } from "@/features/store/schemas/store.schema"
 import { applyHoursToEveryDay, buildHourlyProfile, copyCoverageProfile, coveragePercentages, createEmptySector, releaseCoveragePercentages, validateSectorDemand, withCoveragePercent, type CoverageSlot, type SectorDemandConfiguration } from "@/features/sectors"
 import { sectorStore } from "@/features/sectors/sector.store"
 import { SectorAdvancedConstraints } from "@/features/sectors/SectorAdvancedConstraints"
+import { HolidaySectorDayEditor } from "@/features/sectors/HolidaySectorDayEditor"
+import { defaultHolidaySectorDay } from "@/features/planning/holidays/model/holiday-sector-day"
 import { Empty, Field, Section } from "@/features/sectors/sector-layout"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
@@ -197,6 +199,39 @@ export function SectorConfigurationView({ store }: { store: StoreConfig | null }
           </span>
         </label>
         {selected.hours.every((day) => day.closed) ? <Empty text="Ouvrez au moins un jour pour configurer sa couverture." /> : <CoverageTable sector={selected} update={update} showPercentages={selected.hourlyPercentagesEnabled} />}
+      </Section>
+
+      {/* Un réglage pour TOUS les fériés travaillés : le cas courant. Un férié
+          précis s'ajuste dans l'onglet Jours fériés, sans toucher au modèle. */}
+      <Section title="Jour férié type" description="Ce que ce secteur fait d’un férié travaillé : ses propres horaires et son besoin, ou sa fermeture. Un férié précis s’ajuste dans l’onglet Jours fériés.">
+        <label className="flex items-start gap-2 text-sm">
+          <input
+            type="checkbox"
+            className="mt-0.5"
+            checked={selected.holidayDay !== undefined}
+            onChange={(e) => {
+              if (e.target.checked) {
+                const usual = selected.hours.find((day) => !day.closed)
+                update({ ...selected, holidayDay: defaultHolidaySectorDay(usual?.opensAt ?? "08:00", usual?.closesAt ?? "13:00") })
+              } else {
+                const { holidayDay: _removed, ...rest } = selected
+                void _removed
+                update(rest)
+              }
+            }}
+          />
+          <span>
+            <span className="block font-medium">Régler un jour férié type pour ce secteur</span>
+            <span className="text-xs text-muted-foreground">Décoché, le secteur suit les horaires de férié du magasin et le besoin du jour de la semaine.</span>
+          </span>
+        </label>
+        {selected.holidayDay ? (
+          <HolidaySectorDayEditor
+            value={selected.holidayDay}
+            label={`${selected.name || "secteur"}, jour férié type`}
+            onChange={(holidayDay) => update({ ...selected, holidayDay })}
+          />
+        ) : null}
       </Section>
 
       <Section title="Répartition des heures" description="Choisissez une répartition manuelle ou laissez Planiteo la déduire de la couverture configurée.">

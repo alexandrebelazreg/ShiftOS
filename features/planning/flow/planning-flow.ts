@@ -35,6 +35,7 @@ import { buildDemandInput } from "@/features/planning/flow/demand-builder"
 import { buildClosingHistory } from "@/features/planning/closing-history/build-closing-history"
 import type { PlanningRecord } from "@/features/planning/persistence/planning-record"
 import { eligibleEmployees } from "@/features/planning/flow/generation-scope"
+import { resolveHolidaySectorDay } from "@/features/planning/holidays/model/holiday-sector-day"
 import {
   planningAbsences,
   snapToStep,
@@ -162,8 +163,21 @@ export function preparePlanningGeneration(
       return { status: "error", errors: fromZodError(configValidation.error) }
     }
 
+    // Les fériés de la période, ramenés à ce que chaque contrat doit encore
+    // porter. Un jour férié retire une journée à ce que le moteur a À PLACER,
+    // que ces heures soient perdues (JF, horaires variables) ou dues en heures
+    // fériées (HF, horaires fixes) : dans les deux cas elles ne se planifient
+    // pas, et les laisser dans l'objectif tasserait un contrat entier sur six
+    // jours. Ce que la paie en fait se lit dans les codes, pas ici.
+    const holidayPlan = (request.holidayPlan ?? []).filter(
+      (entry) =>
+        entry.date >= request.scope.period.start && entry.date <= request.scope.period.end
+    )
+
     // Collect application data → build the bridge input (incl. derived demand).
-    const demand = buildDemandInput(configuration, request.scope.period, request.scope.planningId, request.sectors)
+    // Les fériés d'abord : un rayon qui règle son jour férié pose son propre
+    // besoin ce jour-là, et la demande doit le lire.
+    const demand = buildDemandInput(configuration, request.scope.period, request.scope.planningId, request.sectors, holidayPlan)
     const bridgeInput: BridgeInput = {
       store: {
         storeId: DEFAULT_STORE_ID,
@@ -193,17 +207,6 @@ export function preparePlanningGeneration(
     }
     // Integer minutes are authoritative. Legacy decimal hours remain only as a
     // compatibility projection for frozen consumers.
-    // Les fériés de la période, ramenés à ce que chaque contrat doit encore
-    // porter. Un jour férié retire une journée à ce que le moteur a À PLACER,
-    // que ces heures soient perdues (JF, horaires variables) ou dues en heures
-    // fériées (HF, horaires fixes) : dans les deux cas elles ne se planifient
-    // pas, et les laisser dans l'objectif tasserait un contrat entier sur six
-    // jours. Ce que la paie en fait se lit dans les codes, pas ici.
-    const holidayPlan = (request.holidayPlan ?? []).filter(
-      (entry) =>
-        entry.date >= request.scope.period.start && entry.date <= request.scope.period.end
-    )
-
     // Lus avant les contrats : l'objectif de chacun se ramène sur le pas de la
     // grille, et c'est ce réglage qui le donne.
     const settings = storeConfigurationService.toGenerationSettings(configuration, {
@@ -351,6 +354,7 @@ export function preparePlanningGeneration(
           requirementIds: demand.requirements.filter((requirement) => requirement.id.startsWith(`req_${sector.id}_`)).map((requirement) => requirement.id),
           workEveryNonFixedRestDay: sector.workEveryNonFixedRestDay,
           hours: sector.hours,
+          ...holidayHoursOf(sector, holidayPlan),
         })),
       },
     }
@@ -402,6 +406,28 @@ export function preparePlanningGeneration(
  * le second tableau de la documentation interroge pour décider entre un repos
  * hebdomadaire et des heures fériées.
  */
+/**
+ * Les horaires de CE rayon les jours fériés de la période, quand il en règle.
+ *
+ * Absent pour un rayon qui n'a ni jour férié type ni ajustement : le
+ * constructeur garde alors les horaires de férié du magasin, comme avant.
+ */
+function holidayHoursOf(
+  sector: SectorDemandConfiguration,
+  holidayPlan: readonly HolidayPlanEntry[]
+) {
+  const entries = holidayPlan.flatMap((entry) => {
+    const day = resolveHolidaySectorDay(entry, sector)
+    if (day === null) return []
+    return [[String(entry.date), {
+      closed: day.closed,
+      opensAtMinutes: day.closed ? null : timeToMinutes(day.opensAt),
+      closesAtMinutes: day.closed ? null : timeToMinutes(day.closesAt),
+    }] as const]
+  })
+  return entries.length > 0 ? { holidayHours: Object.fromEntries(entries) } : {}
+}
+
 /**
  * Les heures souhaitées de la fiche, en minutes. Une moitié manquante — un sens
  * sans heure, une heure illisible — ne produit rien plutôt qu'un souhait deviné.

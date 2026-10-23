@@ -15,6 +15,24 @@ import type { IsoDate } from "@/features/core/models/common"
 
 export type HolidayOpeningKind = "chome" | "demi-chome" | "travaille"
 
+/**
+ * Ce qu'un RAYON fait d'un férié : ses horaires et son besoin ce jour-là, ou sa
+ * fermeture. Le magasin a ses horaires de férié ; un Drive qui ouvre à 6 h n'a
+ * aucune raison de commencer à 8 h 30 parce que la surface de vente le fait.
+ *
+ * Défini une fois ici, et repris tel quel par le « jour férié type » d'un rayon
+ * et par l'ajustement d'un férié précis : les deux écrans saisissent la même
+ * chose, et une seule fonction décide laquelle s'applique.
+ */
+export interface HolidaySectorDay {
+  readonly closed: boolean
+  /** "HH:mm". Ignorés quand le rayon est fermé. */
+  readonly opensAt: string
+  readonly closesAt: string
+  /** Les personnes voulues par plage, comme le profil d'un jour ordinaire. */
+  readonly slots: readonly { readonly start: string; readonly end: string; readonly employees: number }[]
+}
+
 export interface HolidayPlanEntry {
   readonly date: IsoDate
   readonly opening: HolidayOpeningKind
@@ -28,6 +46,12 @@ export interface HolidayPlanEntry {
   /** Les horaires exceptionnels du magasin ce jour-là. `null` s'il est chômé. */
   readonly opensAtMinutes: number | null
   readonly closesAtMinutes: number | null
+  /**
+   * Les ajustements de CE férié, rayon par rayon (clé : identifiant du rayon).
+   * Absent pour un rayon : son jour férié type s'applique, ou à défaut les
+   * horaires du magasin.
+   */
+  readonly sectorDays?: Readonly<Record<string, HolidaySectorDay>>
 }
 
 /**

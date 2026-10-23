@@ -55,6 +55,8 @@ export function holidayPlanForPeriod(
       volunteerIds: stored[schedule.date]?.volunteerIds ?? [],
       opensAtMinutes: minutesOfClock(schedule.opensAt),
       closesAtMinutes: minutesOfClock(schedule.closesAt),
+      // Absent tant qu'aucun rayon n'est ajusté : le plan reste celui d'avant.
+      ...(stored[schedule.date]?.sectors ? { sectorDays: stored[schedule.date]!.sectors! } : {}),
     }))
 }
 

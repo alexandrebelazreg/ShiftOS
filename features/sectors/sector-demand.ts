@@ -1,4 +1,4 @@
-import { WEEK_DAYS, type WeekDay } from "@/features/core/models"
+import { WEEK_DAYS, type HolidaySectorDay, type WeekDay } from "@/features/core/models"
 import type { StoreConfig } from "@/features/store/schemas/store.schema"
 
 export type SectorStatus = "active" | "archived"
@@ -105,7 +105,15 @@ export interface SectorDemandConfiguration {
   /** Unbreakable floors. Empty means the sector declares none — NOT a floor of zero. */
   readonly minimumPresence: readonly SectorPresenceRule[]
   readonly closingFairness: SectorClosingFairness
+  /**
+   * Le « jour férié type » du rayon : ce qu'il fait d'un férié travaillé, tant
+   * qu'un férié précis ne l'ajuste pas dans l'onglet Jours fériés. Absent : le
+   * rayon suit les horaires de férié du magasin et le besoin du jour de la
+   * semaine, comme avant que le réglage existe.
+   */
+  readonly holidayDay?: HolidaySectorDay
 }
+export type { HolidaySectorDay }
 export interface SectorValidationIssue { readonly path: string; readonly message: string }
 
 /**
@@ -333,6 +341,9 @@ export function effectiveMinimumShiftDuration(sector: SectorDemandConfiguration,
 export function validateSectorDemand(sector: SectorDemandConfiguration, store: StoreConfig | null): SectorValidationIssue[] {
   const issues: SectorValidationIssue[] = []
   if (!sector.name.trim()) issues.push({ path: "name", message: "Le nom du secteur est obligatoire." })
+  if (sector.holidayDay && !sector.holidayDay.closed && !(sector.holidayDay.opensAt < sector.holidayDay.closesAt)) {
+    issues.push({ path: "holidayDay", message: "Jour férié type : la fermeture doit suivre l’ouverture." })
+  }
   for (const day of sector.hours) {
     if (day.closed) continue
     if (!TIME_RE.test(day.opensAt) || !TIME_RE.test(day.closesAt)) { issues.push({ path: `hours.${day.day}`, message: "Les horaires doivent respecter des pas de 15 minutes." }); continue }

@@ -404,18 +404,36 @@ export function buildPlanningProblemV3(
       && holidayEntry.closesAtMinutes > holidayEntry.opensAtMinutes
         ? holidayEntry
         : null
+    // Les horaires que CE rayon a réglés pour ce férié — jour férié type ou
+    // ajustement —, prioritaires sur ceux du magasin : un Drive qui ouvre à 6 h
+    // n'a aucune raison de commencer à 8 h 30 avec la surface de vente. Un
+    // férié chômé ferme tout, et le rayon n'a pas son mot à dire.
+    const ownHoliday = holidayEntry !== undefined && !holidayClosed
+      ? sector.holidayHours?.[date]
+      : undefined
+    const ownWindow =
+      ownHoliday !== undefined
+      && !ownHoliday.closed
+      && ownHoliday.opensAtMinutes !== null
+      && ownHoliday.closesAtMinutes !== null
+      && ownHoliday.closesAtMinutes > ownHoliday.opensAtMinutes
+        ? ownHoliday
+        : null
+    // Fermé ce jour-là par son propre réglage : traité comme un chômé pour ce
+    // seul rayon — journée fermée, et sa part de la semaine change de jour.
+    const closedForHoliday = holidayClosed === true || ownHoliday?.closed === true
     if (holidayEntry !== undefined && !closed) {
-      holidayShare.set(date, { share: budgetMinutes, chome: holidayClosed === true })
+      holidayShare.set(date, { share: budgetMinutes, chome: closedForHoliday })
     }
 
     days.push({
       date,
       weekDay,
       weekKey: isoWeekKey(date),
-      closed: closed || holidayClosed === true,
-      opensAtMinutes: holidayClosed ? null : holidayWindow?.opensAtMinutes ?? opensAtMinutes,
-      closesAtMinutes: holidayClosed ? null : holidayWindow?.closesAtMinutes ?? closesAtMinutes,
-      budgetMinutes: holidayClosed ? 0 : budgetMinutes,
+      closed: closed || closedForHoliday,
+      opensAtMinutes: closedForHoliday ? null : ownWindow?.opensAtMinutes ?? holidayWindow?.opensAtMinutes ?? opensAtMinutes,
+      closesAtMinutes: closedForHoliday ? null : ownWindow?.closesAtMinutes ?? holidayWindow?.closesAtMinutes ?? closesAtMinutes,
+      budgetMinutes: closedForHoliday ? 0 : budgetMinutes,
       ...(sector.dailyBudgetMode ? { budgetMode: sector.dailyBudgetMode } : {}),
     })
   }
