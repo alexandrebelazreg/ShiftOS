@@ -192,3 +192,46 @@ describe("le férié et le pas de la grille", () => {
     expect(snapToStep(1_680, 15)).toBe(1_680)
   })
 })
+
+describe("un volontaire en arrêt le jour férié", () => {
+  // Volontaire, il ne perd aucune heure pour le férié : il est censé y
+  // travailler. En arrêt ce jour-là, il ne le peut plus — et sa journée doit
+  // sortir de son objectif comme n'importe quelle journée d'absence. Elle n'en
+  // sortait pas : tous les fériés étaient sautés pour tout le monde, et il
+  // gardait une journée sans aucun jour pour la placer.
+  const holiday: HolidayPlanEntry = {
+    date: "2026-07-07" as IsoDate,
+    opening: "travaille",
+    volunteerIds: ["e1", "e2"],
+    opensAtMinutes: 540,
+    closesAtMinutes: 1020,
+  }
+
+  it("retire la journée fériée manquée de son objectif", () => {
+    const built = problemFor({
+      holidayPlan: [holiday],
+      absences: [absence({ employeeId: "e1", start: "2026-07-07", end: "2026-07-07", type: "sick_leave" })],
+    })
+    if (!built.ok) throw new Error(built.errors.map((error) => error.message).join(" | "))
+    const e1 = built.problem.employees.find((entry) => String(entry.id) === "e1")
+    const e2 = built.problem.employees.find((entry) => String(entry.id) === "e2")
+    // Un jour sur cinq manqué : 20 h → 16 h. Le volontaire présent garde tout.
+    expect(e1?.contractMinutes).toBe(960)
+    expect(e2?.contractMinutes).toBe(1_200)
+    expect(
+      built.problem.employeeDays.find((day) => String(day.employeeId) === "e1" && day.date === holiday.date)?.available
+    ).toBe(false)
+  })
+
+  it("ne retire rien de plus à un non-volontaire absent ce jour-là, déjà réduit par le férié", () => {
+    const withoutAbsence = problemFor({ holidayPlan: [{ ...holiday, volunteerIds: ["e2"] }] })
+    const withAbsence = problemFor({
+      holidayPlan: [{ ...holiday, volunteerIds: ["e2"] }],
+      absences: [absence({ employeeId: "e1", start: "2026-07-07", end: "2026-07-07", type: "sick_leave" })],
+    })
+    if (!withoutAbsence.ok || !withAbsence.ok) throw new Error("construction impossible")
+    const contractOf = (problem: typeof withAbsence.problem) =>
+      problem.employees.find((entry) => String(entry.id) === "e1")?.contractMinutes
+    expect(contractOf(withAbsence.problem)).toBe(contractOf(withoutAbsence.problem))
+  })
+})

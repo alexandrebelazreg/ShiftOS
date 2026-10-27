@@ -216,7 +216,6 @@ export function preparePlanningGeneration(
     })
     const step =
       settings.timeIncrementMinutes ?? bridged.value.store.planningSettings.granularity ?? 15
-    const holidayDates = new Set<string>(holidayPlan.map((entry) => entry.date))
     const isOpen = (date: IsoDate): boolean => {
       const day = request.store.openingHours.find((hours) => hours.day === weekDayOf(date))
       return day !== undefined && !day.closed
@@ -227,24 +226,30 @@ export function preparePlanningGeneration(
       contracts: bridged.value.contracts.map((contract) => {
         const employee = planningEmployees.find((item) => item.id === contract.employeeId)
         const contractMinutes = employee?.weeklyMinutes ?? Math.round(contract.weeklyHours * 60)
-        const afterHolidays = weeklyTargetAfterHolidays(
-          contractMinutes,
-          holidayPlan.map((entry) =>
-            holidayImpact({
-              entry,
-              employeeId: String(contract.employeeId),
-              profile: {
-                scheduleType: employee?.scheduleType,
-                student: employee?.student,
-                forfaitJour: employee?.forfaitJour,
-              },
-              contractMinutes,
-              sunday: isSunday(entry.date),
-              storeOpensSundays: storeOpensSundays(request.store),
-              usuallyWorksSundays: !(employee?.fixedDaysOff ?? []).includes("sunday"),
-              usualRestDay: (employee?.fixedDaysOff ?? []).includes(weekDayOf(entry.date)),
-            })
-          )
+        const impacts = holidayPlan.map((entry) =>
+          holidayImpact({
+            entry,
+            employeeId: String(contract.employeeId),
+            profile: {
+              scheduleType: employee?.scheduleType,
+              student: employee?.student,
+              forfaitJour: employee?.forfaitJour,
+            },
+            contractMinutes,
+            sunday: isSunday(entry.date),
+            storeOpensSundays: storeOpensSundays(request.store),
+            usuallyWorksSundays: !(employee?.fixedDaysOff ?? []).includes("sunday"),
+            usualRestDay: (employee?.fixedDaysOff ?? []).includes(weekDayOf(entry.date)),
+          })
+        )
+        const afterHolidays = weeklyTargetAfterHolidays(contractMinutes, impacts)
+        // Les fériés qui ont DÉJÀ retiré quelque chose à CE salarié — et à lui
+        // seul. Un volontaire n'en perd aucune heure : il est censé travailler
+        // ce jour-là. Tous les fériés étaient sautés pour tout le monde, si bien
+        // qu'un volontaire en arrêt maladie gardait sa journée fériée dans son
+        // objectif, sans aucun jour pour la placer : semaine impossible.
+        const holidayDates = new Set<string>(
+          impacts.filter((impact) => impact.reducedMinutes > 0).map((impact) => String(impact.date))
         )
         // Puis les absences, et l'ensemble ramené sur la grille une seule fois,
         // à la fin : arrondir chaque déduction séparément cumulerait les écarts.
