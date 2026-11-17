@@ -31,14 +31,13 @@ import { PermanenceRecapTable } from "@/features/permanence/components/Permanenc
 import { PermanenceYearRecap } from "@/features/permanence/components/PermanenceYearRecap"
 import { assign, awayOn, toggleRest } from "@/features/permanence/domain/permanence-edits"
 import { paidLeaveByWeek } from "@/features/permanence/domain/permanence-leave"
-import {
-  absentOn,
-  permanenceRoster,
-  type PermanenceMember,
-} from "@/features/permanence/domain/permanence-roster"
+import { absentOn, permanenceRoster } from "@/features/permanence/domain/permanence-roster"
 import { trainingByDate, trainingDraft } from "@/features/permanence/domain/permanence-training"
+import {
+  historyBefore,
+  previousMonths,
+} from "@/features/permanence/generation/fairness-window"
 import { generatePermanenceMonth } from "@/features/permanence/generation/generate-permanence-month"
-import type { PermanenceLoad } from "@/features/permanence/models/permanence-load"
 import {
   emptyPermanenceMonth,
   EMPTY_WEEK_SLOTS,
@@ -84,6 +83,8 @@ export function PermanenceView({ initialStore }: { readonly initialStore: StoreC
   const [sheet, setSheet] = useState<PermanenceMonth | null>(null)
   const { failure, guard } = useSaveFailure()
   const [yearSheets, setYearSheets] = useState<readonly PermanenceMonth[]>([])
+  /** Les deux mois qui précèdent le mois affiché : la mémoire du générateur. */
+  const [priorSheets, setPriorSheets] = useState<readonly PermanenceMonth[]>([])
   useEffect(() => {
     if (typeof window === "undefined") return
     queueMicrotask(() => {
@@ -99,10 +100,17 @@ export function PermanenceView({ initialStore }: { readonly initialStore: StoreC
     absenceService.list().then(setAbsences)
   }, [])
 
-  // Le mois affiché et l'année entière se relisent ensemble : le récapitulatif
-  // annuel et le passif du générateur viennent tous deux des mois voisins.
+  // Le mois affiché, l'année entière et les deux mois précédents se relisent
+  // ensemble : le récapitulatif annuel vient de l'année, le passif du
+  // générateur des deux mois d'avant — qui sont dans l'année PRÉCÉDENTE quand
+  // on génère janvier ou février.
   useEffect(() => {
         queueMicrotask(() => {
+      void Promise.all(
+        previousMonths(year, month).map((entry) => permanenceStore.get(entry.year, entry.month))
+      ).then((found) =>
+        setPriorSheets(found.filter((entry): entry is PermanenceMonth => entry !== null))
+      )
       void permanenceStore
         .get(year, month)
         .then((found) =>
@@ -285,7 +293,7 @@ export function PermanenceView({ initialStore }: { readonly initialStore: StoreC
       // Absences saisies ET congés validés : les deux disent la même chose au
       // générateur — cette personne n'est pas là pour ouvrir le magasin.
       unavailableOn: (date) => absentOn(unavailabilities, date),
-      history: historyBefore(yearSheets, month, roster),
+      history: historyBefore(priorSheets, year, month, roster),
     })
     write({
       ...sheet,
@@ -388,23 +396,4 @@ export function PermanenceView({ initialStore }: { readonly initialStore: StoreC
       ) : null}
     </div>
   )
-}
-
-/**
- * Ce que chacun a porté depuis janvier, avant le mois qu'on génère.
- *
- * Les mois SUIVANTS sont volontairement ignorés : régénérer mars ne doit pas
- * dépendre de ce qu'on avait déjà posé en avril, sinon la même commande rendrait
- * deux résultats différents selon l'ordre dans lequel l'année a été remplie.
- */
-function historyBefore(
-  sheets: readonly PermanenceMonth[],
-  month: number,
-  roster: readonly PermanenceMember[]
-): Readonly<Record<string, PermanenceLoad>> {
-  const recap = buildPermanenceRecap(
-    sheets.filter((sheet) => sheet.month < month),
-    roster
-  )
-  return Object.fromEntries(recap.rows.map((row) => [row.employeeId, row.load]))
 }
