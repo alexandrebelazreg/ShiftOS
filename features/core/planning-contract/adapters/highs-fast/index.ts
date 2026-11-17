@@ -2,7 +2,10 @@ import {
   createPythonRunner,
   resolveHighsFastPython,
 } from "@/features/core/planning-contract/adapters/python/run-python"
-import type { CpSatRunner } from "@/features/core/planning-contract/adapters/python/run-python"
+import type {
+  CpSatRunner,
+  CpSatRunOutcome,
+} from "@/features/core/planning-contract/adapters/python/run-python"
 import type { EnginePreservationSupport } from "@/features/core/planning-contract/adapters/from-audited-v3"
 import { toSolvePlanningResponse } from "@/features/core/planning-contract/adapters/from-audited-v3"
 import { applyLocks } from "@/features/core/planning-contract/locks"
@@ -244,12 +247,7 @@ export function createHighsFastAdapter(
  * n'avoir pas eu le temps, ce qui appelle un budget plus long et non un plafond
  * plus lâche. Dire le statut brut plutôt que l'interpréter.
  */
-function whyNotSolved(outcome: {
-  readonly kind: string
-  readonly stdout?: string
-  readonly code?: string
-  readonly message?: string
-}): string | null {
+function whyNotSolved(outcome: CpSatRunOutcome): string | null {
   if (outcome.kind === "cancelled") return "la résolution a été annulée"
   if (outcome.kind === "failure") {
     // Le code du lanceur, tel quel. « Rien rendu de lisible » couvrait aussi
@@ -259,7 +257,15 @@ function whyNotSolved(outcome: {
       outcome.message === undefined ? "" : ` — ${outcome.message}`
     })`
   }
-  if (outcome.kind !== "success" || outcome.stdout === undefined) {
+  // `stdout`, le nom que le lanceur donne VRAIMENT à une réponse. Ce test
+  // attendait « success », un nom que le lanceur n'a jamais rendu — et le
+  // paramètre, typé à la main en `kind: string`, laissait passer l'erreur. Du
+  // 24/08 au 17/11/2026, chaque semaine RÉSOLUE avec les plafonds d'équité
+  // était donc jetée comme « illisible » et recalculée sans eux : l'équité des
+  // fermetures ne s'appliquait jamais, chaque génération coûtait deux calculs,
+  // et une semaine que le second ne savait pas résoudre était refusée alors
+  // que le premier l'avait résolue. Typé par `CpSatRunOutcome` désormais.
+  if (outcome.kind !== "stdout") {
     return "le moteur n'a rien rendu de lisible"
   }
   const parsed = parseHighsFastResponse(outcome.stdout)

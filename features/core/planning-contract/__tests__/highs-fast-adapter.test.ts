@@ -8,6 +8,8 @@ import {
 import type { CpSatRunner } from "@/features/core/planning-contract/adapters/python/run-python"
 import type { SolvePlanningRequest } from "@/features/core/planning-contract/types/solve-request"
 import { buildAccueilCanonicalProblem } from "@/features/core/planning-v3/__tests__/accueil-canonical"
+import { planClosingQuotas } from "@/features/core/planning-v3/fairness/closing-quota"
+import type { PlanningProblemV3 } from "@/features/core/planning-v3/types/problem"
 
 /**
  * The `v3-highs-fast` adapter, without Python.
@@ -32,8 +34,16 @@ function request(): SolvePlanningRequest {
   return { problem }
 }
 
+/**
+ * Un lanceur qui rend `stdout`, sous la forme EXACTE du vrai — sans `as never`.
+ *
+ * Il rendait `{ kind: "success", stderr, durationMs }` forcé par `as never` :
+ * une forme que le lanceur n'a jamais produite, et l'adaptateur, écrit contre
+ * ce faux, testait `kind === "success"`. Les deux moitiés étaient vertes et
+ * le joint cassé en production pendant trois mois.
+ */
 function runnerReturning(stdout: string): CpSatRunner {
-  return async () => ({ kind: "success", stdout, stderr: "", durationMs: 1 }) as never
+  return async () => ({ kind: "stdout", stdout })
 }
 
 function envelope(overrides: Record<string, unknown> = {}): string {
@@ -137,14 +147,75 @@ describe("adaptateur v3-highs-fast — pannes de transport", () => {
     let spawned = false
     const adapter = createHighsFastAdapter({
       signal: { aborted: true },
-      runner: (async () => {
+      runner: async () => {
         spawned = true
-        return { kind: "success", stdout: envelope(), stderr: "", durationMs: 1 }
-      }) as never,
+        return { kind: "stdout", stdout: envelope() }
+      },
     })
     const response = await adapter(request())
     expect(spawned).toBe(false)
     expect(response.outcome).toBe("backend-error")
+  })
+})
+
+describe("adaptateur v3-highs-fast — plafonds d'équité des fermetures", () => {
+  /**
+   * Le problème canonique, équité des fermetures activée et plafonds de fiche
+   * levés — à 2 chacun, la répartition équitable n'en resserrait aucun et les
+   * plafonds ne se posaient pas.
+   */
+  const fairProblem: PlanningProblemV3 = {
+    ...problem,
+    employees: problem.employees.map((employee) => ({ ...employee, maximumClosings: null })),
+    rules: {
+      ...problem.rules,
+      closingFairness: { balanceClosings: true, balanceSaturdayClosings: true, lookbackWeeks: 8 },
+    },
+  }
+
+  it("garde la réponse résolue avec les plafonds, sans relancer le moteur", async () => {
+    // Sans cette précondition le test passerait sans jamais emprunter le chemin.
+    expect(planClosingQuotas(fairProblem).applied).toBe(true)
+
+    let calls = 0
+    const response = await createHighsFastAdapter({
+      runner: async () => {
+        calls += 1
+        // Une affectation suffit : le protocole refuse un `solved` vide, et
+        // c'est la LECTURE de la réponse qu'on éprouve ici, pas sa validité.
+        return {
+          kind: "stdout",
+          stdout: envelope({
+            status: "solved",
+            assignments: [{
+              employeeId: fairProblem.employees[0].id,
+              date: fairProblem.days[0].date,
+              segments: [{ startMinutes: 600, endMinutes: 840 }],
+            }],
+          }),
+        }
+      },
+    })({ problem: fairProblem })
+
+    expect(calls).toBe(1)
+    const messages = response.diagnostics.entries.map((entry) => entry.message).join("\n")
+    expect(messages).not.toContain("n'ont PAS été appliqués")
+  })
+
+  it("relance sans plafonds quand la tentative plafonnée n'aboutit pas", async () => {
+    let calls = 0
+    const response = await createHighsFastAdapter({
+      runner: async () => {
+        calls += 1
+        return { kind: "stdout", stdout: envelope({ status: "no-solution" }) }
+      },
+    })({ problem: fairProblem })
+
+    expect(calls).toBe(2)
+    const messages = response.diagnostics.entries.map((entry) => entry.message).join("\n")
+    expect(messages).toContain("n'ont PAS été appliqués")
+    // La raison dite est celle du moteur, pas une sortie « illisible ».
+    expect(messages).not.toContain("rien rendu de lisible")
   })
 })
 
