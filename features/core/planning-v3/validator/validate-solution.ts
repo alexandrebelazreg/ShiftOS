@@ -300,6 +300,30 @@ export function validatePlanningSolutionV3(
     }
   }
 
+  // ── Coupures de la semaine ────────────────────────────────────────────────
+  //
+  // Comptées comme celles du jour, `segments − 1` par journée, puis sommées par
+  // salarié et par semaine. Une limite dure : le moteur la tient, et c'est ici
+  // qu'elle se vérifie pour tout le reste — l'échange de fermetures après le
+  // placement, une retouche à la main.
+  const weeklySplitCap = problem.rules.maximumSplitsPerWeek
+  if (weeklySplitCap != null) {
+    const weekOf = new Map(problem.days.map((day) => [day.date, day.weekKey]))
+    const splitsByWeek = new Map<string, number>()
+    for (const [key, segments] of worked) {
+      if (segments.length < 2) continue
+      const [employeeId, date] = key.split("|")
+      const weekKey = `${employeeId}|${weekOf.get(date as IsoDate) ?? ""}`
+      splitsByWeek.set(weekKey, (splitsByWeek.get(weekKey) ?? 0) + segments.length - 1)
+    }
+    for (const [weekKey, splits] of splitsByWeek) {
+      if (splits <= weeklySplitCap) continue
+      const [employeeId, week] = weekKey.split("|")
+      const employee = problem.employees.find((entry) => String(entry.id) === employeeId)
+      add("split-shift", "blocking", `${employee?.firstName ?? employeeId} : ${splits} coupures la semaine ${week}, au-delà du maximum de ${weeklySplitCap} par semaine.`, { employeeId: employee?.id, expected: weeklySplitCap, actual: splits })
+    }
+  }
+
   // ── Rest between two days, consecutive days ───────────────────────────────
   const orderedDays = [...problem.days].sort((left, right) => left.date.localeCompare(right.date))
   for (const employee of problem.employees) {

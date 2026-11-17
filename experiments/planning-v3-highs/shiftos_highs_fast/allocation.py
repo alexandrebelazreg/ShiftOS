@@ -79,6 +79,84 @@ class Allocation:
         return "|".join(",".join(str(value) for value in row) for row in self.minutes)
 
 
+def weekly_split_cap(problem: dict[str, Any]) -> int | None:
+    """Coupures permises par salarié sur la semaine ; ``None`` : aucune limite.
+
+    Une limite DURE, comme celle du jour : le gérant l'a posée pour qu'aucun
+    salarié n'ait une semaine hachée, et la dépasser pour couvrir un pic
+    reviendrait à ignorer le réglage dès qu'il gêne. Le moteur laisse plutôt du
+    sous-effectif.
+
+    Elle se tient À DEUX ÉTAGES, parce qu'une coupure naît à deux endroits :
+
+    - l'allocation l'IMPOSE quand elle donne à une journée plus que la durée
+      continue maximale — ces journées-là se comptent ici, sur les minutes ;
+    - le placement peut en CHOISIR une sur une journée plus courte, pour
+      épouser deux pics — celles-là se comptent sur les horaires (placement).
+    """
+    value = (problem.get("rules") or {}).get("maximumSplitsPerWeek")
+    return None if value is None else int(value)
+
+
+def long_days(model: "AllocationModel", allocation: Allocation, employee_index: int) -> int:
+    """Les journées dont la durée impose une coupure : au-delà du continu."""
+    count = 0
+    for day_index, minutes in enumerate(allocation.minutes[employee_index]):
+        cell = model.cell(employee_index, day_index)
+        if cell is not None and minutes > cell.continuous_maximum:
+            count += 1
+    return count
+
+
+def respects_weekly_splits(
+    problem: dict[str, Any], model: "AllocationModel", allocation: Allocation
+) -> bool:
+    """L'allocation laisse-t-elle chacun sous sa limite de coupures ?
+
+    Nécessaire, pas suffisant : une journée longue coûte AU MOINS une coupure,
+    et le placement peut en ajouter. C'est le filtre des générateurs qui ne
+    portent pas la contrainte dans leur modèle — échanges, voisinages.
+    """
+    cap = weekly_split_cap(problem)
+    if cap is None:
+        return True
+    return all(
+        long_days(model, allocation, employee_index) <= cap
+        for employee_index in range(len(allocation.minutes))
+    )
+
+
+def _add_long_day_rows(
+    add: Any,
+    model: "AllocationModel",
+    columns: dict[tuple[int, int], int],
+    long_day: dict[tuple[int, int], int],
+    split_cap: int | None,
+) -> None:
+    """Relie chaque journée longue à son indicateur, et borne leur somme.
+
+    ``minutes ≤ continu + (plafond − continu) × long`` : sans l'indicateur, la
+    journée reste sous la durée continue, donc sans coupure imposée. Puis, par
+    salarié, ``Σ long ≤ limite``. Les colonnes de minutes sont en PAS, comme
+    partout dans ces modèles.
+    """
+    if split_cap is None or not long_day:
+        return
+    step = model.step
+    by_employee: dict[int, dict[int, float]] = {}
+    for key, column in long_day.items():
+        cell = model.cell(*key)
+        assert cell is not None
+        add(
+            {columns[key]: 1.0, column: -(cell.maximum - cell.continuous_maximum) / step},
+            -np.inf,
+            cell.continuous_maximum / step,
+        )
+        by_employee.setdefault(key[0], {})[column] = 1.0
+    for coefficients in by_employee.values():
+        add(coefficients, -np.inf, float(split_cap))
+
+
 @dataclass(frozen=True, slots=True)
 class AllocationSolveResult:
     """One allocation MILP outcome, without confusing timeout and proof.
@@ -156,6 +234,54 @@ def allocation_infeasibility_details(
                 ),
             }
         )
+
+    # La limite de coupures de la SEMAINE. Un contrat qui ne tient pas sous la
+    # durée continue réclame des journées longues, chacune coupée : s'il en
+    # faut plus que la limite, aucune répartition n'existe, et c'est CE réglage
+    # que le gérant doit lire — pas « contrats et budgets ».
+    split_cap = weekly_split_cap(problem)
+    if split_cap is not None:
+        for employee_index, employee in enumerate(employees):
+            if any(c["employeeId"] == str(employee["id"]) for c in employee_conflicts):
+                continue
+            cells = [cell for cell in model.cells[employee_index] if cell is not None]
+            contract = int(employee["contractMinutes"])
+            forced = [
+                cell for cell in cells
+                if cell.mandatory and cell.minimum > cell.continuous_maximum
+            ]
+            free = [cell for cell in cells if cell not in forced]
+            reach = sum(cell.maximum for cell in forced) + sum(
+                min(cell.maximum, cell.continuous_maximum) for cell in free
+            )
+            gains = sorted(
+                (cell.maximum - min(cell.maximum, cell.continuous_maximum) for cell in free),
+                reverse=True,
+            )
+            needed = len(forced)
+            for gain in gains:
+                if reach >= contract or gain <= 0:
+                    break
+                reach += gain
+                needed += 1
+            if reach < contract or needed <= split_cap:
+                continue
+            first_name = str(employee.get("firstName") or "").strip()
+            last_name = str(employee.get("lastName") or "").strip()
+            continuous = max((cell.continuous_maximum for cell in cells), default=0)
+            employee_conflicts.append(
+                {
+                    "employeeId": str(employee["id"]),
+                    "employeeName": f"{first_name} {last_name}".strip()
+                    or str(employee["id"]),
+                    "contractMinutes": contract,
+                    "availableDayCount": len(cells),
+                    "continuousMaximumMinutes": continuous,
+                    "requiredSplitDays": needed,
+                    "weeklySplitCap": split_cap,
+                    "reason": "contract-needs-more-splits-than-weekly-limit",
+                }
+            )
 
     day_conflicts: list[dict[str, Any]] = []
     for day_index, day in enumerate(days):
@@ -450,7 +576,20 @@ def solve_allocation(
                 len(columns) + len(overflow) + len(deviation) + len(works) + len(day_deviation)
             )
 
-    total = len(columns) + len(overflow) + len(deviation) + len(works) + len(day_deviation)
+    # Une colonne binaire par cellule qui PEUT déborder, quand le rayon limite
+    # les coupures de la semaine : elle vaut 1 dès que la journée passe la durée
+    # continue, et leur somme par salarié reste sous la limite.
+    split_cap = weekly_split_cap(problem)
+    long_day: dict[tuple[int, int], int] = {}
+    if split_cap is not None:
+        base = len(columns) + len(overflow) + len(deviation) + len(works) + len(day_deviation)
+        for key in overflow:
+            long_day[key] = base + len(long_day)
+
+    total = (
+        len(columns) + len(overflow) + len(deviation) + len(works) + len(day_deviation)
+        + len(long_day)
+    )
 
     rows: list[int] = []
     cols: list[int] = []
@@ -467,6 +606,8 @@ def solve_allocation(
                 values.append(float(value))
         lower.append(lb)
         upper.append(ub)
+
+    _add_long_day_rows(add, model, columns, long_day, split_cap)
 
     for employee_index, employee in enumerate(employees):
         contract = int(employee["contractMinutes"])
@@ -534,6 +675,8 @@ def solve_allocation(
         upper_bounds[column] = cell.maximum / step
 
     for column in works.values():
+        upper_bounds[column] = 1.0
+    for column in long_day.values():
         upper_bounds[column] = 1.0
 
     for day_index, column in day_deviation.items():
@@ -684,7 +827,13 @@ def solve_polarised(
         if cell.maximum > cell.continuous_maximum:
             overflow[key] = len(columns) + len(carriers) + len(overflow)
 
-    total = len(columns) + len(carriers) + len(overflow)
+    split_cap = weekly_split_cap(problem)
+    long_day: dict[tuple[int, int], int] = {}
+    if split_cap is not None:
+        for key in overflow:
+            long_day[key] = len(columns) + len(carriers) + len(overflow) + len(long_day)
+
+    total = len(columns) + len(carriers) + len(overflow) + len(long_day)
 
     rows: list[int] = []
     cols: list[int] = []
@@ -752,6 +901,10 @@ def solve_polarised(
         add({columns[key]: 1.0, column: -1.0}, -np.inf, cell.continuous_maximum / step)
         # Still the heaviest term: a forced split may never be bought by shape.
         objective[column] = 1_000.0
+
+    _add_long_day_rows(add, model, columns, long_day, split_cap)
+    for column in long_day.values():
+        upper_bounds[column] = 1.0
 
     integrality = np.ones(total, dtype=np.int8)
     result = milp(
@@ -923,6 +1076,11 @@ def repair_large_neighbourhood(
             minutes=tuple(tuple(row) for row in minutes),
             origin=f"lns[{label}/{name}]",
         )
+        # Filtré plutôt que contraint : ce voisinage ne libère que quelques
+        # jours, et un candidat qui dépasse la limite de coupures de la semaine
+        # serait refusé au placement de toute façon.
+        if not respects_weekly_splits(problem, model, candidate):
+            continue
         signature = candidate.signature()
         if signature not in seen:
             seen.add(signature)

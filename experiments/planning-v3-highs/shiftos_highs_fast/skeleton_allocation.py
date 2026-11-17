@@ -55,7 +55,7 @@ from scipy.sparse import coo_matrix
 
 from shiftos_highs.demand import DemandModel
 
-from .allocation import Allocation, AllocationModel
+from .allocation import Allocation, AllocationModel, weekly_split_cap
 from .shifts import Segment, _sector_patterns, _tighten_for_rest, sole_server_duties
 from .skeleton import Skeleton
 
@@ -638,6 +638,21 @@ def solve_for_skeleton(
     # combinaison réfutée — au moins une de ses durées doit changer — et rien de
     # plus : une coupe plus large retirerait des allocations que personne n'a
     # réfutées, et pourrait cacher la seule qui marche.
+    # La limite de coupures de la SEMAINE : une durée qui impose une coupure en
+    # consomme une. Le placement compte ensuite les coupures qu'il choisit.
+    split_cap = weekly_split_cap(problem)
+    if split_cap is not None:
+        for employee_index in range(len(employees)):
+            forced_splits = {
+                columns[(key[0], key[1], option.minutes)]: 1.0
+                for key in space.options
+                if key[0] == employee_index
+                for option in space.options[key]
+                if option.splits
+            }
+            if len(forced_splits) > 0:
+                add(forced_splits, -np.inf, float(split_cap))
+
     for cut in forbidden:
         columns_of_cut = [
             columns[(employee_index, day_index, minutes)]

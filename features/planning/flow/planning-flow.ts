@@ -352,6 +352,7 @@ export function preparePlanningGeneration(
           maximumContinuousDuration: sector.shiftRules.maximumContinuousDuration,
           minimumSplitDuration: sector.shiftRules.minimumSplitDuration,
           maximumSplitsPerDay: sector.shiftRules.maximumSplitsPerDay,
+          maximumSplitsPerWeek: sector.shiftRules.maximumSplitsPerWeek ?? null,
           minimumOpeningsPerDay: sector.shiftRules.minimumOpeningsPerDay,
           requiredClosingsPerDay: sector.shiftRules.requiredClosingsPerDay,
           minimumRestMinutes: sector.shiftRules.minimumRestMinutes,

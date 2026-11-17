@@ -670,6 +670,41 @@ describe("adaptateur v3-highs-fast — verdicts du moteur", () => {
     )
   })
 
+  it("nomme la limite de coupures par semaine quand c'est elle qui rend la semaine impossible", async () => {
+    // Sans ce message, le gérant lisait « contrats et budgets » et cherchait
+    // dans ses contrats un blocage qui vient d'un réglage de coupures.
+    const response = await createHighsFastAdapter({
+      runner: runnerReturning(
+        envelope({
+          status: "infeasible",
+          diagnostics: {
+            engineStatus: "infeasible-proven",
+            reason: "no-minute-allocation-satisfies-contracts-and-budgets",
+            allocationEmployeeConflicts: [{
+              employeeId: "arthur",
+              employeeName: "Arthur Martin",
+              contractMinutes: 2205,
+              availableDayCount: 5,
+              continuousMaximumMinutes: 360,
+              requiredSplitDays: 2,
+              weeklySplitCap: 1,
+              reason: "contract-needs-more-splits-than-weekly-limit",
+            }],
+            allocationDayConflicts: [],
+            totalSeconds: 0.01,
+          },
+        })
+      ),
+    })(request())
+
+    const entry = response.diagnostics.entries.find(
+      (candidate) => candidate.code === "employee-needs-more-splits-than-weekly-limit"
+    )
+    expect(entry?.message).toContain("Arthur Martin doit faire 36 h 45")
+    expect(entry?.message).toContain("au moins 2 journées coupées")
+    expect(entry?.message).toContain("1 coupure par semaine")
+  })
+
   it("explique chaque journée structurellement impossible avec ses chiffres", async () => {
     const response = await createHighsFastAdapter({
       runner: runnerReturning(

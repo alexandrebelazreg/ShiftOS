@@ -62,6 +62,8 @@ export interface SectorPlanningRules {
   readonly maximumContinuousDuration?: number | null
   readonly minimumSplitDuration?: number | null
   readonly maximumSplitsPerDay?: number | null
+  /** Coupures permises par salarié sur la semaine. Absent ou null : aucune limite. */
+  readonly maximumSplitsPerWeek?: number | null
   readonly minimumOpeningsPerDay?: number | null
   readonly requiredClosingsPerDay?: number | null
   readonly minimumRestMinutes?: number | null

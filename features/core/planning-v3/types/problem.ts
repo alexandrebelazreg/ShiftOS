@@ -303,6 +303,14 @@ export interface PlanningRulesV3 {
    * means the rule is not enforced.
    */
   readonly maximumContinuousMinutes?: number | null
+  /**
+   * Coupures permises à un salarié sur la SEMAINE. Absent : aucune limite.
+   *
+   * Posé uniquement quand le rayon en déclare une, pour qu'un problème qui
+   * n'en dit rien garde l'identité qu'il avait avant ce réglage. Une limite
+   * dure : le moteur et le validateur la tiennent tous deux.
+   */
+  readonly maximumSplitsPerWeek?: number | null
   /** How many splits one employee may have in one day. Absent means unlimited. */
   readonly maximumSplitsPerDay?: number | null
   /**

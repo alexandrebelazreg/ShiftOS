@@ -138,6 +138,14 @@ export function SectorAdvancedConstraints({
               hint={`Valeur en vigueur : ${SECTOR_RULE_DEFAULTS.maximumSplitsPerDay}.`}
               onChange={(maximumSplitsPerDay) => setRules({ maximumSplitsPerDay })}
             />
+            <CountField
+              label="Coupures maximum par salarié et par semaine"
+              value={rules.maximumSplitsPerWeek ?? null}
+              min={1}
+              placeholder="Aucune limite"
+              hint="Jamais dépassée : le moteur laisse plutôt du sous-effectif."
+              onChange={(maximumSplitsPerWeek) => setRules({ maximumSplitsPerWeek })}
+            />
           </div>
         ) : null}
       </CollapsibleSection>

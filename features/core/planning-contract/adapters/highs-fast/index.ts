@@ -846,6 +846,19 @@ function diagnosticsOf(envelope: HighsFastResponseEnvelope) {
           ? "ses jours et horaires disponibles"
           : `${days} jour${days > 1 ? "s" : ""} disponible${days > 1 ? "s" : ""}`
 
+        if (conflict.reason === "contract-needs-more-splits-than-weekly-limit") {
+          const needed = numberOf(conflict.requiredSplitDays)
+          const cap = numberOf(conflict.weeklySplitCap)
+          const continuous = formatDuration(conflict.continuousMaximumMinutes) ?? "la durée continue autorisée"
+          return {
+            code: "employee-needs-more-splits-than-weekly-limit",
+            message:
+              `${name} doit faire ${contract} sur ${availability}. Sans dépasser ${continuous} d'affilée, ` +
+              `il lui faut au moins ${needed ?? "plusieurs"} journée${needed === 1 ? "" : "s"} coupée${needed === 1 ? "" : "s"}, ` +
+              `mais le rayon n'autorise que ${cap ?? "peu de"} coupure${cap === 1 ? "" : "s"} par semaine. ` +
+              "Relevez la limite de coupures par semaine ou la durée continue, ou réduisez son volume dans ce rayon.",
+          }
+        }
         if (conflict.reason === "contract-below-mandatory-minimum") {
           return {
             code: "employee-volume-below-mandatory-minimum",

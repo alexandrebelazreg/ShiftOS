@@ -153,6 +153,19 @@ def evaluate(problem: dict[str, Any], assignments: list[dict[str, Any]]) -> dict
                 ):
                     violations.append(f"split-too-long:{employee_id}:{day_date}")
 
+    # Les coupures de la SEMAINE, comptées comme celles du jour et sommées par
+    # salarié et par semaine — le même compte que le validateur TypeScript.
+    weekly_split_cap = rules.get("maximumSplitsPerWeek")
+    if weekly_split_cap is not None:
+        splits_by_week: dict[tuple[str, str], int] = defaultdict(int)
+        for (employee_id, day_date), segments in worked.items():
+            if len(segments) > 1:
+                week = str(days.get(day_date, {}).get("weekKey", ""))
+                splits_by_week[(employee_id, week)] += len(segments) - 1
+        for (employee_id, week), splits in sorted(splits_by_week.items()):
+            if splits > int(weekly_split_cap):
+                violations.append(f"weekly-splits:{employee_id}:{week}:{splits}>{weekly_split_cap}")
+
     ordered_days = sorted(problem["days"], key=lambda item: item["date"])
     for employee_id in employees:
         history = next((h for h in problem.get("previousWork") or [] if str(h["employeeId"]) == employee_id), None)

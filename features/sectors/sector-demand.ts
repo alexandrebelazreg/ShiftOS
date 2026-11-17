@@ -43,6 +43,16 @@ export interface SectorShiftRules {
   readonly minimumSplitDuration: number | null
   /** How many coupures one employee may have in one day. Null = unlimited. */
   readonly maximumSplitsPerDay: number | null
+  /**
+   * Combien de coupures un salarié peut avoir sur la SEMAINE. Null : aucune
+   * limite — la valeur de tout rayon enregistré avant que le réglage existe,
+   * pour qu'aucun planning ne bouge tant qu'on ne l'a pas posé.
+   *
+   * Une limite DURE, comme celle du jour : le moteur laisse du sous-effectif
+   * plutôt que de la dépasser, et le validateur refuse un planning qui la
+   * dépasse.
+   */
+  readonly maximumSplitsPerWeek: number | null
   /** How many employees must start exactly at opening, AT LEAST, on every open day. */
   readonly minimumOpeningsPerDay: number
   /** How many employees must finish exactly at closing, EXACTLY. Locking up is one job. */
@@ -161,6 +171,7 @@ export function createEmptySector(id = `sector_${crypto.randomUUID()}`): SectorD
       maximumContinuousDuration: SECTOR_RULE_DEFAULTS.maximumContinuousDuration,
       minimumSplitDuration: SECTOR_RULE_DEFAULTS.minimumSplitDuration,
       maximumSplitsPerDay: SECTOR_RULE_DEFAULTS.maximumSplitsPerDay,
+      maximumSplitsPerWeek: null,
       minimumOpeningsPerDay: SECTOR_RULE_DEFAULTS.minimumOpeningsPerDay,
       requiredClosingsPerDay: SECTOR_RULE_DEFAULTS.requiredClosingsPerDay,
       minimumRestMinutes: SECTOR_RULE_DEFAULTS.minimumRestMinutes,
@@ -406,6 +417,9 @@ function validateAdvancedSectorRules(sector: SectorDemandConfiguration, store: S
     }
     if (rules.maximumSplitsPerDay !== null && (!Number.isInteger(rules.maximumSplitsPerDay) || rules.maximumSplitsPerDay < 1)) {
       issues.push({ path: "shiftRules.maximumSplitsPerDay", message: "Le nombre maximal de coupures par jour doit être un entier d’au moins 1, ou vide pour aucune limite." })
+    }
+    if (rules.maximumSplitsPerWeek != null && (!Number.isInteger(rules.maximumSplitsPerWeek) || rules.maximumSplitsPerWeek < 1)) {
+      issues.push({ path: "shiftRules.maximumSplitsPerWeek", message: "Le nombre maximal de coupures par semaine doit être un entier d’au moins 1, ou vide pour aucune limite. Pour n’en autoriser aucune, interdisez les coupures." })
     }
   }
 

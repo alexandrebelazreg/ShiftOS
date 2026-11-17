@@ -617,6 +617,11 @@ export function buildPlanningProblemV3(
         : input.store.planningSettings.maxShiftDuration,
     ]),
     maximumSplitsPerDay: sector.maximumSplitsPerDay ?? null,
+    // Seulement s'il y en a une : un rayon sans limite pose le problème
+    // d'avant, à l'octet près.
+    ...(sector.splitShiftAllowed && sector.maximumSplitsPerWeek != null
+      ? { maximumSplitsPerWeek: sector.maximumSplitsPerWeek }
+      : {}),
     minimumOpeningsPerDay: sector.minimumOpeningsPerDay ?? 1,
     exactClosingsPerDay: sector.requiredClosingsPerDay ?? 1,
     // Carried, never enforced. `null` when the sector declares no policy, so a
@@ -1112,6 +1117,16 @@ function buildMultiSectorProblemV3(
       MULTI_SECTOR_MAXIMUM_CONTINUOUS_MINUTES,
       Math.max(...parts.map(({ problem }) => problem.rules.maximumContinuousMinutes ?? MULTI_SECTOR_MAXIMUM_CONTINUOUS_MINUTES))
     ),
+    // La limite de la SEMAINE suit le salarié d'un comptoir à l'autre : la plus
+    // stricte des rayons qui en déclarent une, et rien si aucun n'en déclare.
+    ...(() => {
+      const declared = splitParts
+        .map(({ problem }) => problem.rules.maximumSplitsPerWeek)
+        .filter((value): value is number => value != null)
+      return splitShiftAllowed && declared.length > 0
+        ? { maximumSplitsPerWeek: Math.min(...declared) }
+        : {}
+    })(),
     maximumSplitsPerDay: splitShiftAllowed
       ? nullableMaximum(splitParts.map(({ problem }) => problem.rules.maximumSplitsPerDay))
       : null,

@@ -50,7 +50,12 @@ from scipy.sparse import coo_matrix
 from shiftos_highs.demand import DemandModel
 from shiftos_highs.sequence import streak_windows
 
-from .allocation import Allocation, AllocationModel
+from .allocation import (
+    Allocation,
+    AllocationModel,
+    respects_weekly_splits,
+    weekly_split_cap,
+)
 from .shifts import ShiftSpace, latest_close, role_implied_by_demand
 
 _SCIPY_OPTIMAL = 0
@@ -166,6 +171,12 @@ def place(
         for window, maximum in streak_windows(problem, str(employee["id"])):
             if sum(allocation.minutes[employee_index][i] > 0 for i, day in enumerate(days) if day["date"] in window) > maximum:
                 return PlacementResult(None, 0, 0, True, True, time.perf_counter() - started)
+
+    # Une allocation qui impose déjà trop de journées longues ne peut pas tenir
+    # la limite de coupures de la semaine, quels que soient les horaires : la
+    # refuser ici coûte une boucle, la laisser coûterait un MILP.
+    if not respects_weekly_splits(problem, model, allocation):
+        return PlacementResult(None, 0, 0, True, True, time.perf_counter() - started)
 
     shifts = space.shifts
     shift_count = len(shifts)
@@ -403,6 +414,22 @@ def place(
                     -np.inf,
                     float(employee["maximumClosings"]),
                 )
+
+    # ── Coupures de la semaine ──────────────────────────────────────────────
+    #
+    # Toutes les coupures de chacun, imposées par la durée ou choisies pour
+    # épouser deux pics : `segments − 1` par horaire retenu, comme le compte le
+    # validateur. Une contrainte DURE — le gérant l'a posée pour qu'elle tienne.
+    split_cap = weekly_split_cap(problem)
+    if split_cap is not None:
+        splits_by_employee: dict[int, dict[int, float]] = {}
+        for shift in shifts:
+            if len(shift.segments) > 1:
+                splits_by_employee.setdefault(shift.employee_index, {})[shift.index] = float(
+                    len(shift.segments) - 1
+                )
+        for coefficients in splits_by_employee.values():
+            rows.add(coefficients, -np.inf, float(split_cap))
 
     # ── Rest between consecutive worked days ────────────────────────────────
     rest = int(rules["minimumRestMinutes"])
