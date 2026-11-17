@@ -44,6 +44,7 @@ function problemFor(options: {
   const prepared = preparePlanningGeneration({
     savedPlannings: [],
     absences: [],
+    paidLeaveCampaigns: [],
     store: storeConfig(),
     employees: options.employees,
     sectors: options.sectors,

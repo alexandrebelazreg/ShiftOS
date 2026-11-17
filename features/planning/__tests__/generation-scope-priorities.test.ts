@@ -66,6 +66,7 @@ describe("périmètre multi-secteur — priorités salarié", () => {
       // Aucune semaine publiée : ces tests ne portent pas sur l'équité.
       savedPlannings: [],
       absences: [],
+      paidLeaveCampaigns: [],
       store: sectorStoreConfig(),
       employees: members,
       sectors: [fruitSector, charcuterieSector],

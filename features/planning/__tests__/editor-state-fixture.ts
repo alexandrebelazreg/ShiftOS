@@ -43,6 +43,7 @@ export function editorStateFixture(options: {
     // Aucune semaine publiée : ces tests ne portent pas sur l'équité.
     savedPlannings: [],
     absences: [],
+    paidLeaveCampaigns: [],
     store: options.store,
     employees: options.employees,
     scope: options.scope,

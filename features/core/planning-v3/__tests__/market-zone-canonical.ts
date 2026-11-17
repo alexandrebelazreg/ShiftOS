@@ -50,6 +50,7 @@ export function buildMarketZoneCanonicalProblem(): PlanningProblemV3 {
     // Aucune semaine publiée : ces tests ne portent pas sur l'équité.
     savedPlannings: [],
     absences: [],
+    paidLeaveCampaigns: [],
     store: sectorStoreConfig(),
     employees,
     sectors,

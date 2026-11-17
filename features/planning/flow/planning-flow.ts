@@ -42,6 +42,8 @@ import {
   weeklyTargetAfterAbsences,
 } from "@/features/planning/flow/absence-target"
 import type { AbsenceRecord } from "@/features/absences/types/absence-record"
+import { validatedPaidLeaveAbsences } from "@/features/paid-leave/dashboard/validated-paid-leave"
+import type { PaidLeaveCampaign } from "@/features/paid-leave/models/paid-leave-campaign"
 
 function brand<T>(value: string): T {
   return value as unknown as T
@@ -92,6 +94,17 @@ export interface PlanningFlowRequest {
    * tableau vide est la façon de dire « personne n'est absent ».
    */
   readonly absences: readonly AbsenceRecord[]
+  /**
+   * Les campagnes de congés payés. Seules leurs semaines VALIDÉES comptent.
+   *
+   * OBLIGATOIRE, pour la troisième fois la même raison : une semaine accordée
+   * en campagne n'est PAS une absence saisie, elle ne vit que dans la campagne.
+   * L'écran du planning ne lisait que les absences — un salarié en congés
+   * validés était planifié sur toute sa semaine (Drive, S48, 17/11/2026),
+   * pendant que les écrans Absences et Permanences le montraient en congés.
+   * Le tableau vide dit « aucune campagne ».
+   */
+  readonly paidLeaveCampaigns: readonly PaidLeaveCampaign[]
 }
 
 /**
@@ -189,8 +202,10 @@ export function preparePlanningGeneration(
       },
       employees: planningEmployees,
       demand,
+      // Les absences saisies ET les semaines de congés validées : pour le
+      // planning, les deux disent la même chose — cette personne n'est pas là.
       absences: planningAbsences(
-        request.absences,
+        [...request.absences, ...validatedPaidLeaveAbsences(request.paidLeaveCampaigns)],
         new Set(planningEmployees.map((employee) => employee.id)),
         request.scope.period
       ),

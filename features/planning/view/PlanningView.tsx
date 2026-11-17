@@ -8,6 +8,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 
 import { useEmployees } from "@/features/employees/hooks/useEmployees"
 import { absenceService } from "@/features/absences/services/absence.service"
+import { paidLeaveStore } from "@/features/paid-leave/persistence/paid-leave.store"
 import type { StoreConfig } from "@/features/store/schemas/store.schema"
 import {
   preparePlanningGeneration,
@@ -483,6 +484,10 @@ export function PlanningView({
     // aucune : un congé posé après une première génération ne retirait personne,
     // et « Régénérer » replanifiait le salarié pendant ses vacances.
     const absences = await absenceService.list()
+    // Et les campagnes de congés : une semaine accordée en campagne ne figure
+    // dans aucune absence saisie, et sans elles le salarié était planifié
+    // pendant ses congés validés.
+    const paidLeaveCampaigns = await paidLeaveStore.list()
 
     const prepared = preparePlanningGeneration({
       store: initialStore,
@@ -492,6 +497,7 @@ export function PlanningView({
       savedPlannings,
       holidayPlan,
       absences,
+      paidLeaveCampaigns,
     })
     if (prepared.status === "error") {
       setV3({

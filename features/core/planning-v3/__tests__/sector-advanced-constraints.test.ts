@@ -66,6 +66,7 @@ function throughTheApplication(sector: SectorDemandConfiguration): PlanningProbl
     // Aucune semaine publiée : ces tests ne portent pas sur l'équité.
     savedPlannings: [],
     absences: [],
+    paidLeaveCampaigns: [],
     store: storeConfig(),
     employees: smallSectorEmployees(),
     sectors: [sector],
@@ -152,6 +153,7 @@ describe("secteur — rétrocompatibilité", () => {
       // Aucune semaine publiée : ces tests ne portent pas sur l'équité.
       savedPlannings: [],
       absences: [],
+      paidLeaveCampaigns: [],
       store: sectorStoreConfig(),
       employees,
       sectors: [sector],

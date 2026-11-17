@@ -4,6 +4,7 @@ import type { HolidayPlanEntry, IsoDate } from "@/features/core/models"
 import { buildPlanningProblemV3 } from "@/features/core/planning-v3/problem-builder"
 import type { AbsenceRecord } from "@/features/absences/types/absence-record"
 import type { EmployeeRecord } from "@/features/employees/types/employee.types"
+import type { PaidLeaveCampaign } from "@/features/paid-leave/models/paid-leave-campaign"
 import {
   employee,
   SMALL_SECTOR_SCOPE,
@@ -39,10 +40,12 @@ function problemFor(options: {
   readonly employees?: readonly EmployeeRecord[]
   readonly absences?: readonly AbsenceRecord[]
   readonly holidayPlan?: readonly HolidayPlanEntry[]
+  readonly paidLeaveCampaigns?: readonly PaidLeaveCampaign[]
 }) {
   const prepared = preparePlanningGeneration({
     savedPlannings: [],
     absences: options.absences ?? [],
+    paidLeaveCampaigns: options.paidLeaveCampaigns ?? [],
     ...(options.holidayPlan ? { holidayPlan: options.holidayPlan } : {}),
     store: storeConfig(),
     employees: options.employees ?? smallSectorEmployees(),
@@ -83,6 +86,42 @@ describe("les absences dans la génération", () => {
     expect(
       built.problem.employeeDays.filter((day) => String(day.employeeId) === "e1" && day.available)
     ).toEqual([])
+  })
+
+  /**
+   * Une semaine accordée en CAMPAGNE n'est pas une absence saisie : elle ne vit
+   * que dans la campagne. L'écran du planning ne lisait que les absences, et
+   * un salarié en congés validés était planifié toute sa semaine (Drive, S48).
+   */
+  it("retire de la semaine un salarié en congés validés dans une campagne", () => {
+    const campaign = {
+      id: "ete",
+      validatedSnapshot: {
+        validatedAt: "2026-04-01T10:00:00.000Z",
+        grants: { e1: ["2026-W28"] },
+        reinforcementAllocations: [],
+        fullFirstChoiceEmployeeIds: [],
+      },
+    } as unknown as PaidLeaveCampaign
+
+    const built = problemFor({ paidLeaveCampaigns: [campaign] })
+    if (!built.ok) throw new Error(built.errors.map((error) => error.message).join(" | "))
+
+    const e1 = built.problem.employees.find((entry) => String(entry.id) === "e1")
+    expect(e1?.contractMinutes).toBe(0)
+    expect(
+      built.problem.employeeDays.filter((day) => String(day.employeeId) === "e1" && day.available)
+    ).toEqual([])
+  })
+
+  it("ignore une campagne encore en arbitrage : ce n'est pas un congé, c'est une hypothèse", () => {
+    const draft = {
+      id: "brouillon",
+      validatedSnapshot: null,
+      grants: { e1: ["2026-W28"] },
+    } as unknown as PaidLeaveCampaign
+
+    expect(problemFor({ paidLeaveCampaigns: [draft] })).toEqual(problemFor({}))
   })
 
   it("ne change rien sans absence — la production ne bouge pas", () => {

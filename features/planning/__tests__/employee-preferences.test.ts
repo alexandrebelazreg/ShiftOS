@@ -27,6 +27,7 @@ function problemFor(employees: readonly EmployeeRecord[]) {
   const prepared = preparePlanningGeneration({
     savedPlannings: [],
     absences: [],
+    paidLeaveCampaigns: [],
     store: storeConfig(),
     employees,
     sectors: [smallSector()],

@@ -46,6 +46,7 @@ function problemFor(sector: ReturnType<typeof smallSector>, holidayPlan: readonl
   const prepared = preparePlanningGeneration({
     savedPlannings: [],
     absences: [],
+    paidLeaveCampaigns: [],
     store: storeConfig({
       openingHours: storeConfig().openingHours.map((day) =>
         day.closed ? day : { ...day, opensAt: "06:00", closesAt: "17:00" }

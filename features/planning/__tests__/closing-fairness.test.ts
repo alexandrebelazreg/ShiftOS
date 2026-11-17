@@ -651,6 +651,7 @@ describe("le joint — l'historique arrive-t-il vraiment jusqu'au problème", ()
       scope: SMALL_SECTOR_SCOPE,
       savedPlannings,
       absences: [],
+      paidLeaveCampaigns: [],
     })
 
   it("porte l'historique jusqu'à l'entrée du problème", () => {
