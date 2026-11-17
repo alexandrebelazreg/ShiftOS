@@ -61,6 +61,20 @@ export function assign(
   return { ...month, assignments, rest: withoutRestOn(month.rest, date, employeeId) }
 }
 
+/**
+ * Quelqu'un qui n'est pas au magasin ce jour-là — en formation — ne tient ni
+ * l'ouverture ni la fermeture, et n'est pas non plus « de repos ». Ses cases du
+ * jour se vident : elles restent à pourvoir, et c'est au gérant de dire qui les
+ * reprend.
+ */
+export function awayOn(month: PermanenceMonth, date: IsoDate, employeeId: string): PermanenceMonth {
+  return {
+    ...month,
+    assignments: withoutPersonOn(month.assignments, date, employeeId),
+    rest: withoutRestOn(month.rest, date, employeeId),
+  }
+}
+
 /** Les mêmes affectations, sans celles de cette personne ce jour-là. */
 function withoutPersonOn(
   assignments: Readonly<Record<string, string>>,

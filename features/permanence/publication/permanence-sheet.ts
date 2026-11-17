@@ -1,6 +1,8 @@
+import type { IsoDate } from "@/features/core/models"
 import { WEEK_DAY_LABELS } from "@/features/employees/utils/employee.labels"
 import type { PermanenceCalendar } from "@/features/permanence/calendar/permanence-calendar"
 import type { PermanenceMember } from "@/features/permanence/domain/permanence-roster"
+import type { PermanenceTraining } from "@/features/permanence/domain/permanence-training"
 import {
   permanenceSlotKey,
   type PermanenceMonth,
@@ -49,6 +51,12 @@ export interface PermanenceSheetWeek {
   readonly closing: readonly PermanenceSheetCell[]
   /** Les noms en repos, par journée — plusieurs par case. */
   readonly rest: readonly (readonly string[])[]
+  /**
+   * Les noms en formation, par journée. `null` quand la semaine n'en compte
+   * aucune : la ligne n'est alors pas imprimée, et le mois continue de tenir
+   * sur UNE page — six lignes vides de plus l'auraient poussé sur deux.
+   */
+  readonly training: readonly (readonly string[])[] | null
   /** Les congés de la semaine, lus dans les campagnes validées. */
   readonly paidLeave: readonly string[]
   readonly onCall: string | null
@@ -73,6 +81,7 @@ export function buildPermanenceSheet({
   month,
   roster,
   paidLeaveByWeek,
+  trainingByDate = new Map(),
   storeName,
   printedAtLabel,
 }: {
@@ -80,6 +89,7 @@ export function buildPermanenceSheet({
   readonly month: PermanenceMonth
   readonly roster: readonly PermanenceMember[]
   readonly paidLeaveByWeek: ReadonlyMap<string, readonly string[]>
+  readonly trainingByDate?: ReadonlyMap<IsoDate, readonly PermanenceTraining[]>
   readonly storeName: string
   readonly printedAtLabel: string
 }): PermanenceSheetVM {
@@ -102,6 +112,13 @@ export function buildPermanenceSheet({
 
   const weeks: PermanenceSheetWeek[] = calendar.weeks.map((week) => {
     const onCall = month.weeks[week.key]?.onCallEmployeeId ?? null
+    const training = week.days.map((day) =>
+      day.inMonth
+        ? (trainingByDate.get(day.date) ?? [])
+            .filter((entry) => roster.some((member) => member.employeeId === entry.employeeId))
+            .map((entry) => shortNameOf(entry.employeeId))
+        : []
+    )
     return {
       label: `S${week.number}`,
       days: week.days.map((day) => ({
@@ -116,6 +133,7 @@ export function buildPermanenceSheet({
       rest: week.days.map((day) =>
         day.inMonth ? (month.rest[day.date] ?? []).map(shortNameOf) : []
       ),
+      training: training.some((names) => names.length > 0) ? training : null,
       paidLeave: (paidLeaveByWeek.get(week.key) ?? [])
         .filter((employeeId) => roster.some((member) => member.employeeId === employeeId))
         .map(shortNameOf),

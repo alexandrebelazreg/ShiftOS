@@ -5,6 +5,7 @@ import type { WeekDay } from "@/features/core/models"
 import { buildPermanenceCalendar } from "@/features/permanence/calendar/permanence-calendar"
 import { PermanenceMonthGrid } from "@/features/permanence/components/PermanenceMonthGrid"
 import type { PermanenceMember } from "@/features/permanence/domain/permanence-roster"
+import type { PermanenceTraining } from "@/features/permanence/domain/permanence-training"
 import {
   emptyPermanenceMonth,
   permanenceSlotKey,
@@ -52,7 +53,8 @@ const noop = () => undefined
 function render(
   month: PermanenceMonth,
   calendar = january(),
-  leave: ReadonlyMap<string, readonly string[]> = new Map()
+  leave: ReadonlyMap<string, readonly string[]> = new Map(),
+  training: ReadonlyMap<string, readonly PermanenceTraining[]> = new Map()
 ): string {
   return renderToStaticMarkup(
     <PermanenceMonthGrid
@@ -60,6 +62,9 @@ function render(
       month={month}
       roster={roster}
       paidLeaveByWeek={leave}
+      trainingByDate={training}
+      onAddTraining={noop}
+      onRemoveTraining={noop}
       onAssign={noop}
       onToggleRest={noop}
       onOnCall={noop}
@@ -96,6 +101,7 @@ describe("la grille des permanences", () => {
 
     expect(markup.indexOf("Ouverture")).toBeLessThan(markup.indexOf("Fermeture"))
     expect(markup.indexOf("Fermeture")).toBeLessThan(markup.indexOf("Repos"))
+    expect(markup.indexOf(">Repos<")).toBeLessThan(markup.indexOf(">Formation<"))
   })
 
   it("garde les colonnes CP et Astreinte de la feuille, sur toute la hauteur de la bande", () => {
@@ -104,8 +110,34 @@ describe("la grille des permanences", () => {
     expect(markup).toContain(">CP</th>")
     expect(markup).toContain(">Astreinte</th>")
     // Congés et astreinte se posent à la semaine : leurs cases couvrent les
-    // trois lignes plutôt que d'être répétées trois fois.
-    expect(markup.match(/rowspan="3"/gi)).toHaveLength(10)
+    // quatre lignes plutôt que d'être répétées quatre fois.
+    expect(markup.match(/rowspan="4"/gi)).toHaveLength(10)
+  })
+
+  it("propose de poser une formation chaque jour du mois, et la montre une fois posée", () => {
+    const markup = render(
+      blank,
+      january(),
+      new Map(),
+      new Map([["2026-01-06", [{ absenceId: "f1", employeeId: "a", removable: true }]]])
+    )
+
+    expect(markup).toContain('aria-label="Ajouter une formation le 5/01"')
+    expect(markup).toContain('aria-label="Retirer la formation de Adeline le 6/01"')
+  })
+
+  it("ne propose pas de retirer d’ici une formation de plusieurs jours", () => {
+    // La retirer annulerait aussi les autres journées, invisibles depuis la case.
+    const markup = render(
+      blank,
+      january(),
+      new Map(),
+      new Map([["2026-01-06", [{ absenceId: "f1", employeeId: "a", removable: false }]]])
+    )
+
+    expect(markup).toContain("Adeline")
+    expect(markup).not.toContain("Retirer la formation")
+    expect(markup).toContain("se corrige dans l’écran Absences")
   })
 
   it("remplit la colonne CP depuis les congés, sans rien à saisir", () => {

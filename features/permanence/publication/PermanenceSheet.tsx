@@ -92,7 +92,7 @@ export function PermanenceSheet({ sheet }: { readonly sheet: PermanenceSheetVM }
             <p className="truncate text-base font-bold uppercase tracking-wide">
               {sheet.storeName}
             </p>
-            <p className="text-[10px] text-neutral-600">Ouverture · Fermeture · Repos</p>
+            <p className="text-[10px] text-neutral-600">Ouverture · Fermeture · Repos · Formation</p>
           </div>
           <div className="text-center">
             <p className="text-lg font-bold">Permanences · {sheet.monthLabel}</p>
@@ -212,13 +212,13 @@ function WeekBand({ week }: { readonly week: PermanenceSheetWeek }) {
               par la PREMIÈRE ligne — un `rowSpan` parti de la dernière
               déborderait sous le tableau. */}
           <td
-            rowSpan={3}
+            rowSpan={week.training ? 4 : 3}
             className="border border-neutral-400 px-1 py-0.5 text-center align-middle text-[9px]"
           >
             {week.paidLeave.length > 0 ? week.paidLeave.join(", ") : "—"}
           </td>
           <td
-            rowSpan={3}
+            rowSpan={week.training ? 4 : 3}
             className="border border-neutral-400 px-1 py-0.5 text-center align-middle text-[9px] font-medium"
           >
             {week.onCall ?? "—"}
@@ -241,6 +241,24 @@ function WeekBand({ week }: { readonly week: PermanenceSheetWeek }) {
             </td>
           ))}
         </tr>
+        {week.training ? (
+          <tr>
+            <th className="border border-neutral-400 bg-sky-100 px-1 py-0.5 text-left text-[9px] font-medium">
+              Formation
+            </th>
+            {week.training.map((names, index) => (
+              <td
+                key={week.days[index].label}
+                className={cn(
+                  "h-[5mm] border border-neutral-400 px-0.5 text-center text-[9px] leading-tight",
+                  !week.days[index].inMonth && "bg-neutral-200"
+                )}
+              >
+                {names.join(", ")}
+              </td>
+            ))}
+          </tr>
+        ) : null}
       </tbody>
     </table>
   )

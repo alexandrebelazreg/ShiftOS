@@ -1,12 +1,17 @@
 "use client"
 
 import { ChevronLeft, ChevronRight, Printer, Wand2 } from "lucide-react"
-import { useCallback, useEffect, useMemo, useState } from "react"
+import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 
 import { PageHeader } from "@/components/layout/page-header"
 import { Button } from "@/components/ui/button"
 import type { IsoDate, WeekDay } from "@/features/core/models"
 import { weekDayOf } from "@/features/core/shared"
+import {
+  DEFAULT_ABSENCE_RULES,
+  type AbsenceRules,
+} from "@/features/absences/models/absence-rules"
+import { absenceRulesStore } from "@/features/absences/persistence/absence-rules.store"
 import { absenceService } from "@/features/absences/services/absence.service"
 import type { AbsenceRecord } from "@/features/absences/types/absence-record"
 import { useEmployees } from "@/features/employees/hooks/useEmployees"
@@ -24,13 +29,14 @@ import {
 import { PermanenceMonthGrid } from "@/features/permanence/components/PermanenceMonthGrid"
 import { PermanenceRecapTable } from "@/features/permanence/components/PermanenceRecapTable"
 import { PermanenceYearRecap } from "@/features/permanence/components/PermanenceYearRecap"
-import { assign, toggleRest } from "@/features/permanence/domain/permanence-edits"
+import { assign, awayOn, toggleRest } from "@/features/permanence/domain/permanence-edits"
 import { paidLeaveByWeek } from "@/features/permanence/domain/permanence-leave"
 import {
   absentOn,
   permanenceRoster,
   type PermanenceMember,
 } from "@/features/permanence/domain/permanence-roster"
+import { trainingByDate, trainingDraft } from "@/features/permanence/domain/permanence-training"
 import { generatePermanenceMonth } from "@/features/permanence/generation/generate-permanence-month"
 import type { PermanenceLoad } from "@/features/permanence/models/permanence-load"
 import {
@@ -73,6 +79,7 @@ export function PermanenceView({ initialStore }: { readonly initialStore: StoreC
   const [month, setMonth] = useState(() => today.getMonth() + 1)
   const [holidays, setHolidays] = useState<StoredHolidays | null>(null)
   const [absences, setAbsences] = useState<readonly AbsenceRecord[]>([])
+  const [absenceRules, setAbsenceRules] = useState<AbsenceRules>(DEFAULT_ABSENCE_RULES)
   const [campaigns, setCampaigns] = useState<readonly PaidLeaveCampaign[]>([])
   const [sheet, setSheet] = useState<PermanenceMonth | null>(null)
   const { failure, guard } = useSaveFailure()
@@ -85,6 +92,9 @@ export function PermanenceView({ initialStore }: { readonly initialStore: StoreC
       // remplir sa colonne « CP » et pour ne confier les clés à personne qui
       // soit en vacances cette semaine-là.
       void paidLeaveStore.list().then(setCampaigns)
+      // Une formation posée d'ici est une absence comme une autre : elle suit
+      // les règles réglées dans les paramètres des absences.
+      void absenceRulesStore.read().then(setAbsenceRules)
     })
     absenceService.list().then(setAbsences)
   }, [])
@@ -168,6 +178,16 @@ export function PermanenceView({ initialStore }: { readonly initialStore: StoreC
     [absences, campaigns]
   )
 
+  /** La ligne « Formation » : les absences à ce motif, journée par journée. */
+  const trainings = useMemo(
+    () =>
+      trainingByDate(
+        absences,
+        calendar.weeks.flatMap((week) => week.days.filter((day) => day.inMonth).map((day) => day.date))
+      ),
+    [absences, calendar]
+  )
+
   const recap = useMemo(
     () => buildPermanenceRecap(sheet ? [sheet] : [], roster),
     [sheet, roster]
@@ -192,6 +212,7 @@ export function PermanenceView({ initialStore }: { readonly initialStore: StoreC
             month: sheet,
             roster,
             paidLeaveByWeek: leaveByWeek,
+            trainingByDate: trainings,
             storeName: initialStore?.name ?? "Magasin",
             printedAtLabel: signPrintedLabel(
               `Imprimé le ${new Intl.DateTimeFormat("fr-FR", { dateStyle: "long" }).format(new Date())}`,
@@ -199,7 +220,7 @@ export function PermanenceView({ initialStore }: { readonly initialStore: StoreC
             ),
           })
         : null,
-    [sheet, calendar, roster, leaveByWeek, initialStore, printedBy]
+    [sheet, calendar, roster, leaveByWeek, trainings, initialStore, printedBy]
   )
 
   /** Écrire le mois, et l'écrire une seule fois — l'état et le dépôt ne divergent pas. */
@@ -215,6 +236,46 @@ export function PermanenceView({ initialStore }: { readonly initialStore: StoreC
     },
     [guard]
   )
+
+  /**
+   * Le mois tel qu'il est À CET INSTANT.
+   *
+   * Poser une formation attend la base avant de vider les cases du jour ; une
+   * retouche faite pendant cette attente serait effacée si l'on repartait du
+   * mois tel qu'il était au clic.
+   */
+  const sheetRef = useRef(sheet)
+  useEffect(() => {
+    sheetRef.current = sheet
+  }, [sheet])
+
+  /**
+   * Poser une formation : l'absence d'abord, la feuille ensuite.
+   *
+   * Dans cet ordre parce que l'absence est la vérité : si elle n'est pas
+   * enregistrée, la personne garde ses cases plutôt que de les perdre pour une
+   * formation qui n'existe nulle part.
+   */
+  const addTraining = async (date: IsoDate, employeeId: string) => {
+    const today = new Date().toISOString().slice(0, 10)
+    const written = await guard(() =>
+      absenceService.create(trainingDraft(employeeId, date), today, absenceRules)
+    )
+    if (written === null) return
+    setAbsences((current) => [...current, written])
+    const current = sheetRef.current
+    if (current) write(awayOn(current, date, employeeId))
+  }
+
+  /** Retirer une formation l'ANNULE : elle reste lisible, barrée, dans l'écran des absences. */
+  const removeTraining = async (absenceId: string) => {
+    const today = new Date().toISOString().slice(0, 10)
+    const cancelled = await guard(() => absenceService.cancel(absenceId, today))
+    if (cancelled === null) return
+    setAbsences((current) =>
+      current.map((absence) => (absence.id === cancelled.id ? cancelled : absence))
+    )
+  }
 
   const generate = () => {
     if (!sheet) return
@@ -298,9 +359,12 @@ export function PermanenceView({ initialStore }: { readonly initialStore: StoreC
         month={sheet}
         roster={roster}
         paidLeaveByWeek={leaveByWeek}
+        trainingByDate={trainings}
         onAssign={(date, role, employeeId) => write(assign(sheet, date, role, employeeId))}
         onToggleRest={(date, employeeId) => write(toggleRest(sheet, date, employeeId))}
         onOnCall={setOnCall}
+        onAddTraining={(date, employeeId) => void addTraining(date, employeeId)}
+        onRemoveTraining={(absenceId) => void removeTraining(absenceId)}
       />
 
       <PermanenceRecapTable

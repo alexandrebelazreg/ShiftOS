@@ -4,6 +4,7 @@ import { describe, expect, it } from "vitest"
 import type { WeekDay } from "@/features/core/models"
 import { buildPermanenceCalendar } from "@/features/permanence/calendar/permanence-calendar"
 import type { PermanenceMember } from "@/features/permanence/domain/permanence-roster"
+import type { PermanenceTraining } from "@/features/permanence/domain/permanence-training"
 import {
   emptyPermanenceMonth,
   permanenceSlotKey,
@@ -63,13 +64,15 @@ function fullMonth(calendar = january()): PermanenceMonth {
 const build = (
   month: PermanenceMonth,
   calendar = january(),
-  leave: ReadonlyMap<string, readonly string[]> = new Map()
+  leave: ReadonlyMap<string, readonly string[]> = new Map(),
+  training: ReadonlyMap<string, readonly PermanenceTraining[]> = new Map()
 ) =>
   buildPermanenceSheet({
     calendar,
     month,
     roster,
     paidLeaveByWeek: leave,
+    trainingByDate: training,
     storeName: "Carrefour Market Test",
     printedAtLabel: "Imprimé le 17 août 2026",
   })
@@ -154,6 +157,23 @@ describe("la feuille de permanence, rendue", () => {
     expect(markup.match(/rowspan="3"/gi)).toHaveLength(10)
     expect(markup).toContain(">S1<")
     expect(markup).toContain(">S5<")
+  })
+
+  it("n’imprime la ligne Formation que sur les semaines qui en ont une", () => {
+    // Six lignes vides de plus pousseraient le mois sur une deuxième page.
+    expect(render(fullMonth())).not.toContain(">Formation<")
+
+    const markup = render(
+      fullMonth(),
+      january(),
+      new Map(),
+      new Map([["2026-01-06", [{ absenceId: "f1", employeeId: "b", removable: true }]]])
+    )
+
+    expect(markup.match(/>Formation</g)).toHaveLength(1)
+    // La semaine qui en a une étend ses congés et son astreinte sur quatre lignes.
+    expect(markup.match(/rowspan="4"/gi)).toHaveLength(2)
+    expect(markup.match(/rowspan="3"/gi)).toHaveLength(8)
   })
 
   it("ne sort PAS le récapitulatif au papier", () => {

@@ -9,6 +9,7 @@ import type {
   PermanenceDay,
 } from "@/features/permanence/calendar/permanence-calendar"
 import type { PermanenceMember } from "@/features/permanence/domain/permanence-roster"
+import type { PermanenceTraining } from "@/features/permanence/domain/permanence-training"
 import { weekSlotsOf } from "@/features/permanence/persistence/permanence-repository"
 import {
   PERMANENCE_ROLE_LABELS,
@@ -37,18 +38,25 @@ export function PermanenceMonthGrid({
   month,
   roster,
   paidLeaveByWeek,
+  trainingByDate,
   onAssign,
   onToggleRest,
   onOnCall,
+  onAddTraining,
+  onRemoveTraining,
 }: {
   readonly calendar: PermanenceCalendar
   readonly month: PermanenceMonth
   readonly roster: readonly PermanenceMember[]
   /** Qui est en congés validés, semaine par semaine — lu, jamais saisi. */
   readonly paidLeaveByWeek: ReadonlyMap<string, readonly string[]>
+  /** Qui est en formation, jour par jour — des absences, lues et écrites comme telles. */
+  readonly trainingByDate: ReadonlyMap<IsoDate, readonly PermanenceTraining[]>
   readonly onAssign: (date: IsoDate, role: PermanenceRole, employeeId: string | null) => void
   readonly onToggleRest: (date: IsoDate, employeeId: string) => void
   readonly onOnCall: (weekKey: string, employeeId: string | null) => void
+  readonly onAddTraining: (date: IsoDate, employeeId: string) => void
+  readonly onRemoveTraining: (absenceId: string) => void
 }) {
   return (
     <div className="overflow-x-auto rounded-lg border">
@@ -146,10 +154,10 @@ export function PermanenceMonthGrid({
                   ))}
                   {role === "opening" ? (
                     <>
-                      <td rowSpan={3} className="border-b border-l p-0.5 align-top">
+                      <td rowSpan={4} className="border-b border-l p-0.5 align-top">
                         <PaidLeaveCell roster={roster} onLeave={onLeave} />
                       </td>
-                      <td rowSpan={3} className="border-b border-l p-0.5 align-top">
+                      <td rowSpan={4} className="border-b border-l p-0.5 align-top">
                         <PersonSelect
                           roster={roster}
                           value={slots.onCallEmployeeId}
@@ -177,6 +185,34 @@ export function PermanenceMonthGrid({
                         roster={roster}
                         resting={month.rest[day.date] ?? []}
                         onToggle={(employeeId) => onToggleRest(day.date, employeeId)}
+                        dayLabel={day.label}
+                      />
+                    ) : null}
+                  </td>
+                ))}
+              </tr>
+
+              {/* LA FORMATION SUIT LE REPOS : les deux disent « pas aux clés ce
+                  jour-là », mais pour deux raisons que la paie ne confond pas —
+                  une formation est du travail effectif, un repos non. */}
+              <tr>
+                <th className="border-b border-r bg-muted/40 px-2 py-0.5 text-left text-xs font-medium">Formation</th>
+                {week.days.map((day) => (
+                  <td
+                    key={day.date}
+                    className={cn(
+                      "border-b border-r p-0.5 align-top last:border-r-0",
+                      day.inMonth ? null : "bg-muted/60"
+                    )}
+                  >
+                    {day.inMonth ? (
+                      <TrainingCell
+                        roster={roster}
+                        trainings={(trainingByDate.get(day.date) ?? []).filter((training) =>
+                          roster.some((member) => member.employeeId === training.employeeId)
+                        )}
+                        onAdd={(employeeId) => onAddTraining(day.date, employeeId)}
+                        onRemove={onRemoveTraining}
                         dayLabel={day.label}
                       />
                     ) : null}
@@ -360,6 +396,87 @@ function RestCell({
           className="h-7 w-full rounded-md border border-dashed border-input bg-transparent px-1.5 text-xs text-muted-foreground"
         >
           <option value="">+ repos</option>
+          {available.map((member) => (
+            <option key={member.employeeId} value={member.employeeId}>
+              {member.shortName}
+            </option>
+          ))}
+        </select>
+      ) : null}
+    </div>
+  )
+}
+
+/**
+ * Les formations d'une journée : des pastilles, comme les repos, mais chacune
+ * est une ABSENCE enregistrée — l'ajouter l'écrit dans l'écran des absences,
+ * et la retirer l'y annule.
+ *
+ * Une formation de plusieurs jours n'a pas de croix : la retirer d'ici
+ * annulerait aussi les autres journées, qu'on ne voit pas depuis cette case.
+ */
+function TrainingCell({
+  roster,
+  trainings,
+  onAdd,
+  onRemove,
+  dayLabel,
+}: {
+  readonly roster: readonly PermanenceMember[]
+  readonly trainings: readonly PermanenceTraining[]
+  readonly onAdd: (employeeId: string) => void
+  readonly onRemove: (absenceId: string) => void
+  readonly dayLabel: string
+}) {
+  const available = roster.filter(
+    (member) => !trainings.some((training) => training.employeeId === member.employeeId)
+  )
+  const pill =
+    "flex max-w-full items-center gap-1 rounded-full border border-sky-300 bg-sky-50 px-2 py-0.5 text-xs text-sky-950 dark:border-sky-800 dark:bg-sky-950/40 dark:text-sky-50"
+
+  return (
+    <div className="space-y-1">
+      {trainings.length > 0 ? (
+        <ul className="flex flex-wrap gap-1">
+          {trainings.map((training) => {
+            const name =
+              roster.find((entry) => entry.employeeId === training.employeeId)?.shortName ??
+              "Hors tour"
+            return (
+              <li key={training.absenceId}>
+                {training.removable ? (
+                  <button
+                    type="button"
+                    onClick={() => onRemove(training.absenceId)}
+                    className={cn(pill, "hover:bg-sky-100 dark:hover:bg-sky-900/60")}
+                    aria-label={`Retirer la formation de ${name} le ${dayLabel}`}
+                  >
+                    <span className="min-w-0 truncate">{name}</span>
+                    <X className="size-3 shrink-0" aria-hidden />
+                  </button>
+                ) : (
+                  <span
+                    className={pill}
+                    title="Formation de plusieurs jours : elle se corrige dans l’écran Absences."
+                  >
+                    <span className="min-w-0 truncate">{name}</span>
+                  </span>
+                )}
+              </li>
+            )
+          })}
+        </ul>
+      ) : null}
+      {available.length > 0 ? (
+        <select
+          aria-label={`Ajouter une formation le ${dayLabel}`}
+          value=""
+          onChange={(event) => {
+            if (event.target.value !== "") onAdd(event.target.value)
+          }}
+          className="h-7 w-full rounded-md border border-dashed border-input bg-transparent px-1.5 text-xs text-muted-foreground"
+        >
+          <option value="">+ formation</option>
           {available.map((member) => (
             <option key={member.employeeId} value={member.employeeId}>
               {member.shortName}
