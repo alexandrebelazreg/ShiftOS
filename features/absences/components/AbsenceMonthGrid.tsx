@@ -105,26 +105,34 @@ export function AbsenceMonthGrid({
   }
 
   return (
-    <div className="overflow-x-auto">
+    // LE TABLEAU DÉFILE DANS SON CADRE, pas dans la page. Une équipe de trente
+    // personnes descend sous l'écran, et l'en-tête des jours partait avec elle :
+    // on cherchait le 14 en remontant à chaque ligne. Un en-tête collant ne colle
+    // qu'à la boîte qui défile — c'est donc le cadre qui doit défiler, dans les
+    // deux sens, avec les jours figés en haut et les noms figés à gauche.
+    <div className="max-h-[70vh] overflow-auto rounded-md border">
       <table className={cn("w-full border-collapse text-xs", painting && "select-none")}>
-        <thead>
-          <tr>
-            <th className="sticky left-0 z-10 min-w-40 bg-background p-1 text-left font-medium">
+        <thead className="sticky top-0 z-20">
+          <tr className="border-b border-border">
+            {/* Le coin appartient aux deux bords figés : il passe au-dessus des deux. */}
+            <th className="sticky left-0 z-30 min-w-40 bg-background p-1 text-left font-medium">
               Salarié
             </th>
             {month.days.map((day) => (
               <th
                 key={day.date}
                 className={cn(
+                  // Fonds OPAQUES : en défilant, les lignes passent dessous, et
+                  // un fond translucide les laissait apparaître à travers.
                   "w-7 p-1 text-center font-normal",
-                  day.open ? "text-muted-foreground" : "bg-muted/60 text-muted-foreground/60"
+                  day.open ? "bg-background text-muted-foreground" : "bg-muted text-muted-foreground/60"
                 )}
               >
                 <span className="block">{WEEK_DAY_SHORT_LABELS[day.weekDay].charAt(0)}</span>
                 <span className="block font-medium">{day.label}</span>
               </th>
             ))}
-            <th className="w-12 p-1 text-center font-medium">Jours</th>
+            <th className="w-12 bg-background p-1 text-center font-medium">Jours</th>
           </tr>
         </thead>
         <tbody>

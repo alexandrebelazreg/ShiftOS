@@ -7,7 +7,7 @@ import { PageHeader } from "@/components/layout/page-header"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import type { IsoDate } from "@/features/core/models"
-import { weekDayOf } from "@/features/core/shared"
+import { enumerateDates, weekDayOf } from "@/features/core/shared"
 import { useEmployees } from "@/features/employees/hooks/useEmployees"
 import { getFullName } from "@/features/employees/utils/employee.format"
 import { validatedPaidLeaveAbsences } from "@/features/paid-leave/dashboard/validated-paid-leave"
@@ -53,7 +53,10 @@ import { absenceRulesStore } from "@/features/absences/persistence/absence-rules
 import { absenceService, type AbsenceDraft } from "@/features/absences/services/absence.service"
 import {
   ABSENCE_SOURCE_NOTICES,
+  DAY_HALF_LABELS,
+  DAY_HALVES,
   type AbsenceRecord,
+  type DayHalf,
 } from "@/features/absences/types/absence-record"
 
 /**
@@ -83,6 +86,8 @@ export function AbsencesView({ initialStore }: { readonly initialStore: StoreCon
   const [selected, setSelected] = useState<AbsenceRecord | null>(null)
   /** Le motif de la saisie rapide ; `null` tant qu'on ne peint pas. */
   const [paintMotive, setPaintMotive] = useState<string | null>(null)
+  /** La moitié peinte ; `null` : la journée entière. */
+  const [paintHalf, setPaintHalf] = useState<DayHalf | null>(null)
   const { failure, guard } = useSaveFailure()
 
   // `.then` plutôt qu'`await` : poser l'état DANS l'effet, sans frontière
@@ -190,20 +195,46 @@ export function AbsencesView({ initialStore }: { readonly initialStore: StoreCon
     await reload()
   }
 
+  /** Les jours où le magasin ouvre, ce mois-ci. */
+  const openDates = useMemo(
+    () => new Set(monthModel.days.filter((day) => day.open).map((day) => day.date)),
+    [monthModel]
+  )
+
   /**
-   * Une plage peinte sur la grille : une absence d'un motif choisi, journées
-   * entières. Le justificatif attendu se calcule comme au formulaire.
+   * Une plage peinte sur la grille : une absence d'un motif choisi, journée
+   * entière ou demi-journée. Le justificatif attendu se calcule comme au
+   * formulaire.
    */
   const paint = useCallback(
     async (employeeId: string, start: IsoDate, end: IsoDate) => {
       if (paintMotive === null) return
-      const written = await guard(() =>
-        absenceService.create({ employeeId, type: paintMotive, start, end }, today, rules)
-      )
-      if (written === null) return
+      // Une demi-journée ne se porte que sur UNE journée : le modèle ne sait
+      // pas dire « trois matins » en une absence. Une plage de matins devient
+      // donc un matin par jour — ce que le formulaire obligeait à saisir un à
+      // un.
+      const drafts: AbsenceDraft[] =
+        paintHalf === null
+          ? [{ employeeId, type: paintMotive, start, end }]
+          : enumerateDates(start, end)
+              // Un matin d'absence un jour où le magasin est fermé ne veut rien
+              // dire — sauf s'il est le seul jour cliqué, ce qui est un choix.
+              .filter((date) => start === end || openDates.has(date))
+              .map((date) => ({
+              employeeId,
+              type: paintMotive,
+              start: date,
+              end: date,
+              halfDay: paintHalf,
+            }))
+      await guard(async () => {
+        for (const draft of drafts) await absenceService.create(draft, today, rules)
+      })
+      // Relu même en cas d'échec : une plage de matins peut avoir été écrite à
+      // moitié, et l'écran doit montrer ceux qui sont partis.
       await reload()
     },
-    [paintMotive, guard, today, rules, reload]
+    [paintMotive, paintHalf, openDates, guard, today, rules, reload]
   )
 
   async function cancel(id: string) {
@@ -312,12 +343,39 @@ export function AbsencesView({ initialStore }: { readonly initialStore: StoreCon
                 {motive.label}
               </button>
             ))}
-            {paintMotive !== null ? (
-              <span className="text-xs text-muted-foreground">
-                Cliquez une case, ou glissez le long d’une ligne. Recliquez le motif pour arrêter.
-              </span>
-            ) : null}
           </div>
+          {paintMotive !== null ? (
+            <div className="flex flex-wrap items-center gap-2 text-sm">
+              <div
+                role="radiogroup"
+                aria-label="Partie de la journée"
+                className="inline-flex overflow-hidden rounded-md border text-xs"
+              >
+                {([null, ...DAY_HALVES] as const).map((half) => (
+                  <button
+                    key={half ?? "day"}
+                    type="button"
+                    role="radio"
+                    aria-checked={paintHalf === half}
+                    onClick={() => setPaintHalf(half)}
+                    className={cn(
+                      "px-2.5 py-1 not-first:border-l",
+                      paintHalf === half
+                        ? "bg-foreground text-background"
+                        : "text-muted-foreground hover:bg-muted"
+                    )}
+                  >
+                    {half === null ? "Journée" : DAY_HALF_LABELS[half]}
+                  </button>
+                ))}
+              </div>
+              <span className="text-xs text-muted-foreground">
+                Cliquez une case, ou glissez le long d’une ligne
+                {paintHalf === null ? "" : ` (une demi-journée par jour)`}. Recliquez le motif pour
+                arrêter.
+              </span>
+            </div>
+          ) : null}
           <AbsenceMonthGrid
             month={monthModel}
             onPick={(cell) => setSelected(cell.absence)}
