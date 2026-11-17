@@ -1,6 +1,10 @@
 "use client"
 
+import { useEffect, useRef, useState } from "react"
+
 import type { AbsenceMonth, AbsenceMonthCell } from "@/features/absences/calendar/absence-month"
+import { paintRange, type PaintRange } from "@/features/absences/calendar/absence-paint"
+import type { IsoDate } from "@/features/core/models"
 import { WEEK_DAY_SHORT_LABELS } from "@/features/employees/utils/employee.labels"
 import { cn } from "@/lib/utils"
 
@@ -28,18 +32,70 @@ const MOTIVE_CLASSES: Record<string, string> = {
   delegation: "bg-teal-200 text-teal-950 dark:bg-teal-900 dark:text-teal-50",
   unjustified: "bg-zinc-800 text-zinc-50 dark:bg-zinc-200 dark:text-zinc-900",
   paid_leave: "bg-emerald-200 text-emerald-950 dark:bg-emerald-900 dark:text-emerald-50",
+  // Sa propre teinte : il retombait sur celle d'« Autre », la même que les
+  // fériés, et un repos peint se confondait avec un jour férié.
+  rest_day: "bg-indigo-200 text-indigo-950 dark:bg-indigo-900 dark:text-indigo-50",
   other: "bg-amber-200 text-amber-950 dark:bg-amber-900 dark:text-amber-50",
+}
+
+/** La couleur d'un motif — la même dans la grille, la légende et la saisie rapide. */
+export function motiveTone(type: string): string {
+  return MOTIVE_CLASSES[type] ?? MOTIVE_CLASSES.other
+}
+
+/** Le glissé en cours : sur quelle ligne, d'où, jusqu'où. */
+interface Drag {
+  readonly employeeId: string
+  readonly anchor: number
+  readonly hover: number
 }
 
 export function AbsenceMonthGrid({
   month,
   onPick,
+  paintMotive = null,
+  onPaint,
 }: {
   readonly month: AbsenceMonth
-  /** Ouvre le détail d'une absence. Les cases vides ne font rien : la saisie
-      passe par le formulaire, où le motif et le justificatif se décident. */
+  /** Ouvre le détail d'une absence. */
   readonly onPick: (cell: AbsenceMonthCell) => void
+  /**
+   * Le motif de la saisie rapide. `null` : les cases vides ne font rien, et la
+   * saisie passe par le formulaire.
+   */
+  readonly paintMotive?: string | null
+  /** Une plage peinte sur une ligne : UNE absence, du premier au dernier jour. */
+  readonly onPaint?: (employeeId: string, start: IsoDate, end: IsoDate) => void
 }) {
+  const [drag, setDrag] = useState<Drag | null>(null)
+  const dragRef = useRef<Drag | null>(null)
+  const painting = paintMotive !== null && onPaint !== undefined
+
+  const moveDrag = (next: Drag | null) => {
+    dragRef.current = next
+    setDrag(next)
+  }
+
+  // Le bouton relâché N'IMPORTE OÙ termine le glissé — hors de la grille aussi,
+  // sinon une plage commencée puis abandonnée en sortant du tableau resterait
+  // accrochée au pointeur.
+  useEffect(() => {
+    if (!painting) return
+    const release = () => {
+      const current = dragRef.current
+      if (current === null) return
+      dragRef.current = null
+      setDrag(null)
+      const row = month.rows.find((entry) => entry.employeeId === current.employeeId)
+      const range = row ? paintRange(row.cells, current.anchor, current.hover) : null
+      if (row && range && onPaint) {
+        onPaint(row.employeeId, row.cells[range.from].date, row.cells[range.to].date)
+      }
+    }
+    window.addEventListener("pointerup", release)
+    return () => window.removeEventListener("pointerup", release)
+  }, [painting, month, onPaint])
+
   if (month.rows.length === 0) {
     return (
       <p className="rounded-lg border border-dashed p-6 text-sm text-muted-foreground">
@@ -50,7 +106,7 @@ export function AbsenceMonthGrid({
 
   return (
     <div className="overflow-x-auto">
-      <table className="w-full border-collapse text-xs">
+      <table className={cn("w-full border-collapse text-xs", painting && "select-none")}>
         <thead>
           <tr>
             <th className="sticky left-0 z-10 min-w-40 bg-background p-1 text-left font-medium">
@@ -72,7 +128,12 @@ export function AbsenceMonthGrid({
           </tr>
         </thead>
         <tbody>
-          {month.rows.map((row) => (
+          {month.rows.map((row) => {
+            const preview: PaintRange | null =
+              drag !== null && drag.employeeId === row.employeeId
+                ? paintRange(row.cells, drag.anchor, drag.hover)
+                : null
+            return (
             <tr key={row.employeeId} className="border-t border-border">
               <td className="sticky left-0 z-10 truncate bg-background p-1 font-medium">
                 {row.name}
@@ -83,30 +144,92 @@ export function AbsenceMonthGrid({
                   cell={cell}
                   closed={!month.days[index].open}
                   onPick={onPick}
+                  paint={
+                    painting && cell.absence === null
+                      ? {
+                          label: `Poser l’absence de ${row.name} le ${month.days[index].label}`,
+                          selected:
+                            preview !== null && index >= preview.from && index <= preview.to,
+                          tone: motiveTone(paintMotive ?? "other"),
+                          onStart: () =>
+                            moveDrag({ employeeId: row.employeeId, anchor: index, hover: index }),
+                          onEnter: () => {
+                            const current = dragRef.current
+                            if (current?.employeeId === row.employeeId) {
+                              moveDrag({ ...current, hover: index })
+                            }
+                          },
+                          // Le clavier n'a pas de glissé : Entrée pose la journée.
+                          onKeyboard: () => onPaint?.(row.employeeId, cell.date, cell.date),
+                        }
+                      : null
+                  }
                 />
               ))}
               <td className="p-1 text-center tabular-nums text-muted-foreground">
                 {row.daysOff === 0 ? "" : row.daysOff}
               </td>
             </tr>
-          ))}
+            )
+          })}
         </tbody>
       </table>
     </div>
   )
 }
 
+interface PaintHandlers {
+  readonly label: string
+  /** Dans la plage en cours de glissé : la case prend déjà la couleur du motif. */
+  readonly selected: boolean
+  readonly tone: string
+  readonly onStart: () => void
+  readonly onEnter: () => void
+  readonly onKeyboard: () => void
+}
+
 function Cell({
   cell,
   closed,
   onPick,
+  paint,
 }: {
   readonly cell: AbsenceMonthCell
   readonly closed: boolean
   readonly onPick: (cell: AbsenceMonthCell) => void
+  readonly paint: PaintHandlers | null
 }) {
   if (cell.absence === null) {
-    return <td className={cn("h-7 border-l border-border/50", closed && "bg-muted/60")} />
+    if (paint === null) {
+      return <td className={cn("h-7 border-l border-border/50", closed && "bg-muted/60")} />
+    }
+    return (
+      <td className={cn("h-7 border-l border-border/50 p-0", closed && "bg-muted/60")}>
+        <button
+          type="button"
+          aria-label={paint.label}
+          onPointerDown={(event) => {
+            if (event.button !== 0) return
+            // Une cible tactile garde le pointeur pour elle : sans ce
+            // relâchement, glisser au doigt ne quitterait jamais la première case.
+            if (event.currentTarget.hasPointerCapture(event.pointerId)) {
+              event.currentTarget.releasePointerCapture(event.pointerId)
+            }
+            paint.onStart()
+          }}
+          onPointerEnter={paint.onEnter}
+          onClick={(event) => {
+            // `detail === 0` : un clic venu du clavier. Celui de la souris est
+            // déjà traité au relâchement du glissé.
+            if (event.detail === 0) paint.onKeyboard()
+          }}
+          className={cn(
+            "block h-7 w-full cursor-crosshair hover:bg-muted",
+            paint.selected && paint.tone
+          )}
+        />
+      </td>
+    )
   }
 
   const tone = MOTIVE_CLASSES[cell.absence.type] ?? MOTIVE_CLASSES.other

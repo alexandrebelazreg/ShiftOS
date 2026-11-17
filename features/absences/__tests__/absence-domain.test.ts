@@ -298,9 +298,31 @@ describe("le bandeau", () => {
     })
     expect(alerts.onPlannedWeeks).toHaveLength(1)
     expect(alerts.onPlannedWeeks[0].employeeName).toBe("Adeline Roche")
-    expect(alerts.onPlannedWeeks[0].plannings).toEqual([
-      { label: "Semaine 11", published: true },
+    expect(alerts.onPlannedWeeks[0].weeks).toEqual([
+      { periodStart: "2026-03-09", periodEnd: "2026-03-15", published: true },
     ])
+  })
+
+  it("ne cite qu'une fois une semaine planifiée deux fois, brouillon et version affichée", () => {
+    const alerts = buildAbsenceAlerts({
+      today: "2026-03-10",
+      absences: [absence({ id: "a" })],
+      plannings: [planning({ status: "draft" }), planning({ id: "p2" })],
+      employeeNames: names,
+    })
+    expect(alerts.onPlannedWeeks[0].weeks).toEqual([
+      { periodStart: "2026-03-09", periodEnd: "2026-03-15", published: true },
+    ])
+  })
+
+  it("se tait sur une semaine déjà terminée : il n'y a plus rien à y décider", () => {
+    const alerts = buildAbsenceAlerts({
+      today: "2026-03-16",
+      absences: [absence({ id: "a" })],
+      plannings: [planning({})],
+      employeeNames: names,
+    })
+    expect(alerts.onPlannedWeeks).toEqual([])
   })
 
   it("ignore les plannings archivés, sur lesquels plus rien ne se décide", () => {

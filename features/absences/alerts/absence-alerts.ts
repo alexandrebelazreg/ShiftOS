@@ -27,8 +27,22 @@ export interface AbsenceAlerts {
 export interface PlannedCollision {
   readonly absence: AbsenceRecord
   readonly employeeName: string
-  /** Les plannings touchés : leur libellé, et s'ils sont déjà affichés. */
-  readonly plannings: readonly { readonly label: string; readonly published: boolean }[]
+  /**
+   * Les périodes planifiées touchées, UNE fois chacune.
+   *
+   * Par période et non par planning : un brouillon et sa version affichée
+   * couvrent la même semaine, et les énumérer tous deux disait deux fois la
+   * même chose — « Market · 2026-09-07 → 2026-09-13 » trois fois de suite pour
+   * une seule semaine à revoir.
+   */
+  readonly weeks: readonly PlannedWeek[]
+}
+
+export interface PlannedWeek {
+  readonly periodStart: IsoDate
+  readonly periodEnd: IsoDate
+  /** Au moins un planning de cette période est déjà affiché au magasin. */
+  readonly published: boolean
 }
 
 export interface LateProof {
@@ -58,11 +72,14 @@ export function buildAbsenceAlerts({
 
   return {
     onPlannedWeeks: live.flatMap((absence) => {
-      // Un planning archivé est du passé : le signaler ne demanderait aucune
-      // action, et noierait ceux sur lesquels on peut encore agir.
+      // Un planning archivé, ou dont la semaine est TERMINÉE, est du passé : le
+      // signaler ne demanderait aucune action, et noierait ceux sur lesquels on
+      // peut encore agir. Sans cette seconde règle, le bandeau ressortait chaque
+      // arrêt de septembre en novembre.
       const touched = plannings.filter(
         (planning) =>
           planning.status !== "archived" &&
+          planning.periodEnd >= today &&
           absenceOverlaps(absence, planning.periodStart as IsoDate, planning.periodEnd as IsoDate)
       )
       if (touched.length === 0) return []
@@ -70,10 +87,7 @@ export function buildAbsenceAlerts({
         {
           absence,
           employeeName: nameOf(employeeNames, absence.employeeId),
-          plannings: touched.map((planning) => ({
-            label: planning.label,
-            published: planning.status === "published",
-          })),
+          weeks: plannedWeeks(touched),
         },
       ]
     }),
@@ -98,6 +112,29 @@ export function buildAbsenceAlerts({
 
 export function hasAlerts(alerts: AbsenceAlerts): boolean {
   return alerts.onPlannedWeeks.length > 0 || alerts.lateProofs.length > 0
+}
+
+/** Une ligne par période, la plus proche d'abord. */
+function plannedWeeks(plannings: readonly PlanningSummary[]): readonly PlannedWeek[] {
+  const byPeriod = new Map<string, PlannedWeek>()
+  for (const planning of plannings) {
+    const key = `${planning.periodStart}_${planning.periodEnd}`
+    const published = planning.status === "published"
+    const known = byPeriod.get(key)
+    byPeriod.set(key, {
+      periodStart: planning.periodStart as IsoDate,
+      periodEnd: planning.periodEnd as IsoDate,
+      published: published || (known?.published ?? false),
+    })
+  }
+  return [...byPeriod.values()].sort((left, right) =>
+    left.periodStart.localeCompare(right.periodStart)
+  )
+}
+
+/** Le nombre de lignes que le bandeau a à dire. */
+export function alertCount(alerts: AbsenceAlerts): number {
+  return alerts.onPlannedWeeks.length + alerts.lateProofs.length
 }
 
 function nameOf(names: ReadonlyMap<string, string>, employeeId: string): string {

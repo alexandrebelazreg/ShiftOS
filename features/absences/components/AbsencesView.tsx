@@ -28,6 +28,7 @@ import type { StoreConfig } from "@/features/store/schemas/store.schema"
 import {
   buildAbsenceAlerts,
   hasAlerts,
+  type AbsenceAlerts,
 } from "@/features/absences/alerts/absence-alerts"
 import {
   buildAbsenceMonth,
@@ -35,10 +36,13 @@ import {
   MONTH_LABELS,
 } from "@/features/absences/calendar/absence-month"
 import { AbsenceForm } from "@/features/absences/components/AbsenceForm"
+import { QUICK_ENTRY_MOTIVES } from "@/features/absences/calendar/absence-paint"
 import {
   AbsenceLegend,
   AbsenceMonthGrid,
+  motiveTone,
 } from "@/features/absences/components/AbsenceMonthGrid"
+import { cn } from "@/lib/utils"
 import { absencePeriodLabel } from "@/features/absences/models/absence-period"
 import { absenceMotiveLabel } from "@/features/absences/models/absence-motive"
 import {
@@ -77,6 +81,8 @@ export function AbsencesView({ initialStore }: { readonly initialStore: StoreCon
   const [rules, setRules] = useState<AbsenceRules>(DEFAULT_ABSENCE_RULES)
   const [formOpen, setFormOpen] = useState(false)
   const [selected, setSelected] = useState<AbsenceRecord | null>(null)
+  /** Le motif de la saisie rapide ; `null` tant qu'on ne peint pas. */
+  const [paintMotive, setPaintMotive] = useState<string | null>(null)
   const { failure, guard } = useSaveFailure()
 
   // `.then` plutôt qu'`await` : poser l'état DANS l'effet, sans frontière
@@ -184,6 +190,22 @@ export function AbsencesView({ initialStore }: { readonly initialStore: StoreCon
     await reload()
   }
 
+  /**
+   * Une plage peinte sur la grille : une absence d'un motif choisi, journées
+   * entières. Le justificatif attendu se calcule comme au formulaire.
+   */
+  const paint = useCallback(
+    async (employeeId: string, start: IsoDate, end: IsoDate) => {
+      if (paintMotive === null) return
+      const written = await guard(() =>
+        absenceService.create({ employeeId, type: paintMotive, start, end }, today, rules)
+      )
+      if (written === null) return
+      await reload()
+    },
+    [paintMotive, guard, today, rules, reload]
+  )
+
   async function cancel(id: string) {
     if ((await guard(() => absenceService.cancel(id, today))) === null) return
     setSelected(null)
@@ -224,45 +246,7 @@ export function AbsencesView({ initialStore }: { readonly initialStore: StoreCon
         description="Qui n’est pas là, pourquoi, et ce qu’il reste à réclamer."
       />
 
-      {hasAlerts(alerts) ? (
-        <Card className="border-amber-500/50">
-          <CardContent className="space-y-2 py-4 text-sm">
-            {alerts.onPlannedWeeks.length > 0 ? (
-              <div>
-                <p className="font-medium">
-                  {alerts.onPlannedWeeks.length} absence
-                  {alerts.onPlannedWeeks.length > 1 ? "s tombent" : " tombe"} sur un planning déjà
-                  fait.
-                </p>
-                <ul className="mt-1 space-y-0.5 text-muted-foreground">
-                  {alerts.onPlannedWeeks.map((collision) => (
-                    <li key={collision.absence.id}>
-                      {collision.employeeName}, {absencePeriodLabel(collision.absence)} —{" "}
-                      {collision.plannings
-                        .map((planning) => `${planning.label}${planning.published ? " (affiché)" : ""}`)
-                        .join(", ")}
-                    </li>
-                  ))}
-                </ul>
-              </div>
-            ) : null}
-
-            {alerts.lateProofs.length > 0 ? (
-              <div>
-                <p className="font-medium">Justificatifs en retard</p>
-                <ul className="mt-1 space-y-0.5 text-muted-foreground">
-                  {alerts.lateProofs.map((late) => (
-                    <li key={late.absence.id}>
-                      {late.employeeName} — {late.proofLabel} attendu depuis {late.lateDays} jour
-                      {late.lateDays > 1 ? "s" : ""}
-                    </li>
-                  ))}
-                </ul>
-              </div>
-            ) : null}
-          </CardContent>
-        </Card>
-      ) : null}
+      {hasAlerts(alerts) ? <AlertsBanner alerts={alerts} /> : null}
 
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="flex items-center gap-2">
@@ -303,7 +287,43 @@ export function AbsencesView({ initialStore }: { readonly initialStore: StoreCon
         <p className="text-sm text-muted-foreground">Chargement de l’équipe…</p>
       ) : (
         <div className="space-y-3">
-          <AbsenceMonthGrid month={monthModel} onPick={(cell) => setSelected(cell.absence)} />
+          {/* LA SAISIE RAPIDE. Un motif choisi, et les cases vides se peignent :
+              un clic pose la journée, un glissé le long d'une ligne pose UNE
+              absence sur toute la plage. Demi-journée, note ou heures passent
+              toujours par le formulaire. */}
+          <div className="flex flex-wrap items-center gap-2 text-sm">
+            <span className="text-muted-foreground">Saisie rapide :</span>
+            {QUICK_ENTRY_MOTIVES.map((motive) => (
+              <button
+                key={motive.value}
+                type="button"
+                aria-pressed={paintMotive === motive.value}
+                onClick={() =>
+                  setPaintMotive(paintMotive === motive.value ? null : motive.value)
+                }
+                className={cn(
+                  "flex items-center gap-1.5 rounded-full border px-2.5 py-0.5 text-xs",
+                  paintMotive === motive.value
+                    ? "border-foreground font-medium"
+                    : "border-border text-muted-foreground hover:bg-muted"
+                )}
+              >
+                <span className={cn("inline-block size-2.5 rounded-sm", motiveTone(motive.value))} />
+                {motive.label}
+              </button>
+            ))}
+            {paintMotive !== null ? (
+              <span className="text-xs text-muted-foreground">
+                Cliquez une case, ou glissez le long d’une ligne. Recliquez le motif pour arrêter.
+              </span>
+            ) : null}
+          </div>
+          <AbsenceMonthGrid
+            month={monthModel}
+            onPick={(cell) => setSelected(cell.absence)}
+            paintMotive={paintMotive}
+            onPaint={(employeeId, start, end) => void paint(employeeId, start, end)}
+          />
           <AbsenceLegend month={monthModel} />
         </div>
       )}
@@ -340,6 +360,64 @@ export function AbsencesView({ initialStore }: { readonly initialStore: StoreCon
       ) : null}
     </div>
   )
+}
+
+/**
+ * Le bandeau : UNE ligne qui dit combien de choses attendent, le détail replié.
+ *
+ * Il dépliait tout d'office — huit absences, chacune suivie de la liste de
+ * ses plannings — et l'écran s'ouvrait sur un paragraphe à lire avant de
+ * trouver le calendrier. Le compte suffit à savoir s'il faut s'arrêter ; le
+ * détail s'ouvre pour qui s'arrête.
+ */
+function AlertsBanner({ alerts }: { readonly alerts: AbsenceAlerts }) {
+  const [open, setOpen] = useState(false)
+  const collisions = alerts.onPlannedWeeks.length
+  const late = alerts.lateProofs.length
+  const parts = [
+    collisions > 0
+      ? `${collisions} absence${collisions > 1 ? "s tombent" : " tombe"} sur un planning en cours ou à venir`
+      : null,
+    late > 0 ? `${late} justificatif${late > 1 ? "s" : ""} en retard` : null,
+  ].filter((part) => part !== null)
+
+  return (
+    <div className="rounded-lg border border-amber-500/50 bg-amber-50/50 px-3 py-2 text-sm dark:bg-amber-950/20">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <p className="font-medium">{parts.join(" · ")}</p>
+        <Button variant="ghost" size="sm" onClick={() => setOpen(!open)} aria-expanded={open}>
+          {open ? "Masquer" : "Voir le détail"}
+        </Button>
+      </div>
+      {open ? (
+        <ul className="mt-1 space-y-0.5 pb-1 text-muted-foreground">
+          {alerts.onPlannedWeeks.map((collision) => (
+            <li key={collision.absence.id}>
+              {collision.employeeName} — {absenceMotiveLabel(collision.absence.type).toLowerCase()}{" "}
+              {absencePeriodLabel(collision.absence)} · planning{" "}
+              {collision.weeks
+                .map(
+                  (week) =>
+                    `semaine du ${shortDate(week.periodStart)}${week.published ? " (affiché)" : ""}`
+                )
+                .join(", ")}
+            </li>
+          ))}
+          {alerts.lateProofs.map((proof) => (
+            <li key={proof.absence.id}>
+              {proof.employeeName} — {proof.proofLabel.toLowerCase()} attendu depuis{" "}
+              {proof.lateDays} jour{proof.lateDays > 1 ? "s" : ""} ({absencePeriodLabel(proof.absence)})
+            </li>
+          ))}
+        </ul>
+      ) : null}
+    </div>
+  )
+}
+
+/** « 9/11 » — le mois est déjà dans la phrase. */
+function shortDate(date: string): string {
+  return `${Number(date.slice(8, 10))}/${date.slice(5, 7)}`
 }
 
 /**
